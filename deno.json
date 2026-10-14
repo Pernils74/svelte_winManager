@@ -1,0 +1,7 @@
+{
+  "fmt": {
+    "include": ["src/", "static/"],
+    "exts": ["ts", "js", "svelte", "json"]
+  },
+  "unstable": ["fmt-component"]
+}
