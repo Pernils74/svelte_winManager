@@ -30,9 +30,35 @@ let {
   bounds: HTMLElement; //| undefined;
   children: Snippet;
 } = $props();
-
 const manager = getWindowManager();
 const titleId = $derived(`win-title-${win.winId}`);
+
+let titlebarVisible = $state(true);
+let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
+
+const TITLEBAR_HEIGHT = 32;
+const HIDE_DELAY = 700;
+
+function showTitlebar() {
+  if (hideTitlebarTimeout) {
+    clearTimeout(hideTitlebarTimeout);
+  }
+
+  titlebarVisible = true;
+}
+
+function scheduleHideTitlebar() {
+  if (!win.state.isMaximized) return;
+
+  if (hideTitlebarTimeout) {
+    clearTimeout(hideTitlebarTimeout);
+  }
+
+  hideTitlebarTimeout = setTimeout(() => {
+    titlebarVisible = false;
+    hideTitlebarTimeout = undefined;
+  }, HIDE_DELAY);
+}
 
 let frameEl: HTMLDivElement;
 let titlebarEl: HTMLDivElement;
@@ -81,6 +107,19 @@ onMount(() => {
     width: initialWidth,
     height: initialHeight,
   });
+});
+
+$effect(() => {
+  if (!win.state.isMaximized) {
+    titlebarVisible = true;
+
+    if (hideTitlebarTimeout) {
+      clearTimeout(hideTitlebarTimeout);
+      hideTitlebarTimeout = undefined;
+    }
+  } else {
+    scheduleHideTitlebar();
+  }
 });
 
 function getSnapTargets(axis: "x" | "y"): number[] {
@@ -352,9 +391,20 @@ function close() {
 -->
 <!-- {@const titleId = `win-title-${win.winId}`} -->
 
+{#if win.state.isMaximized}
+  <div
+  class="titlebar-reveal-zone"
+  onmouseenter={showTitlebar}
+  onmouseleave={scheduleHideTitlebar}
+  aria-hidden="true"
+></div>
+{/if}
+
+
 <div
   bind:this={frameEl}
   class="window-frame"
+  class:is-maximized={win.state.isMaximized}
   style:left="{left}px"
   style:top="{top}px"
   style:width="{width}px"
@@ -371,12 +421,18 @@ function close() {
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    bind:this={titlebarEl}
-    class="titlebar"
-    onmousedown={(event) => beginInteraction(event, 'move')}
-    ondblclick={toggleMaximize}
-  >
-    <strong id={titleId}>{win.title}</strong>
+  bind:this={titlebarEl}
+  class="titlebar"
+  class:is-hidden={win.state.isMaximized && !titlebarVisible}
+  onmouseenter={showTitlebar}
+  onmouseleave={scheduleHideTitlebar}
+  onmousedown={(event) => beginInteraction(event, 'move')}
+  ondblclick={toggleMaximize}
+>
+ 
+ 
+ 
+ <strong id={titleId}>{win.title}</strong>
 
     {#if win.showButtons}
       <win.actions winId={win.winId} />
@@ -472,6 +528,36 @@ function close() {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* Osynlig zon som aktiverar titelraden vid skärmens överkant */
+.titlebar-reveal-zone {
+  position: absolute;
+  z-index: 100000;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  pointer-events: auto;
+}
+
+/* Titelraden glider upp och försvinner */
+.window-frame.is-maximized .titlebar {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.window-frame.is-maximized .titlebar.is-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Gör plats för innehållet när titelraden är dold */
+.window-frame.is-maximized .content {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .controls {

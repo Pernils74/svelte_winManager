@@ -124,7 +124,8 @@ export class WindowManager {
   }
 
   open<TPayload = unknown>(
-    component: any,
+    // deno-lint-ignore no-explicit-any
+    component: Component<any>,
     options: OpenWindowOptions<TPayload> = {},
   ): WindowInstance<TPayload> {
     if (options.setId && this.find(options.setId)) {
@@ -164,7 +165,7 @@ export class WindowManager {
       useArena: this.useArena,
       useMonitor: this.useMonitor,
       showButtons: options.showButtons ?? true,
-      docking: options.docking ?? false, // Initiera docking egenskapen här
+      docking: options.docking ?? {}, //false, // Initiera docking egenskapen här
 
       payload: (options.payload ?? {}) as TPayload,
       actions: options.actions,
@@ -352,6 +353,77 @@ export class WindowManager {
   }
 
   toggleMaximize(id: WindowId, bounds: HTMLElement) {
+    const win = this.find(id);
+    if (!win) return;
+
+    if (!win.state.isMaximized) {
+      // Spara det nuvarande flytande tillståndet först
+      win.storedState = {
+        left: win.state.left,
+        top: win.state.top,
+        width: win.state.width,
+        height: win.state.height,
+      };
+
+      // Standardgränser (hela skärmen)
+      let maxLeft = 0;
+      let maxTop = 0;
+      let maxRight = bounds.clientWidth;
+      let maxBottom = bounds.clientHeight;
+
+      const EPSILON = 5; // Felmarginal i pixlar för att upptäcka dockning
+
+      // Gå igenom alla andra öppna fönster för att hitta dockade grannar
+      for (const other of this.windows) {
+        if (other.winId === id || other.state.isMinimized) continue;
+
+        const a = win.state;
+        const b = other.state;
+
+        // Kolla om fönstren överlappar vertikalt eller horisontellt
+        const overlapsY = a.top < b.top + b.height - EPSILON &&
+          a.top + a.height > b.top + EPSILON;
+        const overlapsX = a.left < b.left + b.width - EPSILON &&
+          a.left + a.width > b.left + EPSILON;
+
+        // 1. Är vi dockade mot ett fönster till VÄNSTER? (Vår vänsterkant rör vid dess högerkant)
+        if (overlapsY && Math.abs(a.left - (b.left + b.width)) <= EPSILON) {
+          maxLeft = Math.max(maxLeft, b.left + b.width);
+        }
+        // 2. Är vi dockade mot ett fönster till HÖGER? (Vår högerkant rör vid dess vänsterkant)
+        if (overlapsY && Math.abs((a.left + a.width) - b.left) <= EPSILON) {
+          maxRight = Math.min(maxRight, b.left);
+        }
+        // 3. Är vi dockade mot ett fönster OVANFÖR? (Vår överkant rör vid dess underkant)
+        if (overlapsX && Math.abs(a.top - (b.top + b.height)) <= EPSILON) {
+          maxTop = Math.max(maxTop, b.top + b.height);
+        }
+        // 4. Är vi dockade mot ett fönster NEDANFÖR? (Vår underkant rör vid dess överkant)
+        if (overlapsX && Math.abs((a.top + a.height) - b.top) <= EPSILON) {
+          maxBottom = Math.min(maxBottom, b.top);
+        }
+      }
+
+      // Uppdatera fönstret till den beräknade, smarta maxytan
+      this.update(id, {
+        left: maxLeft,
+        top: maxTop,
+        width: maxRight - maxLeft,
+        height: maxBottom - maxTop,
+        isMaximized: true,
+      });
+    } else {
+      // Återställ till den sparade storleken
+      const previous = win.storedState;
+      if (previous) {
+        Object.assign(win.state, previous);
+      }
+      this.update(id, { isMaximized: false });
+    }
+    this.focus(id);
+  }
+
+  toggleMaximize_old(id: WindowId, bounds: HTMLElement) {
     const win = this.find(id);
     if (!win) return;
 
