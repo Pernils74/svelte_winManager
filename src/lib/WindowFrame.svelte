@@ -17,7 +17,11 @@ svelte -->
 
 <script lang="ts">
 import { onMount, type Snippet } from "svelte";
-import type { WindowInstance } from "./windowManager.svelte";
+import {
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  type WindowInstance,
+} from "./windowManager.svelte";
 import { getWindowManager } from "./windowManager.svelte";
 import ArenaMonitorButtons from "./ArenaMonitorButtons.svelte";
 
@@ -95,8 +99,10 @@ onMount(() => {
 
   const rect = frameEl.getBoundingClientRect();
 
-  minWidth = Math.max(160, rect.width);
-  minHeight = Math.max(100, rect.height);
+  // minWidth = Math.max(160, rect.width);
+  // minHeight = Math.max(100, rect.height);
+  minWidth = MIN_WIDTH;
+  minHeight = MIN_HEIGHT;
 
   // Innehållet kan ha en initial höjd som inte är känd
   // när fönstret öppnas.
@@ -499,8 +505,13 @@ function close() {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
+
+  /* Tvinga webbläsaren att tillåta förminskning */
+  min-width: 150px !important;
+  min-height: 80px !important;
+
+  /* min-width: 0;
+  min-height: 0; */
   background: white;
   border-radius: 6px;
   box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);

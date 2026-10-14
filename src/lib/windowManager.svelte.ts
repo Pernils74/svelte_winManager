@@ -4,6 +4,10 @@
 
 import type { Component } from "svelte";
 
+export const EPSILON = 3;
+export const MIN_WIDTH = 160;
+export const MIN_HEIGHT = 100;
+
 export type WindowActionsComponent = Component<{
   winId: string;
 }>;
@@ -228,9 +232,9 @@ export class WindowManager {
     const old = { ...win.state };
     const next = { ...old, ...proposed };
 
-    const EPSILON = 3;
-    const MIN_WIDTH = 160;
-    const MIN_HEIGHT = 100;
+    // const EPSILON = 3;
+    // const MIN_WIDTH = 160;
+    // const MIN_HEIGHT = 100;
 
     const overlaps = (
       startA: number,
