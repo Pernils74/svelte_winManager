@@ -225,7 +225,7 @@ function beginInteraction(
   }
 
   // Ett maximerat fönster ska inte flyttas eller storleksändras.
-  if (win.state.isMaximized) return;
+  if (win.state.isMaximized && mode === "move") return;
 
   event.preventDefault();
   event.stopPropagation();

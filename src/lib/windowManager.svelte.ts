@@ -140,6 +140,7 @@ export class WindowManager {
   }
 
   open<TPayload = unknown>(
+    // deno-lint-ignore no-explicit-any
     component: Component<any>,
     options: OpenWindowOptions<TPayload> = {},
   ): WindowInstance<TPayload> {
