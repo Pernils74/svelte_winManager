@@ -52,7 +52,6 @@ export interface WindowInstance<TPayload = unknown> {
   storedState: WindowRect | null;
   extraHeight: number;
   zIndex: number;
-  noTile: boolean;
   tileOffset: number;
   useArena: boolean;
   useMonitor: boolean;
@@ -66,7 +65,8 @@ export interface OpenWindowOptions<TPayload = unknown> {
   title?: string;
   parentId?: WindowId | null;
   boundingEl?: HTMLElement | null;
-  noTile?: boolean;
+  tileOffset?: number;
+  // noTile?: boolean;
   setId?: WindowId;
   props?: Record<string, unknown>;
   payload?: TPayload;
@@ -123,7 +123,7 @@ export class WindowManager {
       storedState: null,
       extraHeight: 0,
       zIndex: 0,
-      noTile: true,
+
       tileOffset: 0,
       useArena: true,
       useMonitor: false,
@@ -183,8 +183,11 @@ export class WindowManager {
     const parent = this.find(requestedParent);
     const parentId = parent ? parent.winId : ROOT_WIN_ID;
 
+    const tileOffset = options.tileOffset ?? 20;
     const siblingCount = this.getChildren(parentId).length;
-    const offset = options.noTile ? 0 : siblingCount * 20;
+    // const offset = options.noTile ? 0 : siblingCount * 20;
+
+    const currentOffset = siblingCount * tileOffset;
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
@@ -194,8 +197,8 @@ export class WindowManager {
       parentId,
       boundingEl: options.boundingEl ?? null,
       state: {
-        left: options.left ?? offset,
-        top: options.top ?? offset,
+        left: options.left ?? currentOffset,
+        top: options.top ?? currentOffset,
         width: options.width ?? 400,
         height: options.height ?? 300,
         isMinimized: false,
@@ -205,8 +208,8 @@ export class WindowManager {
       storedState: null,
       extraHeight: options.extraHeight ?? 0,
       zIndex: ++this.zCounter,
-      noTile: options.noTile ?? false,
-      tileOffset: offset,
+
+      tileOffset,
       useArena: this.useArena,
       useMonitor: this.useMonitor,
       showButtons: options.showButtons ?? true,
@@ -244,7 +247,7 @@ export class WindowManager {
       transparency: source.state.transparency,
       showButtons: source.showButtons,
       docking: {},
-      noTile: true,
+
       actions: source.actions,
     });
 

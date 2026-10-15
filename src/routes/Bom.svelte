@@ -22,7 +22,7 @@ const parent = wManager.find(winId);
 function openItem() {
   wManager.open(Scrapping, {
     parentId: winId,
-    boundingEl: parent.boundingEl,
+    // boundingEl: parent.boundingEl,
     title: "🪟 Item Window",
     width: 400,
     height: 300,
