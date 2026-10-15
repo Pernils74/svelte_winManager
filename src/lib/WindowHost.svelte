@@ -3,8 +3,7 @@ import { onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 // Längst upp i WindowHost.svelte:
-import { cubicInOut } from "svelte/easing";
-import { fly } from "svelte/transition";
+import { receive, send } from "./windowTransitions";
 
 interface Props {
   children?: Snippet;
@@ -58,10 +57,6 @@ onMount(() => {
     {#if contentEl}
       {#each rootWindows as win (win.winId)}
         {#if !win.state.isMinimized}
-        <div 
-        transition:fly={{ y: 100, duration: 300, easing: cubicInOut }} 
-        style:display="contents"
-      >
           <WindowFrame win={win} bounds={contentEl}>
             {#if win.component}
               {@const Component = win.component}
@@ -72,7 +67,7 @@ onMount(() => {
               />
             {/if}
           </WindowFrame>
-        </div>
+
         {/if}
       {/each}
     {/if}
@@ -89,6 +84,8 @@ onMount(() => {
       <button
         type="button"
         class="task-btn"
+        in:receive={{ key: win.winId }}
+        out:send={{ key: win.winId }}
         onclick={() => wManager.restore(win.winId)}
       >
         🔼 {win.title}
