@@ -1,51 +1,42 @@
-<!-- WindowFRame.svelte -->
-
-
 <script lang="ts">
 import { onDestroy, onMount, type Snippet } from "svelte";
 import {
+  getWindowManager,
   MIN_HEIGHT,
   MIN_WIDTH,
   type ResizeMode,
+  ROOT_WIN_ID,
   type WindowInstance,
   type WindowRect,
 } from "./windowManager.svelte";
-import { getWindowManager } from "./windowManager.svelte";
 
 type InteractionMode = "move" | ResizeMode;
 
-interface InteractionOptions {
-  mode: InteractionMode;
-}
-
-let {
-  win,
-  bounds,
-  children,
-}: {
+interface Props {
   win: WindowInstance;
   bounds: HTMLElement;
   children: Snippet;
-} = $props();
+}
+
+let { win, bounds, children }: Props = $props();
 
 const manager = getWindowManager();
-const titleId = $derived(`win-title-${win.winId}`);
 
 let frameEl: HTMLDivElement;
-let titlebarEl: HTMLDivElement;
+let contentEl: HTMLDivElement;
 
 let left = $derived(win.state.left);
 let top = $derived(win.state.top);
 let width = $derived(win.state.width);
 let height = $derived(win.state.height);
 let transparency = $derived(win.state.transparency);
-
-let minWidth = $state(MIN_WIDTH);
-let minHeight = $state(MIN_HEIGHT);
+let titleId = $derived(`win-title-${win.winId}`);
 
 let titlebarVisible = $state(true);
 let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
 
+let dragMode: InteractionMode | null = null;
+let dragWinId: string | null = null;
 let dragStartX = 0;
 let dragStartY = 0;
 let startLeft = 0;
@@ -53,14 +44,23 @@ let startTop = 0;
 let startWidth = 0;
 let startHeight = 0;
 
-let dragMode: InteractionMode | null = null;
+let snappedLeft: number | null = null;
+let snappedTop: number | null = null;
 
 const SNAP_DISTANCE = 12;
 const RELEASE_DISTANCE = 24;
 const HIDE_DELAY = 700;
 
-let snappedLeft = $state<number | null>(null);
-let snappedTop = $state<number | null>(null);
+const resizeHandles: ResizeMode[] = [
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+  "top",
+  "right",
+  "bottom",
+  "left",
+];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
@@ -82,7 +82,6 @@ function scheduleHideTitlebar() {
   if (!win.state.isMaximized) return;
 
   clearTitlebarTimeout();
-
   hideTitlebarTimeout = setTimeout(() => {
     titlebarVisible = false;
     hideTitlebarTimeout = undefined;
@@ -99,15 +98,16 @@ $effect(() => {
 });
 
 onMount(() => {
+  // Rooten har ingen WindowFrame. Alla andra fönster
+  // mäts i sin förälders innehållsyta.
   const rect = frameEl.getBoundingClientRect();
 
-  const initialWidth = win.state.width || rect.width;
-  const initialHeight = win.state.height || rect.height + win.extraHeight;
-
-  manager.update(win.winId, {
-    width: initialWidth,
-    height: initialHeight,
-  });
+  if (win.state.width <= 0 || win.state.height <= 0) {
+    manager.update(win.winId, {
+      width: win.state.width || rect.width,
+      height: win.state.height || rect.height + win.extraHeight,
+    });
+  }
 });
 
 onDestroy(() => {
@@ -115,14 +115,8 @@ onDestroy(() => {
   cleanupInteraction();
 });
 
-/**
- * Returnerar snappositioner relativt arbetsytans övre vänstra hörn.
- * Fönster och boundingEl antas ligga i samma koordinatsystem som
- * WindowFrame, det vill säga arbetsytan.
- */
 function getSnapTargets(axis: "x" | "y"): number[] {
   const targets: number[] = [];
-
   const currentWidth = win.state.width;
   const currentHeight = win.state.height;
 
@@ -153,12 +147,13 @@ function getSnapTargets(axis: "x" | "y"): number[] {
     }
   };
 
-  // Övriga fönster, inklusive syskon och föräldrafönster.
-  for (const other of manager.windows) {
-    if (
-      other.winId === win.winId ||
-      other.state.isMinimized
-    ) {
+  // Bara fönster i samma koordinatsystem deltar i dockningen.
+  for (
+    const other of manager.getChildren(
+      win.parentId ?? ROOT_WIN_ID,
+    )
+  ) {
+    if (other.winId === win.winId || other.state.isMinimized) {
       continue;
     }
 
@@ -170,44 +165,30 @@ function getSnapTargets(axis: "x" | "y"): number[] {
     });
   }
 
-  // Explicit DOM-begränsning, exempelvis ett föräldraelement.
-  if (win.boundingEl && win.boundingEl !== bounds) {
-    const boundsRect = bounds.getBoundingClientRect();
-    const parentRect = win.boundingEl.getBoundingClientRect();
-
-    addRectTargets({
-      left: parentRect.left - boundsRect.left,
-      top: parentRect.top - boundsRect.top,
-      width: parentRect.width,
-      height: parentRect.height,
-    });
-  }
-
   return targets;
 }
 
 function snapPosition(
-  rawPosition: number,
+  raw: number,
   targets: number[],
-  previousSnap: number | null,
+  previous: number | null,
 ): number {
   if (
-    previousSnap !== null &&
-    Math.abs(rawPosition - previousSnap) <=
-      SNAP_DISTANCE + RELEASE_DISTANCE
+    previous !== null &&
+    Math.abs(raw - previous) <= SNAP_DISTANCE + RELEASE_DISTANCE
   ) {
-    return previousSnap;
+    return previous;
   }
 
   const nearest = targets
     .map((target) => ({
       target,
-      distance: Math.abs(rawPosition - target),
+      distance: Math.abs(raw - target),
     }))
     .filter((item) => item.distance <= SNAP_DISTANCE)
     .sort((a, b) => a.distance - b.distance)[0];
 
-  return nearest?.target ?? rawPosition;
+  return nearest?.target ?? raw;
 }
 
 function beginInteraction(
@@ -215,32 +196,44 @@ function beginInteraction(
   mode: InteractionMode,
 ) {
   if (event.button !== 0) return;
+  if (win.winId === ROOT_WIN_ID) return;
 
+  const target = event.target;
   if (
-    (event.target as HTMLElement).closest(
-      "button, input, select, textarea, a",
-    )
+    target instanceof Element &&
+    target.closest("button, input, select, textarea, a")
   ) {
     return;
   }
 
-  // Ett maximerat fönster ska inte flyttas eller storleksändras.
-  if (win.state.isMaximized && mode === "move") return;
+  if (win.state.isMaximized) return;
 
   event.preventDefault();
   event.stopPropagation();
 
-  manager.focus(win.winId);
+  let activeWin = win;
 
+  // Ctrl + drag i titelraden skapar en kopia.
+  // Endast flyttning duplicerar; storleksändring gör det inte.
+  if (event.ctrlKey && mode === "move") {
+    const copy = manager.duplicate(win.winId);
+    if (!copy) return;
+
+    activeWin = copy;
+  }
+
+  manager.focus(activeWin.winId);
+
+  dragWinId = activeWin.winId;
   dragMode = mode;
 
   dragStartX = event.clientX;
   dragStartY = event.clientY;
 
-  startLeft = win.state.left;
-  startTop = win.state.top;
-  startWidth = win.state.width;
-  startHeight = win.state.height;
+  startLeft = activeWin.state.left;
+  startTop = activeWin.state.top;
+  startWidth = activeWin.state.width;
+  startHeight = activeWin.state.height;
 
   document.body.style.userSelect = "none";
 
@@ -249,11 +242,13 @@ function beginInteraction(
 }
 
 function onMouseMove(event: MouseEvent) {
-  if (!dragMode) return;
+  if (!dragMode || !dragWinId) return;
+
+  const activeWin = manager.find(dragWinId);
+  if (!activeWin) return;
 
   const dx = event.clientX - dragStartX;
   const dy = event.clientY - dragStartY;
-
   const boundsWidth = bounds.clientWidth;
   const boundsHeight = bounds.clientHeight;
 
@@ -266,41 +261,66 @@ function onMouseMove(event: MouseEvent) {
     const rawLeft = startLeft + dx;
     const rawTop = startTop + dy;
 
-    nextLeft = snapPosition(
-      rawLeft,
-      getSnapTargets("x"),
-      snappedLeft,
-    );
+    // Använd den aktiva instansens position och storlek.
+    const snapX = (targets: number[], raw: number, previous: number | null) =>
+      snapPosition(raw, targets, previous);
 
-    nextTop = snapPosition(
-      rawTop,
-      getSnapTargets("y"),
-      snappedTop,
-    );
+    const xTargets = [
+      0,
+      boundsWidth - startWidth,
+      ...manager
+        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+        .filter(
+          (other) =>
+            other.winId !== activeWin.winId &&
+            !other.state.isMinimized,
+        )
+        .flatMap((other) => [
+          other.state.left,
+          other.state.left + other.state.width,
+          other.state.left - startWidth,
+          other.state.left + other.state.width - startWidth,
+        ]),
+    ];
+
+    const yTargets = [
+      0,
+      boundsHeight - startHeight,
+      ...manager
+        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+        .filter(
+          (other) =>
+            other.winId !== activeWin.winId &&
+            !other.state.isMinimized,
+        )
+        .flatMap((other) => [
+          other.state.top,
+          other.state.top + other.state.height,
+          other.state.top - startHeight,
+          other.state.top + other.state.height - startHeight,
+        ]),
+    ];
+
+    nextLeft = snapX(xTargets, rawLeft, snappedLeft);
+    nextTop = snapX(yTargets, rawTop, snappedTop);
 
     snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
     snappedTop = nextTop !== rawTop ? nextTop : null;
   } else {
-    if (dragMode.includes("right")) {
-      nextWidth = startWidth + dx;
-    }
-
+    if (dragMode.includes("right")) nextWidth = startWidth + dx;
     if (dragMode.includes("left")) {
       nextWidth = startWidth - dx;
       nextLeft = startLeft + dx;
     }
 
-    if (dragMode.includes("bottom")) {
-      nextHeight = startHeight + dy;
-    }
-
+    if (dragMode.includes("bottom")) nextHeight = startHeight + dy;
     if (dragMode.includes("top")) {
       nextHeight = startHeight - dy;
       nextTop = startTop + dy;
     }
 
-    nextWidth = clamp(nextWidth, minWidth, boundsWidth);
-    nextHeight = clamp(nextHeight, minHeight, boundsHeight);
+    nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
+    nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
 
     if (dragMode.includes("left")) {
       nextLeft = startLeft + startWidth - nextWidth;
@@ -311,6 +331,8 @@ function onMouseMove(event: MouseEvent) {
     }
   }
 
+  nextWidth = Math.min(nextWidth, boundsWidth);
+  nextHeight = Math.min(nextHeight, boundsHeight);
   nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
   nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
 
@@ -322,43 +344,34 @@ function onMouseMove(event: MouseEvent) {
   };
 
   if (dragMode === "move") {
-    manager.update(win.winId, nextRect);
+    manager.update(activeWin.winId, nextRect);
   } else {
-    manager.resizeDockedWindow(win.winId, dragMode, nextRect);
+    manager.resizeDockedWindow(activeWin.winId, dragMode, nextRect);
   }
 }
 
 function cleanupInteraction() {
   window.removeEventListener("mousemove", onMouseMove);
   window.removeEventListener("mouseup", endInteraction);
-
   document.body.style.userSelect = "";
 }
 
 function endInteraction() {
   dragMode = null;
+  dragWinId = null;
   snappedLeft = null;
   snappedTop = null;
-
   cleanupInteraction();
 }
 
-/**
- * Svelte action: use:interaction.
- * Varje handtag deklarerar endast vilket läge det använder.
- */
-function interaction(node: HTMLElement, options: InteractionOptions) {
+function interaction(node: HTMLElement, mode: InteractionMode) {
   const handleMouseDown = (event: MouseEvent) => {
-    beginInteraction(event, options.mode);
+    beginInteraction(event, mode);
   };
 
   node.addEventListener("mousedown", handleMouseDown);
 
   return {
-    update(nextOptions: InteractionOptions) {
-      options = nextOptions;
-    },
-
     destroy() {
       node.removeEventListener("mousedown", handleMouseDown);
     },
@@ -396,33 +409,7 @@ function close() {
   endInteraction();
   manager.closeWin(win.winId);
 }
-
-const resizeHandles: {
-  name: ResizeMode;
-  mode: ResizeMode;
-}[] = [
-  { name: "top-left", mode: "top-left" },
-  { name: "top-right", mode: "top-right" },
-  { name: "bottom-left", mode: "bottom-left" },
-  { name: "bottom-right", mode: "bottom-right" },
-  { name: "top", mode: "top" },
-  { name: "right", mode: "right" },
-  { name: "bottom", mode: "bottom" },
-  { name: "left", mode: "left" },
-];
 </script>
-
-{#if win.state.isMaximized}
-  <div
-  class="titlebar-reveal-zone"
-  style:left="{left}px"
-  style:top="{top}px"
-  style:width="{width}px"
-  onmouseenter={showTitlebar}
-  onmouseleave={scheduleHideTitlebar}
-  aria-hidden="true"
-></div>
-{/if}
 
 <div
   bind:this={frameEl}
@@ -443,10 +430,9 @@ const resizeHandles: {
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    bind:this={titlebarEl}
     class="titlebar"
     class:is-hidden={win.state.isMaximized && !titlebarVisible}
-    use:interaction={{ mode: "move" }}
+    use:interaction={"move"}
     onmouseenter={showTitlebar}
     onmouseleave={scheduleHideTitlebar}
     ondblclick={toggleMaximize}
@@ -454,44 +440,57 @@ const resizeHandles: {
     <strong id={titleId}>{win.title}</strong>
 
     {#if win.showButtons}
-      {@const Actions = win.actions}
-      {#if Actions}
+      {#if win.actions}
+        {@const Actions = win.actions}
         <Actions winId={win.winId} />
       {/if}
+
+      <div class="controls">
+        <button
+          type="button"
+          title="Maximera/återställ"
+          aria-label="Maximera eller återställ fönster"
+          onclick={toggleMaximize}
+        >🗖</button>
+
+        <button
+          type="button"
+          title="Minimera"
+          aria-label="Minimera fönster"
+          onclick={minimize}
+        >🗕</button>
+
+        <button
+          type="button"
+          title="Stäng"
+          aria-label="Stäng fönster"
+          onclick={close}
+        >❌</button>
+      </div>
     {/if}
-
-    <div class="controls">
-      <button
-        type="button"
-        title="Maximera/återställ"
-        aria-label="Maximera eller återställ fönster"
-        onclick={toggleMaximize}
-      >🗖</button>
-
-      <button
-        type="button"
-        title="Minimera"
-        aria-label="Minimera fönster"
-        onclick={minimize}
-      >🗕</button>
-
-      <button
-        type="button"
-        title="Stäng"
-        aria-label="Stäng fönster"
-        onclick={close}
-      >❌</button>
-    </div>
   </div>
 
-  <div class="content">
+  <div class="content" bind:this={contentEl}>
     {@render children()}
+
+    {#each manager.getChildren(win.winId) as child (child.winId)}
+      {#if !child.state.isMinimized && child.component}
+        <WindowFrame win={child} bounds={contentEl}>
+          {@const ChildComponent = child.component}
+          <ChildComponent
+            winId={child.winId}
+            {...child.props}
+            parentId={child.parentId}
+          />
+        </WindowFrame>
+      {/if}
+    {/each}
   </div>
 
-  {#each resizeHandles as handle (handle.name)}
+  {#each resizeHandles as handle (handle)}
     <div
-      class="resize-handle {handle.name}"
-      use:interaction={{ mode: handle.mode }}
+      class="resize-handle {handle}"
+      use:interaction={handle}
       role="presentation"
       aria-hidden="true"
     ></div>
@@ -557,13 +556,14 @@ const resizeHandles: {
 }
 
 .content {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  isolation: isolate;
 }
 
-/* Titelraden ligger ovanpå innehållet vid maximering. */
 .window-frame.is-maximized .titlebar {
   position: absolute;
   z-index: 5;
@@ -571,22 +571,13 @@ const resizeHandles: {
   left: 0;
   right: 0;
   box-sizing: border-box;
-  transition:
-    transform 180ms ease,
-    opacity 180ms ease;
+  transition: transform 180ms ease, opacity 180ms ease;
 }
 
 .window-frame.is-maximized .titlebar.is-hidden {
   transform: translateY(-100%);
   opacity: 0;
   pointer-events: none;
-}
-
-.titlebar-reveal-zone {
-  position: absolute;
-  z-index: 100000;
-  height: 6px;
-  pointer-events: auto;
 }
 
 .resize-handle {

@@ -1,8 +1,7 @@
-<!-- WindowHost.svelte -->
 <script lang="ts">
-import type { Snippet } from "svelte";
+import { onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
-import { getWindowManager } from "./windowManager.svelte";
+import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 
 interface Props {
   children?: Snippet;
@@ -16,10 +15,31 @@ const wManager = getWindowManager();
 let contentEl = $state<HTMLElement | undefined>(undefined);
 
 let winCount = $derived(wManager.winCount);
-
 let minimizedWindows = $derived(
-  wManager.windows.filter((win) => win.state.isMinimized),
+  wManager.windows.filter(
+    (win) => win.winId !== ROOT_WIN_ID && win.state.isMinimized,
+  ),
 );
+let rootWindows = $derived(wManager.getChildren(ROOT_WIN_ID));
+
+onMount(() => {
+  if (!contentEl) return;
+
+  const updateBounds = () => {
+    if (!contentEl) return;
+    wManager.setRootBounds(
+      contentEl.clientWidth,
+      contentEl.clientHeight,
+    );
+  };
+
+  updateBounds();
+
+  const observer = new ResizeObserver(updateBounds);
+  observer.observe(contentEl);
+
+  return () => observer.disconnect();
+});
 </script>
 
 <div class="layout">
@@ -33,16 +53,17 @@ let minimizedWindows = $derived(
 
   <main class="workspace" bind:this={contentEl}>
     {#if contentEl}
-      {#each wManager.windows as win (win.winId)}
+      {#each rootWindows as win (win.winId)}
         {#if !win.state.isMinimized}
-          <WindowFrame {win} bounds={contentEl}>
-            {@const Component = win.component}
-
-            <Component
-              winId={win.winId}
-              {...win.props}
-              parentId={win.parentId}
-            />
+          <WindowFrame win={win} bounds={contentEl}>
+            {#if win.component}
+              {@const Component = win.component}
+              <Component
+                winId={win.winId}
+                {...win.props}
+                parentId={win.parentId}
+              />
+            {/if}
           </WindowFrame>
         {/if}
       {/each}

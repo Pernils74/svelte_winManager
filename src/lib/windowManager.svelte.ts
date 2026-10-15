@@ -1,6 +1,6 @@
-// windowManager.svelte.ts
 import { type Component, createContext } from "svelte";
 
+export const ROOT_WIN_ID = "root";
 export const EPSILON = 3;
 export const MIN_WIDTH = 160;
 export const MIN_HEIGHT = 100;
@@ -8,8 +8,16 @@ export const MIN_HEIGHT = 100;
 const MAXIMIZE_EPSILON = 5;
 
 export type WindowId = string;
-
 export type DockSide = "left" | "right" | "top" | "bottom";
+export type ResizeMode =
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
 
 export type WindowActionsComponent = Component<{ winId: string }>;
 
@@ -36,24 +44,19 @@ export interface WindowState extends WindowRect {
 export interface WindowInstance<TPayload = unknown> {
   winId: WindowId;
   title: string;
-  component: Component<any>;
+  component: Component<any> | null;
   props: Record<string, unknown>;
-
   parentId: WindowId | null;
   boundingEl: HTMLElement | null;
-
   state: WindowState;
   storedState: WindowRect | null;
-
   extraHeight: number;
   zIndex: number;
-
-  tileOffset: number; // how much to offset
-
+  noTile: boolean;
+  tileOffset: number;
   useArena: boolean;
   useMonitor: boolean;
   showButtons: boolean;
-
   docking: WindowDocking;
   payload: TPayload;
   actions?: WindowActionsComponent;
@@ -63,8 +66,7 @@ export interface OpenWindowOptions<TPayload = unknown> {
   title?: string;
   parentId?: WindowId | null;
   boundingEl?: HTMLElement | null;
-  tileOffset?: number;
-
+  noTile?: boolean;
   setId?: WindowId;
   props?: Record<string, unknown>;
   payload?: TPayload;
@@ -79,15 +81,10 @@ export interface OpenWindowOptions<TPayload = unknown> {
   actions?: WindowActionsComponent;
 }
 
-export type ResizeMode =
-  | "left"
-  | "right"
-  | "top"
-  | "bottom"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
+function rectOf(win: WindowInstance): WindowRect {
+  const { left, top, width, height } = win.state;
+  return { left, top, width, height };
+}
 
 function overlaps(
   startA: number,
@@ -98,11 +95,6 @@ function overlaps(
   return startA < endB - EPSILON && endA > startB + EPSILON;
 }
 
-function rectOf(win: WindowInstance): WindowRect {
-  const { left, top, width, height } = win.state;
-  return { left, top, width, height };
-}
-
 export class WindowManager {
   windows = $state<WindowInstance[]>([]);
 
@@ -111,8 +103,40 @@ export class WindowManager {
 
   private zCounter = 1;
 
+  constructor() {
+    this.windows.push({
+      winId: ROOT_WIN_ID,
+      title: "Root Workspace",
+      component: null,
+      props: {},
+      parentId: null,
+      boundingEl: null,
+      state: {
+        left: 0,
+        top: 0,
+        width: 1920,
+        height: 1080,
+        isMinimized: false,
+        isMaximized: false,
+        transparency: 1,
+      },
+      storedState: null,
+      extraHeight: 0,
+      zIndex: 0,
+      noTile: true,
+      tileOffset: 0,
+      useArena: true,
+      useMonitor: false,
+      showButtons: false,
+      docking: {},
+      payload: null,
+    });
+  }
+
   get winCount(): number {
-    return this.windows.length;
+    return this.windows.filter(
+      (win) => win.winId !== ROOT_WIN_ID,
+    ).length;
   }
 
   find(id: WindowId | null | undefined): WindowInstance | undefined {
@@ -130,8 +154,12 @@ export class WindowManager {
 
   getDescendants(parentId: WindowId): WindowInstance[] {
     const result: WindowInstance[] = [];
+    const visited = new Set<WindowId>();
 
     const visit = (id: WindowId) => {
+      if (visited.has(id)) return;
+      visited.add(id);
+
       for (const child of this.getChildren(id)) {
         result.push(child);
         visit(child.winId);
@@ -143,7 +171,6 @@ export class WindowManager {
   }
 
   open<TPayload = unknown>(
-    // deno-lint-ignore no-explicit-any
     component: Component<any>,
     options: OpenWindowOptions<TPayload> = {},
   ): WindowInstance<TPayload> {
@@ -152,41 +179,39 @@ export class WindowManager {
       if (existing) return existing as WindowInstance<TPayload>;
     }
 
-    const parent = this.find(options.parentId);
-    const tileOffset = options.tileOffset ?? 20; // Hämtar det inskickade värtet på tileOffset från den första inst
-    const currentOffset = this.windows.length * tileOffset;
+    const requestedParent = options.parentId ?? ROOT_WIN_ID;
+    const parent = this.find(requestedParent);
+    const parentId = parent ? parent.winId : ROOT_WIN_ID;
+
+    const siblingCount = this.getChildren(parentId).length;
+    const offset = options.noTile ? 0 : siblingCount * 20;
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
       title: options.title ?? component.name ?? "Window",
       component,
       props: options.props ?? {},
-
-      parentId: parent?.winId ?? null,
+      parentId,
       boundingEl: options.boundingEl ?? null,
-
       state: {
-        left: options.left ?? currentOffset,
-        top: options.top ?? currentOffset,
-        width: options.width ?? 0,
-        height: options.height ?? 0,
+        left: options.left ?? offset,
+        top: options.top ?? offset,
+        width: options.width ?? 400,
+        height: options.height ?? 300,
         isMinimized: false,
         isMaximized: false,
         transparency: options.transparency ?? 1,
       },
-
       storedState: null,
-
       extraHeight: options.extraHeight ?? 0,
       zIndex: ++this.zCounter,
-      tileOffset,
-
+      noTile: options.noTile ?? false,
+      tileOffset: offset,
       useArena: this.useArena,
       useMonitor: this.useMonitor,
       showButtons: options.showButtons ?? true,
       docking: options.docking ?? {},
-
-      payload: (options.payload ?? {}) as TPayload,
+      payload: (options.payload ?? null) as TPayload,
       actions: options.actions,
     });
 
@@ -194,34 +219,88 @@ export class WindowManager {
     return win;
   }
 
+  /**
+   * Skapar en fristående kopia av ett fönster.
+   * Kopian behåller förälder, komponent, props och utseende,
+   * men får ett nytt ID och en egen position.
+   */
+  duplicate(id: WindowId, offset = 24): WindowInstance | undefined {
+    const source = this.find(id);
+    if (!source || source.winId === ROOT_WIN_ID || !source.component) {
+      return undefined;
+    }
+
+    const copy = this.open(source.component, {
+      title: `${source.title} (kopia)`,
+      parentId: source.parentId ?? ROOT_WIN_ID,
+      boundingEl: source.boundingEl,
+      props: { ...source.props },
+      payload: source.payload,
+      extraHeight: source.extraHeight,
+      left: source.state.left + offset,
+      top: source.state.top + offset,
+      width: source.state.width,
+      height: source.state.height,
+      transparency: source.state.transparency,
+      showButtons: source.showButtons,
+      docking: {},
+      noTile: true,
+      actions: source.actions,
+    });
+
+    this.focus(copy.winId);
+    return copy;
+  }
+
   update(id: WindowId, updates: Partial<WindowState>): void {
     const win = this.find(id);
-    if (!win) return;
+    if (!win || win.winId === ROOT_WIN_ID) {
+      if (win?.winId === ROOT_WIN_ID) {
+        Object.assign(win.state, updates);
+      }
+      return;
+    }
 
     Object.assign(win.state, updates);
   }
 
   updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
     const win = this.find(id);
-    if (!win) return;
-
-    win.payload = payload;
+    if (win) win.payload = payload;
   }
 
   updateAll(updates: Partial<WindowState>): void {
     for (const win of this.windows) {
-      Object.assign(win.state, updates);
+      if (win.winId !== ROOT_WIN_ID) {
+        Object.assign(win.state, updates);
+      }
     }
+  }
+
+  setRootBounds(width: number, height: number): void {
+    const root = this.find(ROOT_WIN_ID);
+    if (!root) return;
+
+    Object.assign(root.state, {
+      left: 0,
+      top: 0,
+      width: Math.max(0, width),
+      height: Math.max(0, height),
+    });
   }
 
   focus(id: WindowId): void {
     const win = this.find(id);
-    if (win) win.zIndex = ++this.zCounter;
+    if (win && win.winId !== ROOT_WIN_ID) {
+      win.zIndex = ++this.zCounter;
+    }
   }
 
   minimize(id: WindowId): void {
     const win = this.find(id);
-    if (!win || win.state.isMinimized) return;
+    if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) {
+      return;
+    }
 
     win.storedState = rectOf(win);
     this.update(id, { isMinimized: true });
@@ -229,7 +308,7 @@ export class WindowManager {
 
   restore(id: WindowId): void {
     const win = this.find(id);
-    if (!win) return;
+    if (!win || win.winId === ROOT_WIN_ID) return;
 
     if (win.storedState) {
       Object.assign(win.state, win.storedState);
@@ -239,26 +318,23 @@ export class WindowManager {
     this.focus(id);
   }
 
-  /**
-   * Ändrar storleken på ett fönster och flyttar angränsande
-   * fönster längs gemensamma kanter.
-   */
   resizeDockedWindow(
     id: WindowId,
     mode: ResizeMode | string,
     proposed: Partial<WindowRect>,
   ): void {
     const win = this.find(id);
-    if (!win) return;
+    if (!win || win.winId === ROOT_WIN_ID) return;
 
     const old = rectOf(win);
     const next: WindowRect = { ...old, ...proposed };
 
-    const neighbors = this.windows.filter((other) => {
+    // Endast syskon i samma koordinatsystem kan påverkas.
+    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
+    const neighbors = siblings.filter((other) => {
       if (other.winId === id || other.state.isMinimized) return false;
 
       const b = other.state;
-
       return (
         (mode.includes("left") &&
           Math.abs(b.left + b.width - old.left) <= EPSILON &&
@@ -284,26 +360,20 @@ export class WindowManager {
           Math.abs(b.left + b.width - old.left) <= EPSILON
         ) {
           const delta = next.left - old.left;
-          const allowedDelta = Math.max(delta, MIN_WIDTH - b.width);
-
-          next.left = old.left + allowedDelta;
-          next.width = old.width - allowedDelta;
-
-          this.update(other.winId, {
-            width: b.width + allowedDelta,
-          });
+          const allowed = Math.max(delta, MIN_WIDTH - b.width);
+          next.left = old.left + allowed;
+          next.width = old.width - allowed;
+          this.update(other.winId, { width: b.width + allowed });
         } else if (
           mode.includes("right") &&
           Math.abs(b.left - (old.left + old.width)) <= EPSILON
         ) {
           const delta = next.left + next.width - (old.left + old.width);
-          const allowedDelta = Math.min(delta, b.width - MIN_WIDTH);
-
-          next.width = old.width + allowedDelta;
-
+          const allowed = Math.min(delta, b.width - MIN_WIDTH);
+          next.width = old.width + allowed;
           this.update(other.winId, {
-            left: b.left + allowedDelta,
-            width: b.width - allowedDelta,
+            left: b.left + allowed,
+            width: b.width - allowed,
           });
         }
       }
@@ -318,26 +388,20 @@ export class WindowManager {
           Math.abs(b.top + b.height - old.top) <= EPSILON
         ) {
           const delta = next.top - old.top;
-          const allowedDelta = Math.max(delta, MIN_HEIGHT - b.height);
-
-          next.top = old.top + allowedDelta;
-          next.height = old.height - allowedDelta;
-
-          this.update(other.winId, {
-            height: b.height + allowedDelta,
-          });
+          const allowed = Math.max(delta, MIN_HEIGHT - b.height);
+          next.top = old.top + allowed;
+          next.height = old.height - allowed;
+          this.update(other.winId, { height: b.height + allowed });
         } else if (
           mode.includes("bottom") &&
           Math.abs(b.top - (old.top + old.height)) <= EPSILON
         ) {
           const delta = next.top + next.height - (old.top + old.height);
-          const allowedDelta = Math.min(delta, b.height - MIN_HEIGHT);
-
-          next.height = old.height + allowedDelta;
-
+          const allowed = Math.min(delta, b.height - MIN_HEIGHT);
+          next.height = old.height + allowed;
           this.update(other.winId, {
-            top: b.top + allowedDelta,
-            height: b.height - allowedDelta,
+            top: b.top + allowed,
+            height: b.height - allowed,
           });
         }
       }
@@ -346,20 +410,12 @@ export class WindowManager {
     this.update(id, next);
   }
 
-  /**
-   * Maximerar inom ytan mellan arbetsytans gränser och
-   * angränsande fönster. Återställer föregående rektangel
-   * när funktionen anropas igen.
-   */
   toggleMaximize(id: WindowId, bounds: HTMLElement): void {
     const win = this.find(id);
-    if (!win) return;
+    if (!win || win.winId === ROOT_WIN_ID) return;
 
     if (win.state.isMaximized) {
-      if (win.storedState) {
-        Object.assign(win.state, win.storedState);
-      }
-
+      if (win.storedState) Object.assign(win.state, win.storedState);
       this.update(id, { isMaximized: false });
       this.focus(id);
       return;
@@ -373,15 +429,14 @@ export class WindowManager {
     let maxBottom = bounds.clientHeight;
 
     const a = win.state;
+    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
 
-    for (const other of this.windows) {
+    for (const other of siblings) {
       if (other.winId === id || other.state.isMinimized) continue;
 
       const b = other.state;
-
       const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
         a.top + a.height > b.top + MAXIMIZE_EPSILON;
-
       const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
         a.left + a.width > b.left + MAXIMIZE_EPSILON;
 
@@ -426,6 +481,8 @@ export class WindowManager {
   }
 
   closeWin(id: WindowId): void {
+    if (id === ROOT_WIN_ID) return;
+
     const ids = new Set([
       id,
       ...this.getDescendants(id).map((win) => win.winId),
