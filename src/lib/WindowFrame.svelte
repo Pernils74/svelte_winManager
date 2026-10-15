@@ -208,7 +208,7 @@ function beginInteraction(
     return;
   }
 
-  if (win.state.isMaximized) return;
+  if (win.state.isMaximized && mode === "move") return;
 
   event.preventDefault();
   event.stopPropagation();
