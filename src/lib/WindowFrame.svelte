@@ -1,6 +1,10 @@
 <script lang="ts">
 import { onDestroy, onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
+// Längst upp bland dina övriga importer:
+import { cubicInOut } from "svelte/easing";
+import { fly } from "svelte/transition";
+
 import {
   getWindowManager,
   MIN_HEIGHT,
@@ -488,6 +492,12 @@ function close() {
 
     {#each manager.getChildren(win.winId) as child (child.winId)}
       {#if !child.state.isMinimized && child.component}
+      
+      <div 
+      transition:fly={{ y: 50, duration: 250, easing: cubicInOut }} 
+      style:display="contents"
+    >
+      
       <WindowFrame win={child} bounds={contentEl}>
         {@const ChildComponent = child.component}
           <ChildComponent
@@ -497,6 +507,7 @@ function close() {
           />
         
        </WindowFrame> 
+      </div>
       {/if}
     {/each}
   </div>
