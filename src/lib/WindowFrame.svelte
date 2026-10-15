@@ -307,46 +307,44 @@ function findDropParent(
   clientY: number,
   draggedId: string,
 ): string {
-  const element = document.elementFromPoint(clientX, clientY);
-
-  const target = element?.closest<HTMLElement>(
-    "[data-window-id]",
+  const elements = document.elementsFromPoint(clientX, clientY);
+  const descendants = new Set(
+    manager.getDescendants(draggedId).map((child) => child.winId),
   );
 
-  const targetId = target?.dataset.windowId;
+  for (const element of elements) {
+    const frame = element.closest<HTMLElement>("[data-window-id]");
+    const targetId = frame?.dataset.windowId;
 
-  if (!targetId || targetId === draggedId) {
-    return ROOT_WIN_ID;
+    if (!targetId || targetId === draggedId) continue;
+    if (targetId === ROOT_WIN_ID) continue;
+    if (descendants.has(targetId)) continue;
+
+    return targetId;
   }
 
-  const descendants = manager.getDescendants(draggedId);
-
-  if (descendants.some((child) => child.winId === targetId)) {
-    return ROOT_WIN_ID;
-  }
-
-  return targetId;
+  return ROOT_WIN_ID;
 }
 
 function handleMouseUp(event: MouseEvent) {
-  if (reparentDrag && dragWinId) {
-    const targetId = findDropParent(
-      event.clientX,
-      event.clientY,
-      dragWinId,
-    );
+  const id = dragWinId;
 
-    const activeWin = manager.find(dragWinId);
-
-    if (activeWin) {
-      const element = document.querySelector<HTMLElement>(
-        `[data-window-id="${CSS.escape(dragWinId)}"]`,
+  try {
+    if (reparentDrag && id) {
+      const targetId = findDropParent(
+        event.clientX,
+        event.clientY,
+        id,
       );
 
-      const rect = element?.getBoundingClientRect();
+      const frame = document.querySelector<HTMLElement>(
+        `[data-window-id="${CSS.escape(id)}"]`,
+      );
+
+      const rect = frame?.getBoundingClientRect();
 
       if (rect) {
-        manager.reparent(dragWinId, targetId, {
+        manager.reparent(id, targetId, {
           left: rect.left,
           top: rect.top,
           width: rect.width,
@@ -354,10 +352,10 @@ function handleMouseUp(event: MouseEvent) {
         });
       }
     }
+  } finally {
+    reparentDrag = false;
+    endInteraction();
   }
-
-  reparentDrag = false;
-  endInteraction();
 }
 
 function onMouseMove(event: MouseEvent) {
