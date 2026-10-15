@@ -1,6 +1,6 @@
 
 bom bla dkjsdk
-
+ <!-- Bom.svelte -->
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 // import Item from '../Item.svelte';

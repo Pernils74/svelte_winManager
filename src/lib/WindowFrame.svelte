@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount, type Snippet } from "svelte";
+import WindowFrame from "./WindowFrame.svelte";
 import {
   getWindowManager,
   MIN_HEIGHT,
@@ -475,14 +476,15 @@ function close() {
 
     {#each manager.getChildren(win.winId) as child (child.winId)}
       {#if !child.state.isMinimized && child.component}
-        <WindowFrame win={child} bounds={contentEl}>
-          {@const ChildComponent = child.component}
+      <WindowFrame win={child} bounds={contentEl}>
+        {@const ChildComponent = child.component}
           <ChildComponent
             winId={child.winId}
             {...child.props}
             parentId={child.parentId}
           />
-        </WindowFrame>
+        
+       </WindowFrame> 
       {/if}
     {/each}
   </div>
