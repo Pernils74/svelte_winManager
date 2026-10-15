@@ -4,6 +4,7 @@ import WindowFrame from "./WindowFrame.svelte";
 // Längst upp bland dina övriga importer:
 import { receive, send } from "./windowTransitions";
 import html2canvas from "html2canvas";
+// import html2canvas from "https://cdn.skypack.dev/html2canvas";
 
 import {
   getWindowManager,
@@ -197,7 +198,7 @@ function snapPosition(
   return nearest?.target ?? raw;
 }
 
-function beginInteraction(
+function beginInteraction_old(
   event: MouseEvent,
   mode: InteractionMode,
 ) {
@@ -245,6 +246,118 @@ function beginInteraction(
 
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mouseup", endInteraction);
+}
+
+// type InteractionMode = "move" | ResizeMode;
+
+let reparentDrag = false;
+
+function beginInteraction(
+  event: MouseEvent,
+  mode: InteractionMode,
+) {
+  if (event.button !== 0) return;
+  if (win.winId === ROOT_WIN_ID) return;
+
+  const target = event.target;
+
+  if (
+    target instanceof Element &&
+    target.closest("button, input, select, textarea, a")
+  ) {
+    return;
+  }
+
+  if (win.state.isMaximized) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  let activeWin = win;
+
+  if (event.ctrlKey && mode === "move") {
+    const copy = manager.duplicate(win.winId);
+    if (!copy) return;
+    activeWin = copy;
+  }
+
+  reparentDrag = event.shiftKey && mode === "move";
+
+  manager.focus(activeWin.winId);
+
+  dragWinId = activeWin.winId;
+  dragMode = mode;
+
+  dragStartX = event.clientX;
+  dragStartY = event.clientY;
+
+  startLeft = activeWin.state.left;
+  startTop = activeWin.state.top;
+  startWidth = activeWin.state.width;
+  startHeight = activeWin.state.height;
+
+  document.body.style.userSelect = "none";
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", handleMouseUp);
+}
+
+function findDropParent(
+  clientX: number,
+  clientY: number,
+  draggedId: string,
+): string {
+  const element = document.elementFromPoint(clientX, clientY);
+
+  const target = element?.closest<HTMLElement>(
+    "[data-window-id]",
+  );
+
+  const targetId = target?.dataset.windowId;
+
+  if (!targetId || targetId === draggedId) {
+    return ROOT_WIN_ID;
+  }
+
+  const descendants = manager.getDescendants(draggedId);
+
+  if (descendants.some((child) => child.winId === targetId)) {
+    return ROOT_WIN_ID;
+  }
+
+  return targetId;
+}
+
+function handleMouseUp(event: MouseEvent) {
+  if (reparentDrag && dragWinId) {
+    const targetId = findDropParent(
+      event.clientX,
+      event.clientY,
+      dragWinId,
+    );
+
+    const activeWin = manager.find(dragWinId);
+
+    if (activeWin) {
+      const element = document.querySelector<HTMLElement>(
+        `[data-window-id="${CSS.escape(dragWinId)}"]`,
+      );
+
+      const rect = element?.getBoundingClientRect();
+
+      if (rect) {
+        manager.reparent(dragWinId, targetId, {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    }
+  }
+
+  reparentDrag = false;
+  endInteraction();
 }
 
 function onMouseMove(event: MouseEvent) {
@@ -406,11 +519,6 @@ function changeTransparency(event: WheelEvent) {
   });
 }
 
-// function minimize() {
-//   endInteraction();
-//   manager.minimize(win.winId);
-// }
-
 async function minimize() {
   if (win.winId === ROOT_WIN_ID) return;
 
@@ -451,6 +559,7 @@ function close() {
 <div
   bind:this={frameEl}
   class="window-frame"
+  data-window-id={win.winId}
   class:is-maximized={win.state.isMaximized}
   style:left="{left}px"
   style:top="{top}px"
@@ -486,6 +595,10 @@ function close() {
     onmouseenter={showTitlebar}
     onmouseleave={scheduleHideTitlebar}
     ondblclick={toggleMaximize}
+
+    // ondragstart={handleTitleDragStart}
+    // ondragover={handleTitleDragOver}
+    // ondrop={handleTitleDrop}
   >
     <strong id={titleId}>{win.title}</strong>
 

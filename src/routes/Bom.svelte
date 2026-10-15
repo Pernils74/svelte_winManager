@@ -30,6 +30,11 @@ function openItem() {
   });
 }
 
+function reparent() {
+  let win2 = wManager.findByTitle("🪟 Item Window");
+  wManager.reparent(win2?.winId, "root");
+}
+
 function openScrapping() {
   wManager.open(Scrapping, {
     title: "👁️ Scrapping Window",
@@ -39,3 +44,4 @@ function openScrapping() {
   <MouseCords />
   <button onclick={openItem}>Ny item</button>
   <button onclick={openScrapping}>Scrapping</button>
+  <button onclick={reparent}>Byta parent</button>

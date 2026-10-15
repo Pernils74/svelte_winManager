@@ -54,6 +54,18 @@ onMount(() => {
   </header>
 
   <main class="workspace" bind:this={contentEl}>
+
+
+    <!-- ondragover={(e) => e.preventDefault()}
+    ondrop={(e) => {
+      e.preventDefault();
+      const draggedWinId = e.dataTransfer?.getData("text/plain");
+      if (draggedWinId) {
+          wManager.reparent(draggedWinId, ROOT_WIN_ID, { left: e.clientX - 100, top: e.clientY - 15 });
+        }
+      }} -->
+
+
     {#if contentEl}
       {#each rootWindows as win (win.winId)}
         {#if !win.state.isMinimized}

@@ -258,6 +258,67 @@ export class WindowManager {
     return copy;
   }
 
+  reparent(
+    id: WindowId,
+    newParentId: WindowId,
+    screenRect?: {
+      left?: number;
+      top?: number;
+      width?: number;
+      height?: number;
+    },
+  ): boolean {
+    const win = this.find(id);
+    const newParent = this.find(newParentId);
+
+    if (!win || !newParent || id === ROOT_WIN_ID) return false;
+
+    // Förhindra att ett fönster blir sin egen förälder
+    // eller flyttas in i ett av sina egna barn.
+    if (
+      id === newParentId ||
+      this.getDescendants(id).some((child) => child.winId === newParentId)
+    ) {
+      return false;
+    }
+
+    const parentElement = newParentId === ROOT_WIN_ID
+      ? null
+      : newParent.boundingEl;
+
+    const parentRect = parentElement?.getBoundingClientRect();
+
+    const originLeft = parentRect?.left ?? 0;
+    const originTop = parentRect?.top ?? 0;
+
+    // 1. Spara fönstrets nuvarande absoluta/skärm-position som fallback
+    // (om inget screenRect skickades med, räknar vi ut var det står just nu)
+    const currentAbsoluteLeft =
+      (win.boundingEl?.getBoundingClientRect().left ?? 0) + win.state.left;
+    const currentAbsoluteTop =
+      (win.boundingEl?.getBoundingClientRect().top ?? 0) + win.state.top;
+
+    // Uppdatera föräldra-ID
+    win.parentId = newParentId;
+
+    // 2. Beräkna de nya koordinaterna. Om specifika värden saknas i screenRect,
+    // räknar vi om fönstrets nuvarande position till det nya koordinatsystemet.
+    const targetScreenLeft = screenRect?.left ?? currentAbsoluteLeft;
+    const targetScreenTop = screenRect?.top ?? currentAbsoluteTop;
+
+    win.state.left = targetScreenLeft - originLeft;
+    win.state.top = targetScreenTop - originTop;
+
+    // Behåll nuvarande bredd/höjd om det inte skickas med nya i screenRect
+    win.state.width = screenRect?.width ?? win.state.width;
+    win.state.height = screenRect?.height ?? win.state.height;
+
+    win.boundingEl = parentElement;
+
+    this.focus(id);
+    return true;
+  }
+
   update(id: WindowId, updates: Partial<WindowState>): void {
     const win = this.find(id);
     if (!win || win.winId === ROOT_WIN_ID) {
