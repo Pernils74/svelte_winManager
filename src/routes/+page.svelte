@@ -1,4 +1,6 @@
-<!-- +page.svelte -->
+<!-- https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowFrame.svelte
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.svelte.ts
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowHost.svelte -->
 
 <!-- +page.svelte -->
 <script lang="ts">

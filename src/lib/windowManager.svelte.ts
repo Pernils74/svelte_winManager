@@ -47,7 +47,9 @@ export interface WindowInstance<TPayload = unknown> {
 
   extraHeight: number;
   zIndex: number;
-  noTile: boolean;
+
+  tileOffset: number; // how much to offset
+
   useArena: boolean;
   useMonitor: boolean;
   showButtons: boolean;
@@ -61,7 +63,8 @@ export interface OpenWindowOptions<TPayload = unknown> {
   title?: string;
   parentId?: WindowId | null;
   boundingEl?: HTMLElement | null;
-  noTile?: boolean;
+  tileOffset?: number;
+
   setId?: WindowId;
   props?: Record<string, unknown>;
   payload?: TPayload;
@@ -150,7 +153,8 @@ export class WindowManager {
     }
 
     const parent = this.find(options.parentId);
-    const offset = options.noTile ? 0 : this.windows.length * 20;
+    const tileOffset = options.tileOffset ?? 20; // Hämtar det inskickade värtet på tileOffset från den första inst
+    const currentOffset = this.windows.length * tileOffset;
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
@@ -162,8 +166,8 @@ export class WindowManager {
       boundingEl: options.boundingEl ?? null,
 
       state: {
-        left: options.left ?? offset,
-        top: options.top ?? offset,
+        left: options.left ?? currentOffset,
+        top: options.top ?? currentOffset,
         width: options.width ?? 0,
         height: options.height ?? 0,
         isMinimized: false,
@@ -175,7 +179,8 @@ export class WindowManager {
 
       extraHeight: options.extraHeight ?? 0,
       zIndex: ++this.zCounter,
-      noTile: options.noTile ?? false,
+      tileOffset,
+
       useArena: this.useArena,
       useMonitor: this.useMonitor,
       showButtons: options.showButtons ?? true,
