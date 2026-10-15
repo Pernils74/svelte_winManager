@@ -44,6 +44,7 @@ export interface WindowState extends WindowRect {
 export interface WindowInstance<TPayload = unknown> {
   winId: WindowId;
   title: string;
+  thumbnail: string | null;
   component: Component<any> | null;
   props: Record<string, unknown>;
   parentId: WindowId | null;
@@ -53,8 +54,8 @@ export interface WindowInstance<TPayload = unknown> {
   extraHeight: number;
   zIndex: number;
   tileOffset: number;
-  useArena: boolean;
-  useMonitor: boolean;
+  // useArena: boolean;
+  // useMonitor: boolean;
   showButtons: boolean;
   docking: WindowDocking;
   payload: TPayload;
@@ -98,8 +99,8 @@ function overlaps(
 export class WindowManager {
   windows = $state<WindowInstance[]>([]);
 
-  useArena = $state(true);
-  useMonitor = $state(false);
+  // useArena = $state(true);
+  // useMonitor = $state(false);
 
   private zCounter = 1;
 
@@ -107,6 +108,7 @@ export class WindowManager {
     this.windows.push({
       winId: ROOT_WIN_ID,
       title: "Root Workspace",
+      thumbnail: null,
       component: null,
       props: {},
       parentId: null,
@@ -125,8 +127,8 @@ export class WindowManager {
       zIndex: 0,
 
       tileOffset: 0,
-      useArena: true,
-      useMonitor: false,
+      // useArena: true,
+      // useMonitor: false,
       showButtons: false,
       docking: {},
       payload: null,
@@ -192,6 +194,7 @@ export class WindowManager {
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
       title: options.title ?? component.name ?? "Window",
+      thumbnail: null,
       component,
       props: options.props ?? {},
       parentId,
@@ -210,8 +213,8 @@ export class WindowManager {
       zIndex: ++this.zCounter,
 
       tileOffset,
-      useArena: this.useArena,
-      useMonitor: this.useMonitor,
+      // useArena: this.useArena,
+      // useMonitor: this.useMonitor,
       showButtons: options.showButtons ?? true,
       docking: options.docking ?? {},
       payload: (options.payload ?? null) as TPayload,
@@ -492,6 +495,13 @@ export class WindowManager {
     ]);
 
     this.windows = this.windows.filter((win) => !ids.has(win.winId));
+  }
+
+  setThumbnail(id: WindowId, thumbnail: string | null): void {
+    const win = this.find(id);
+    if (win) {
+      win.thumbnail = thumbnail;
+    }
   }
 }
 

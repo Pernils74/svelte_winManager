@@ -3,6 +3,7 @@ import { onDestroy, onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
 // Längst upp bland dina övriga importer:
 import { receive, send } from "./windowTransitions";
+import html2canvas from "html2canvas";
 
 import {
   getWindowManager,
@@ -405,8 +406,39 @@ function changeTransparency(event: WheelEvent) {
   });
 }
 
-function minimize() {
+// function minimize() {
+//   endInteraction();
+//   manager.minimize(win.winId);
+// }
+
+async function minimize() {
+  if (win.winId === ROOT_WIN_ID) return;
+
   endInteraction();
+
+  try {
+    // Ta bilden innan fönstret döljs.
+    const canvas = await html2canvas(frameEl, {
+      backgroundColor: "#ffffff",
+      scale: 0.5,
+      logging: false,
+      useCORS: true,
+
+      // Ta inte med resize-handtagen i miniatyren.
+      ignoreElements: (element: HTMLElement) =>
+        element.classList.contains("resize-handle"),
+    });
+
+    manager.setThumbnail(
+      win.winId,
+      canvas.toDataURL("image/jpeg", 0.72),
+    );
+  } catch (error) {
+    console.warn("Kunde inte skapa fönstrets miniatyrbild:", error);
+    manager.setThumbnail(win.winId, null);
+  }
+
+  // Minimera först när bildtagningen är färdig.
   manager.minimize(win.winId);
 }
 
