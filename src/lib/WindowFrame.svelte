@@ -24,7 +24,8 @@ let { win, bounds, children }: Props = $props();
 const manager = getWindowManager();
 
 let frameEl: HTMLDivElement;
-let contentEl: HTMLDivElement;
+// let contentEl: HTMLDivElement;
+let contentEl = $state<HTMLElement | undefined>(undefined);
 
 let left = $derived(win.state.left);
 let top = $derived(win.state.top);
@@ -429,10 +430,21 @@ function close() {
   aria-labelledby={titleId}
   aria-modal="false"
 >
+
+
+  {#if win.state.isMaximized && !titlebarVisible}
+  <div 
+    class="titlebar-hover-trigger" 
+    onmouseenter={showTitlebar}
+    role="presentation"
+  ></div>
+  {/if}
+
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="titlebar"
     class:is-hidden={win.state.isMaximized && !titlebarVisible}
+    
     use:interaction={"move"}
     onmouseenter={showTitlebar}
     onmouseleave={scheduleHideTitlebar}
@@ -511,6 +523,18 @@ function close() {
   border-radius: 6px;
   box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);
   overflow: hidden;
+}
+
+/* 🟢 NY STIL FÖR ATT FÅNGA HOVER VID SKÄRMKANTEN */
+.titlebar-hover-trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px; /* Tjockleken på ytan som reagerar längst upp */
+  z-index: 9999; /* Måste ligga absolut högst upp för att inte täckas av innehållet */
+  background: transparent;
+  pointer-events: auto;
 }
 
 .titlebar {
