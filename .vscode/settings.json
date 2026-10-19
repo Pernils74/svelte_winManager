@@ -7,5 +7,6 @@
   "[svelte]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
   },
-  "svelte.plugin.svelte.format.enable": false
+  "svelte.plugin.svelte.format.enable": false,  
 }
+

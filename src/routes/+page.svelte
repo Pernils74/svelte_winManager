@@ -18,16 +18,13 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBacke
 <!-- +page.svelte -->
 <script lang="ts">
 import { onMount } from "svelte";
+import Wallpaper from "#lib/Wallpaper.svelte";
 
 //   import ArenaMonitorButtons from '$lib/ArenaMonitorButtons.svelte';
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
-
-import {
-  getAllComponents,
-  getAllComponentsAsArray,
-} from "#lib/windowRegistry.ts";
+import { getAllComponentsAsArray } from "#lib/windowRegistry.ts";
 //   import Item from './Item.svelte';
 import Bom from "./Bom.svelte";
 import ArenaMonitorButtons from "#lib/ArenaMonitorButtons.svelte";
@@ -61,7 +58,7 @@ $effect(() => {
 
 <WindowHost>
   {#snippet children()}
-  <h1>Welcome to SvelteKit</h1>
+<h1>Welcome to SvelteKit</h1>
   <p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
   
   5. src/routes/+page.svelte
@@ -76,6 +73,7 @@ $effect(() => {
     {/each}
   </ul>
 
+  <Wallpaper word="page.svelte"></Wallpaper>
     <!-- Eventuellt permanent innehåll i arbetsytan -->
   {/snippet}
 </WindowHost>

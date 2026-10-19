@@ -81,7 +81,7 @@ export class WindowBackendManager implements WindowBackend {
       }
 
       // 🟢 NYTT FÖR WEBBLÄSARFLIKAR: Läs av initial data från localStorage vid boot
-      const currentWinId = new URLSearchParams(window.location.search).get(
+      const currentWinId = new URLSearchParams(globalThis.location.search).get(
         "winId",
       );
       if (currentWinId) {
@@ -144,7 +144,11 @@ export class WindowBackendManager implements WindowBackend {
 
         const label = `detached-${winId}`;
         const windows = await getAllWebviewWindows();
-        const targetWindow = windows.find((item) => item.label === label);
+        // const targetWindow = windows.find((item) => item.label === label);
+        const targetWindow = windows.find(
+          (item: { label: string; close: () => Promise<void> }) =>
+            item.label === label,
+        );
 
         if (targetWindow) {
           await targetWindow.close();
@@ -253,12 +257,12 @@ export class WindowBackendManager implements WindowBackend {
   // Browser-tab backend
   // --------------------------------------------------
 
-  private async openBrowserTab(
+  private openBrowserTab(
     descriptor: ExternalWindowDescriptor,
-  ): Promise<void> {
+  ): void { // <-- Ändrat från Promise<void> till void
     const { winId, title, componentKey, payload } = descriptor;
 
-    const url = new URL(window.location.href);
+    const url = new URL(globalThis.location.href);
 
     url.searchParams.set("winId", winId);
     url.searchParams.set("componentKey", componentKey);
@@ -306,11 +310,11 @@ export class WindowBackendManager implements WindowBackend {
 
     if (message.type === "window:close") {
       const currentWinId = new URLSearchParams(
-        window.location.search,
+        globalThis.location.search,
       ).get("winId");
 
       if (currentWinId === message.winId) {
-        window.close();
+        globalThis.close();
       }
 
       return;
@@ -392,7 +396,7 @@ export class WindowBackendManager implements WindowBackend {
     if (!isTauri()) return;
 
     const winId = new URLSearchParams(
-      window.location.search,
+      globalThis.location.search,
     ).get("winId");
 
     if (!winId) return;
@@ -402,7 +406,7 @@ export class WindowBackendManager implements WindowBackend {
       const eventPath = "@tauri-apps/api/event";
       const { listen } = await import(eventPath);
 
-      const unlistenInit = await listen<unknown>(
+      const unlistenInit = await listen(
         `init-payload-${winId}`,
         (event: any) => {
           this.notifyListeners(winId, event.payload);
@@ -410,7 +414,7 @@ export class WindowBackendManager implements WindowBackend {
         },
       );
 
-      const unlistenSync = await listen<unknown>(
+      const unlistenSync = await listen(
         `sync-payload-${winId}`,
         (event: any) => {
           this.notifyListeners(winId, event.payload);

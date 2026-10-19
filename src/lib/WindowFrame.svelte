@@ -579,15 +579,24 @@ $effect(() => {
 
   <!-- Visa bara Tauri-knappen om vi faktiskt kör i en Tauri-app -->
   {#if typeof window !== "undefined" && "__TAURI_INTERNALS__" in window}
-    <button type="button" title="Frikoppla till skrivbordsfönster" onclick={() => manager.detachWindow(win.winId, "tauri")}>
+    <button 
+      type="button" 
+      title="Frikoppla till skrivbordsfönster" 
+      onclick={() => manager.detachWindow(win.winId, "tauri")}>
       🗔
     </button>
+  {:else}
+    <button 
+      type="button" 
+      title="Frikoppla till ny webbläsarflik" 
+      onclick={() => manager.detachWindow(win.winId, "tab")}>
+      🗗
+    </button>
   {/if}
-  
-  <button type="button" title="Frikoppla till ny webbläsarflik" onclick={() => manager.detachWindow(win.winId, "tab")}>
-    🗗
-  </button>
+    
 
+
+  
         <button
           type="button"
           title="Maximera/återställ"

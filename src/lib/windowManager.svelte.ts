@@ -1,5 +1,5 @@
 import { type Component, createContext } from "svelte";
-import { registerComponent } from "./windowRegistry.ts";
+import { getRealComponentName, registerComponent } from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -206,12 +206,17 @@ export class WindowManager {
 
     const currentOffset = siblingCount * tileOffset;
 
+    console.log(getRealComponentName(component), "  ddddddddd");
+    const initialKey = getRealComponentName(component);
+    // 2. Registrera komponenten. Funktionen returnerar nu det uppackade, RIKTIGA namnet!
+    const compKey = registerComponent(initialKey, component);
+
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
       title: options.title ?? component.name ?? "Window",
       thumbnail: null,
       component,
-      componentKey: component.name, //options.componentKey,
+      componentKey: compKey, //options.componentKey,
       props: options.props ?? {},
       parentId,
       boundingEl: options.boundingEl ?? null,

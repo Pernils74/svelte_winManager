@@ -1,7 +1,10 @@
 {
   "fmt": {
-    "include": ["src/", "static/"],
-    "exts": ["ts", "js", "svelte", "json"]
+    "include": ["src/**/*.svelte", "src/**/*.ts", "src/**/*.js", "static/"],
+    "lineWidth": 80,
+    "useTabs": false,
+    "indentWidth": 2,
+    "singleQuote": false
   },
   "unstable": ["fmt-component"]
 }

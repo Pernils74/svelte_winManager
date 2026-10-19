@@ -1,30 +1,3 @@
-// import type { Component } from "svelte";
-
-// import ArenaMonitorButtons from "./ArenaMonitorButtons.svelte";
-// import WindowActions from "./WindowActions.svelte";
-// // import TmpComponent from "./tmp";
-
-// export const windowRegistry = {
-//   "ArenaMonitorButtons": ArenaMonitorButtons,
-//   "WindowActions": WindowActions,
-//   // "tmp": TmpComponent,
-// } as const;
-
-// export type ComponentKey = keyof typeof windowRegistry;
-
-// export function getComponentByKey(
-//   key: string | null | undefined,
-// ): Component<any> | null {
-//   if (!key) return null;
-//   if (key in windowRegistry) {
-//     return windowRegistry[key as ComponentKey];
-//   }
-//   console.warn(
-//     `[WindowRegistry] Komponenten "${key}" är inte registrerad i windowRegistry.ts`,
-//   );
-//   return null;
-// }
-
 import { type Component, createRawSnippet } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
@@ -34,17 +7,71 @@ const dynamicRegistry = new SvelteMap<string, Component<any>>(); //new Map<strin
 /**
  * Registrerar en komponent i runtime
  */
-export function registerComponent(key: string, component: Component<any>) {
-  if (!dynamicRegistry.has(key)) {
-    dynamicRegistry.set(key, component);
+// export function registerComponent(key: string, component: Component<any>) {
+//   if (!dynamicRegistry.has(key)) {
+//     dynamicRegistry.set(key, component);
+//   }
+// }
+
+/**
+ * Hjälpfunktion som gräver fram det riktiga namnet bakom Sveltes/Vites HMR-wrappers
+ */
+export function getRealComponentName(component: any): string {
+  if (!component) return "UnknownComponent";
+
+  // 1. Kolla om det finns en filnamn-symbol (Svelte 5 standard)
+  // Detta kommer att ge oss en sträng som "src/routes/Bom.svelte"
+  const symbols = Object.getOwnPropertySymbols(component);
+  const filenameSymbol = symbols.find((s) =>
+    s.toString() === "Symbol(filename)"
+  );
+
+  if (filenameSymbol) {
+    const filePath = component[filenameSymbol]; // t.ex. "src/routes/Bom.svelte"
+    if (filePath) {
+      // Plocka ut bara filnamnet utan sökväg och ändelse (Bom)
+      const match = filePath.match(/\/([^/]+)\.svelte$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
   }
+
+  // 2. Fallback: Kolla i Symbol(hmr) om den finns
+  const hmrSymbol = symbols.find((s) => s.toString() === "Symbol(hmr)");
+  if (hmrSymbol && component[hmrSymbol]?.fn) {
+    const realFn = component[hmrSymbol].fn;
+    if (realFn.name) return realFn.name;
+  }
+
+  // 3. Fallback för produktion (där det inte finns några symboler eller wrappers)
+  if (
+    component.name && component.name !== "wrapper" && component.name !== "Proxy"
+  ) {
+    return component.name;
+  }
+
+  return "UnknownComponent";
 }
 
 /**
- * Returnerar alla registrerade komponenter som ett objekt { [key]: Component }
+ * Registrerar en komponent i runtime och packar upp eventuella proxies
  */
-export function getAllComponents(): Record<string, Component<any>> {
-  return Object.fromEntries(dynamicRegistry);
+export function registerComponent(
+  key: string,
+  component: Component<any>,
+): string {
+  // Om nyckeln som skickas in är en wrapper/proxy, leta upp det riktiga namnet istället
+  let realKey = key;
+  if (key === "Proxy" || key === "Wrapper" || key === "ProxyComponent") {
+    realKey = getRealComponentName(component);
+  }
+
+  if (!dynamicRegistry.has(realKey)) {
+    dynamicRegistry.set(realKey, component);
+  }
+
+  return realKey; // Returnera den uppackade, riktiga nyckeln
 }
 
 /**
