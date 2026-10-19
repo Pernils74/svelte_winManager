@@ -1,6 +1,17 @@
-<!-- https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowFrame.svelte
+<!--
+
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowFrame.svelte
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.svelte.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowHost.svelte -->
+
+
+
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts
+
+-->
 
 <!-- +page.svelte -->
 <script lang="ts">

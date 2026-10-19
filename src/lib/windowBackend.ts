@@ -1,3 +1,30 @@
+// export type WindowTarget = "internal" | "tab" | "tauri";
+
+// export interface ExternalWindowDescriptor {
+//   winId: string;
+//   title: string;
+//   componentKey: string;
+//   payload: unknown;
+// }
+
+// export interface WindowBackend {
+//   open(window: ExternalWindowDescriptor): Promise<void>;
+
+//   close(winId: string): Promise<void>;
+
+//   send(
+//     winId: string,
+//     payload: unknown,
+//   ): Promise<void>;
+
+//   onMessage(
+//     winId: string,
+//     callback: (payload: unknown) => void,
+//   ): () => void;
+// }
+
+// src/lib/windowBackend.ts
+
 export type WindowTarget = "internal" | "tab" | "tauri";
 
 export interface ExternalWindowDescriptor {
@@ -8,17 +35,400 @@ export interface ExternalWindowDescriptor {
 }
 
 export interface WindowBackend {
+  readonly target: Exclude<WindowTarget, "internal">;
+
   open(window: ExternalWindowDescriptor): Promise<void>;
-
   close(winId: string): Promise<void>;
-
-  send(
-    winId: string,
-    payload: unknown,
-  ): Promise<void>;
-
+  send(winId: string, payload: unknown): Promise<void>;
   onMessage(
     winId: string,
     callback: (payload: unknown) => void,
   ): () => void;
+
+  destroy(): void;
+}
+
+type MessageCallback = (payload: unknown) => void;
+
+type BrowserMessage =
+  | {
+    winId: string;
+    type: "payload:update" | "payload:init";
+    payload: unknown;
+  }
+  | {
+    winId: string;
+    type: "window:close";
+  };
+
+const CHANNEL_NAME = "svelte_winmanager_channel";
+
+const isTauri = (): boolean =>
+  typeof window !== "undefined" &&
+  "__TAURI_INTERNALS__" in window;
+
+const isBrowser = (): boolean => typeof window !== "undefined";
+
+const initStorageKey = (winId: string): string => `win_payload_init_${winId}`;
+
+/**
+ * Gemensam backend för frikopplade fönster.
+ *
+ * Väljer automatiskt:
+ * - TauriWindowBackend i Tauri.
+ * - BrowserTabBackend i en vanlig webbläsare.
+ *
+ * I ett fönster som redan är frikopplat används samma backend
+ * för att ta emot initial payload och senare uppdateringar.
+ */
+export class WindowBackendManager implements WindowBackend {
+  readonly target: Exclude<WindowTarget, "internal">;
+
+  private listeners = new Map<string, Set<MessageCallback>>();
+  private openedTabs = new Map<string, Window | null>();
+
+  private channel: BroadcastChannel | null = null;
+  private unlistenFunctions = new Map<string, () => void>();
+
+  private destroyed = false;
+  private initListenerPromise: Promise<void> | null = null;
+
+  constructor() {
+    this.target = isTauri() ? "tauri" : "tab";
+
+    if (this.target === "tab" && isBrowser()) {
+      if (typeof BroadcastChannel !== "undefined") {
+        this.channel = new BroadcastChannel(CHANNEL_NAME);
+        this.channel.onmessage = (event: MessageEvent<BrowserMessage>) => {
+          this.handleBrowserMessage(event.data);
+        };
+      }
+    }
+
+    if (this.target === "tauri") {
+      this.initListenerPromise = this.initTauriListeners();
+    }
+  }
+
+  /**
+   * Öppnar ett externt fönster.
+   */
+  async open(descriptor: ExternalWindowDescriptor): Promise<void> {
+    if (this.destroyed) {
+      throw new Error("WindowBackendManager har redan förstörts.");
+    }
+
+    if (!descriptor.winId || !descriptor.componentKey) {
+      throw new Error("winId och componentKey krävs.");
+    }
+
+    if (this.target === "tauri") {
+      await this.openTauri(descriptor);
+    } else {
+      await this.openBrowserTab(descriptor);
+    }
+  }
+
+  /**
+   * Stänger ett externt fönster.
+   */
+  async close(winId: string): Promise<void> {
+    if (this.target === "tauri") {
+      try {
+        const { getAllWebviewWindows } = await import(
+          "@tauri-apps/api/webviewWindow"
+        );
+
+        const label = `detached-${winId}`;
+        const windows = await getAllWebviewWindows();
+        const targetWindow = windows.find((item) => item.label === label);
+
+        if (targetWindow) {
+          await targetWindow.close();
+        }
+      } catch (error) {
+        console.error(
+          `[WindowBackend] Kunde inte stänga Tauri-fönster ${winId}:`,
+          error,
+        );
+      }
+
+      return;
+    }
+
+    const tab = this.openedTabs.get(winId);
+
+    if (tab && !tab.closed) {
+      tab.close();
+      this.openedTabs.delete(winId);
+      return;
+    }
+
+    this.postBrowserMessage({
+      winId,
+      type: "window:close",
+    });
+  }
+
+  /**
+   * Skickar uppdaterad payload till det frikopplade fönstret.
+   */
+  async send(winId: string, payload: unknown): Promise<void> {
+    if (this.target === "tauri") {
+      try {
+        const { emit } = await import("@tauri-apps/api/event");
+
+        await emit(`sync-payload-${winId}`, payload);
+      } catch (error) {
+        console.error(
+          `[WindowBackend] Kunde inte skicka payload till ${winId}:`,
+          error,
+        );
+      }
+
+      return;
+    }
+
+    this.postBrowserMessage({
+      winId,
+      type: "payload:update",
+      payload,
+    });
+  }
+
+  /**
+   * Lyssnar på payload från ett externt fönster.
+   *
+   * Returnerar en funktion för att avregistrera lyssnaren.
+   */
+  onMessage(
+    winId: string,
+    callback: MessageCallback,
+  ): () => void {
+    if (!this.listeners.has(winId)) {
+      this.listeners.set(winId, new Set());
+    }
+
+    this.listeners.get(winId)!.add(callback);
+
+    return () => {
+      const callbacks = this.listeners.get(winId);
+
+      if (!callbacks) return;
+
+      callbacks.delete(callback);
+
+      if (callbacks.size === 0) {
+        this.listeners.delete(winId);
+      }
+    };
+  }
+
+  /**
+   * Frigör resurser när backend inte längre behövs.
+   */
+  destroy(): void {
+    if (this.destroyed) return;
+
+    this.destroyed = true;
+
+    this.channel?.close();
+    this.channel = null;
+
+    for (const unlisten of this.unlistenFunctions.values()) {
+      unlisten();
+    }
+
+    this.unlistenFunctions.clear();
+    this.listeners.clear();
+    this.openedTabs.clear();
+  }
+
+  // --------------------------------------------------
+  // Browser-tab backend
+  // --------------------------------------------------
+
+  private async openBrowserTab(
+    descriptor: ExternalWindowDescriptor,
+  ): Promise<void> {
+    const { winId, title, componentKey, payload } = descriptor;
+
+    const url = new URL(window.location.href);
+
+    url.searchParams.set("winId", winId);
+    url.searchParams.set("componentKey", componentKey);
+    url.searchParams.set("title", title);
+
+    try {
+      localStorage.setItem(
+        initStorageKey(winId),
+        JSON.stringify(payload),
+      );
+    } catch (error) {
+      console.error(
+        `[WindowBackend] Kunde inte spara initial payload för ${winId}:`,
+        error,
+      );
+      throw error;
+    }
+
+    const tab = window.open(url.toString(), `_blank_${winId}`);
+
+    if (!tab) {
+      localStorage.removeItem(initStorageKey(winId));
+
+      throw new Error(
+        "Webbläsaren blockerade den nya fliken. Tillåt popup-fönster för sidan.",
+      );
+    }
+
+    this.openedTabs.set(winId, tab);
+  }
+
+  private postBrowserMessage(message: BrowserMessage): void {
+    if (!this.channel) {
+      console.warn(
+        "[WindowBackend] BroadcastChannel stöds inte i den här miljön.",
+      );
+      return;
+    }
+
+    this.channel.postMessage(message);
+  }
+
+  private handleBrowserMessage(message: BrowserMessage): void {
+    if (!message?.winId || !message.type) return;
+
+    if (message.type === "window:close") {
+      const currentWinId = new URLSearchParams(
+        window.location.search,
+      ).get("winId");
+
+      if (currentWinId === message.winId) {
+        window.close();
+      }
+
+      return;
+    }
+
+    if (
+      message.type === "payload:update" ||
+      message.type === "payload:init"
+    ) {
+      this.notifyListeners(message.winId, message.payload);
+    }
+  }
+
+  // --------------------------------------------------
+  // Tauri backend
+  // --------------------------------------------------
+
+  private async openTauri(
+    descriptor: ExternalWindowDescriptor,
+  ): Promise<void> {
+    const { winId, title, componentKey, payload } = descriptor;
+
+    const { WebviewWindow } = await import(
+      "@tauri-apps/api/webviewWindow"
+    );
+
+    const params = new URLSearchParams({
+      winId,
+      componentKey,
+      title,
+    });
+
+    const tauriWindow = new WebviewWindow(
+      `detached-${winId}`,
+      {
+        url: `index.html?${params.toString()}`,
+        title,
+        width: 800,
+        height: 600,
+        decorations: true,
+      },
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+
+      tauriWindow.once("tauri://created", () => {
+        settled = true;
+        resolve();
+      });
+
+      tauriWindow.once("tauri://error", (event) => {
+        settled = true;
+        reject(event.payload);
+      });
+
+      // Förhindra att ett oväntat eventfel lämnar ett ouppklarat löfte.
+      void Promise.resolve().then(() => {
+        if (settled) return;
+      });
+    });
+
+    const { emit } = await import("@tauri-apps/api/event");
+
+    await emit(`init-payload-${winId}`, payload);
+  }
+
+  private async initTauriListeners(): Promise<void> {
+    if (!isTauri()) return;
+
+    const winId = new URLSearchParams(
+      window.location.search,
+    ).get("winId");
+
+    if (!winId) return;
+
+    try {
+      const { listen } = await import("@tauri-apps/api/event");
+
+      const unlistenInit = await listen<unknown>(
+        `init-payload-${winId}`,
+        (event) => {
+          this.notifyListeners(winId, event.payload);
+          unlistenInit();
+        },
+      );
+
+      const unlistenSync = await listen<unknown>(
+        `sync-payload-${winId}`,
+        (event) => {
+          this.notifyListeners(winId, event.payload);
+        },
+      );
+
+      this.unlistenFunctions.set(winId, () => {
+        unlistenInit();
+        unlistenSync();
+      });
+    } catch (error) {
+      console.error(
+        "[WindowBackend] Kunde inte initiera Tauri-lyssnare:",
+        error,
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // Shared helpers
+  // --------------------------------------------------
+
+  private notifyListeners(
+    winId: string,
+    payload: unknown,
+  ): void {
+    this.listeners.get(winId)?.forEach((callback) => {
+      callback(payload);
+    });
+  }
+}
+
+/**
+ * Fabrik för att skapa backend.
+ */
+export function createWindowBackend(): WindowBackendManager {
+  return new WindowBackendManager();
 }

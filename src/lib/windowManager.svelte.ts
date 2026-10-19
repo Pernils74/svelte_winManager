@@ -1,5 +1,11 @@
 import { type Component, createContext } from "svelte";
 
+import {
+  createWindowBackend,
+  type WindowBackend,
+  type WindowTarget,
+} from "./windowBackend.ts";
+
 export const ROOT_WIN_ID = "root";
 export const EPSILON = 3;
 export const MIN_WIDTH = 160;
@@ -46,6 +52,7 @@ export interface WindowInstance<TPayload = unknown> {
   title: string;
   thumbnail: string | null;
   component: Component<any> | null;
+  componentKey?: string; // component as string, needed for browsertab and tauri backend
   props: Record<string, unknown>;
   parentId: WindowId | null;
   boundingEl: HTMLElement | null;
@@ -80,6 +87,7 @@ export interface OpenWindowOptions<TPayload = unknown> {
   showButtons?: boolean;
   docking?: WindowDocking;
   actions?: WindowActionsComponent;
+  componentKey?: string;
 }
 
 function rectOf(win: WindowInstance): WindowRect {
@@ -104,7 +112,12 @@ export class WindowManager {
 
   private zCounter = 1;
 
-  constructor() {
+  private readonly backend: WindowBackend;
+  // constructor() {
+
+  constructor(backend: WindowBackend = createWindowBackend()) {
+    this.backend = backend;
+
     this.windows.push({
       winId: ROOT_WIN_ID,
       title: "Root Workspace",
@@ -196,6 +209,7 @@ export class WindowManager {
       title: options.title ?? component.name ?? "Window",
       thumbnail: null,
       component,
+      componentKey: options.componentKey,
       props: options.props ?? {},
       parentId,
       boundingEl: options.boundingEl ?? null,
@@ -545,6 +559,22 @@ export class WindowManager {
     });
 
     this.focus(id);
+  }
+
+  /**
+   * Stänger ett frikopplat fönster.
+   */
+  async closeDetached(id: WindowId): Promise<boolean> {
+    try {
+      await this.backend.close(id);
+      return true;
+    } catch (error) {
+      console.error(
+        `[WindowManager] Kunde inte stänga externt fönster ${id}:`,
+        error,
+      );
+      return false;
+    }
   }
 
   closeWin(id: WindowId): void {
