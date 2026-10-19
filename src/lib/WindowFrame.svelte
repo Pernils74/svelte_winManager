@@ -552,6 +552,24 @@ function close() {
   endInteraction();
   manager.closeWin(win.winId);
 }
+
+// Övervaka djupa ändringar i payload och strömma till backend om fönstret körs externt
+$effect(() => {
+  if (win.winId !== ROOT_WIN_ID && win.payload) {
+    // Ta en reaktiv snapshot av din payload
+    const currentPayload = $state.snapshot(win.payload);
+
+    // Vi rensar bort eventuella funktioner/callbacks på toppnivå innan vi skickar över JSON
+    const cleanPayload = Object.fromEntries(
+      Object.entries(currentPayload ?? {}).filter(([, val]) =>
+        typeof val !== "function"
+      ),
+    );
+
+    // Strömma ut ändringen via vår manager (som pratar med sin backend)
+    manager.backend.send(win.winId, cleanPayload);
+  }
+});
 </script>
 
 <div
@@ -574,6 +592,7 @@ function close() {
   aria-labelledby={titleId}
   aria-modal="false"
 >
+
 
 
   {#if win.state.isMaximized && !titlebarVisible}
@@ -607,6 +626,18 @@ function close() {
       {/if}
 
       <div class="controls">
+
+  <!-- Visa bara Tauri-knappen om vi faktiskt kör i en Tauri-app -->
+  {#if typeof window !== "undefined" && "__TAURI_INTERNALS__" in window}
+    <button type="button" title="Frikoppla till skrivbordsfönster" onclick={() => manager.detachWindow(win.winId, "tauri")}>
+      🗔
+    </button>
+  {/if}
+  
+  <button type="button" title="Frikoppla till ny webbläsarflik" onclick={() => manager.detachWindow(win.winId, "tab")}>
+    🗗
+  </button>
+
         <button
           type="button"
           title="Maximera/återställ"

@@ -2,6 +2,9 @@
 import { onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
+
+import { getComponentByKey } from "./windowRegistry"; // Importera registret!
+
 // Längst upp i WindowHost.svelte:
 import { receive, send } from "./windowTransitions";
 
@@ -11,11 +14,15 @@ interface Props {
 }
 
 let { children, topbarContent }: Props = $props();
-
 const wManager = getWindowManager();
 
-let contentEl = $state<HTMLElement | undefined>(undefined);
+// Kolla URL-parametrar för att se om detta fönster är fristående
+let isStandalone = $state(false);
+let standaloneComponentKey = $state<string | null>(null);
+let standaloneWinId = $state<string | null>(null);
+let StandaloneComponent = $derived(getComponentByKey(standaloneComponentKey));
 
+let contentEl = $state<HTMLElement | undefined>(undefined);
 let winCount = $derived(wManager.winCount);
 let minimizedWindows = $derived(
   wManager.windows.filter(
@@ -25,8 +32,54 @@ let minimizedWindows = $derived(
 let rootWindows = $derived(wManager.getChildren(ROOT_WIN_ID));
 
 onMount(() => {
-  if (!contentEl) return;
+  const urlParams = new URLSearchParams(window.location.search);
+  standaloneWinId = urlParams.get("winId");
+  standaloneComponentKey = urlParams.get("componentKey");
 
+  if (standaloneWinId && standaloneComponentKey) {
+    isStandalone = true;
+
+    // Hitta fönsterinstansen lokalt eller skapa en tom skal-payload
+    let localWin = wManager.find(standaloneWinId);
+    if (!localWin) {
+      // Om fönstret laddas i en helt ny flik, lyssna på inkommande payload-synk
+      wManager.backend.onMessage(standaloneWinId, (incomingPayload) => {
+        const win = wManager.find(standaloneWinId);
+        if (win) {
+          win.payload = incomingPayload;
+        } else {
+          // Skapa en instans lokalt i det nya JavaScript-kontextet
+          wManager.windows.push({
+            winId: standaloneWinId!,
+            title: urlParams.get("title") ?? "Fristående",
+            thumbnail: null,
+            component: null,
+            props: {},
+            parentId: null,
+            boundingEl: null,
+            state: {
+              left: 0,
+              top: 0,
+              width: window.innerWidth,
+              height: window.innerHeight,
+              isMinimized: false,
+              isMaximized: true,
+              transparency: 1,
+            },
+            storedState: null,
+            extraHeight: 0,
+            zIndex: 1,
+            tileOffset: 0,
+            showButtons: false,
+            docking: {},
+            payload: incomingPayload,
+          });
+        }
+      });
+    }
+  }
+
+  if (!contentEl) return;
   const updateBounds = () => {
     if (!contentEl) return;
     wManager.setRootBounds(
@@ -34,15 +87,33 @@ onMount(() => {
       contentEl.clientHeight,
     );
   };
-
   updateBounds();
-
   const observer = new ResizeObserver(updateBounds);
   observer.observe(contentEl);
-
   return () => observer.disconnect();
 });
 </script>
+
+
+{#if isStandalone}
+  <!-- Renderar ENDAST komponenten i helskärm utan fönsterramar, topbars eller taskbars -->
+  <div class="standalone-container">
+    {#if StandaloneComponent && standaloneWinId}
+      {@const winInstance = wManager.find(standaloneWinId)}
+      {#if winInstance}
+        <StandaloneComponent 
+          winId={standaloneWinId} 
+          payload={winInstance.payload}
+          {...winInstance.props} 
+        />
+      {/if}
+    {:else}
+      <div class="loading">Laddar fristående komponent...</div>
+    {/if}
+  </div>
+{:else}
+
+
 
 <div class="layout">
   <header class="topbar">
@@ -56,14 +127,6 @@ onMount(() => {
   <main class="workspace" bind:this={contentEl}>
 
 
-    <!-- ondragover={(e) => e.preventDefault()}
-    ondrop={(e) => {
-      e.preventDefault();
-      const draggedWinId = e.dataTransfer?.getData("text/plain");
-      if (draggedWinId) {
-          wManager.reparent(draggedWinId, ROOT_WIN_ID, { left: e.clientX - 100, top: e.clientY - 15 });
-        }
-      }} -->
 
 
     {#if contentEl}
@@ -141,6 +204,8 @@ onMount(() => {
     {/each}
   </footer>
 </div>
+{/if}
+
 
 <style>
 .layout {

@@ -135,9 +135,11 @@ export class WindowBackendManager implements WindowBackend {
   async close(winId: string): Promise<void> {
     if (this.target === "tauri") {
       try {
-        const { getAllWebviewWindows } = await import(
-          "@tauri-apps/api/webviewWindow"
-        );
+        // 1. Skapa en variabel för strängen. Detta döljer importen för Vite/Rollup under bygget!
+        const modulePath = "@tauri-apps/api/webviewWindow";
+
+        // 2. Gör importen via variabeln
+        const { getAllWebviewWindows } = await import(modulePath);
 
         const label = `detached-${winId}`;
         const windows = await getAllWebviewWindows();
@@ -176,7 +178,9 @@ export class WindowBackendManager implements WindowBackend {
   async send(winId: string, payload: unknown): Promise<void> {
     if (this.target === "tauri") {
       try {
-        const { emit } = await import("@tauri-apps/api/event");
+        // Göm strängen för byggverktyget (Vite/Rollup)
+        const eventPath = "@tauri-apps/api/event";
+        const { emit } = await import(eventPath);
 
         await emit(`sync-payload-${winId}`, payload);
       } catch (error) {
@@ -272,7 +276,7 @@ export class WindowBackendManager implements WindowBackend {
       throw error;
     }
 
-    const tab = window.open(url.toString(), `_blank_${winId}`);
+    const tab = globalThis.open(url.toString(), `_blank_${winId}`);
 
     if (!tab) {
       localStorage.removeItem(initStorageKey(winId));
@@ -328,9 +332,9 @@ export class WindowBackendManager implements WindowBackend {
   ): Promise<void> {
     const { winId, title, componentKey, payload } = descriptor;
 
-    const { WebviewWindow } = await import(
-      "@tauri-apps/api/webviewWindow"
-    );
+    // Säkra importen genom att gömma strängen för byggverktyget
+    const webviewWindowPath = "@tauri-apps/api/webviewWindow";
+    const { WebviewWindow } = await import(webviewWindowPath);
 
     const params = new URLSearchParams({
       winId,
@@ -357,7 +361,7 @@ export class WindowBackendManager implements WindowBackend {
         resolve();
       });
 
-      tauriWindow.once("tauri://error", (event) => {
+      tauriWindow.once("tauri://error", (event: any) => {
         settled = true;
         reject(event.payload);
       });
@@ -368,7 +372,9 @@ export class WindowBackendManager implements WindowBackend {
       });
     });
 
-    const { emit } = await import("@tauri-apps/api/event");
+    // Säkra även event-importen på samma sätt
+    const eventPath = "@tauri-apps/api/event";
+    const { emit } = await import(eventPath);
 
     await emit(`init-payload-${winId}`, payload);
   }
@@ -383,11 +389,13 @@ export class WindowBackendManager implements WindowBackend {
     if (!winId) return;
 
     try {
-      const { listen } = await import("@tauri-apps/api/event");
+      // Göm strängen för byggverktyget (Vite/Rollup) så det går att bygga för enbart webb
+      const eventPath = "@tauri-apps/api/event";
+      const { listen } = await import(eventPath);
 
       const unlistenInit = await listen<unknown>(
         `init-payload-${winId}`,
-        (event) => {
+        (event: any) => {
           this.notifyListeners(winId, event.payload);
           unlistenInit();
         },
@@ -395,7 +403,7 @@ export class WindowBackendManager implements WindowBackend {
 
       const unlistenSync = await listen<unknown>(
         `sync-payload-${winId}`,
-        (event) => {
+        (event: any) => {
           this.notifyListeners(winId, event.payload);
         },
       );

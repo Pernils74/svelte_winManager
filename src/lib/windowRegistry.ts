@@ -1,12 +1,12 @@
 import type { Component } from "svelte";
 import ArenaMonitorButtons from "./ArenaMonitorButtons.svelte";
 import WindowActions from "./WindowActions.svelte";
-import TmpComponent from "./tmp.svelte";
+// import TmpComponent from "./tmp";
 
 export const windowRegistry = {
   "ArenaMonitorButtons": ArenaMonitorButtons,
   "WindowActions": WindowActions,
-  "tmp": TmpComponent,
+  // "tmp": TmpComponent,
 } as const;
 
 export type ComponentKey = keyof typeof windowRegistry;

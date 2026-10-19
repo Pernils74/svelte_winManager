@@ -112,7 +112,8 @@ export class WindowManager {
 
   private zCounter = 1;
 
-  private readonly backend: WindowBackend;
+  // private readonly backend: WindowBackend;
+  backend: WindowBackend;
   // constructor() {
 
   constructor(backend: WindowBackend = createWindowBackend()) {
@@ -559,6 +560,38 @@ export class WindowManager {
     });
 
     this.focus(id);
+  }
+
+  async detachWindow(id: WindowId, target: "tab" | "tauri"): Promise<void> {
+    const win = this.find(id);
+    if (!win || id === ROOT_WIN_ID) return;
+
+    if (!win.componentKey) {
+      console.error(
+        `[WindowManager] Fönstret "${win.title}" saknar en 'componentKey' och kan inte frikopplas.`,
+      );
+      return;
+    }
+
+    const descriptor = {
+      winId: win.winId,
+      title: win.title,
+      componentKey: win.componentKey,
+      payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
+    };
+
+    try {
+      // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
+      await this.backend.open(descriptor);
+
+      // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
+      this.closeWin(id);
+    } catch (error) {
+      console.error(
+        "[WindowManager] Misslyckades att frikoppla fönster:",
+        error,
+      );
+    }
   }
 
   /**
