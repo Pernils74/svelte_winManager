@@ -1,0 +1,1 @@
+För att göra din fönsterhanterare kompatibel med både webben och Tauri, behöver vi abstrahera de operationer som skiljer sig åt. På webbe
