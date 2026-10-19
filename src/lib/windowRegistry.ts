@@ -26,9 +26,10 @@
 // }
 
 import { type Component, createRawSnippet } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 
 // En dynamisk runtime-karta där öppnade komponenter registreras automatiskt
-const dynamicRegistry = new Map<string, Component<any>>();
+const dynamicRegistry = new SvelteMap<string, Component<any>>(); //new Map<string, Component<any>>();
 
 /**
  * Registrerar en komponent i runtime
@@ -37,6 +38,20 @@ export function registerComponent(key: string, component: Component<any>) {
   if (!dynamicRegistry.has(key)) {
     dynamicRegistry.set(key, component);
   }
+}
+
+/**
+ * Returnerar alla registrerade komponenter som ett objekt { [key]: Component }
+ */
+export function getAllComponents(): Record<string, Component<any>> {
+  return Object.fromEntries(dynamicRegistry);
+}
+
+/**
+ * Alternativ: Returnerar alla registrerade komponenter som en array av [key, Component] par
+ */
+export function getAllComponentsAsArray(): [string, Component<any>][] {
+  return Array.from(dynamicRegistry.entries());
 }
 
 /**

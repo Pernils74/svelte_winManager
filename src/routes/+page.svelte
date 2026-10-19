@@ -24,6 +24,10 @@ import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
 
+import {
+  getAllComponents,
+  getAllComponentsAsArray,
+} from "#lib/windowRegistry.ts";
 //   import Item from './Item.svelte';
 import Bom from "./Bom.svelte";
 import ArenaMonitorButtons from "#lib/ArenaMonitorButtons.svelte";
@@ -48,6 +52,11 @@ onMount(() => {
     actions: BomActions,
   });
 });
+
+const allComponents = $derived(getAllComponentsAsArray());
+$effect(() => {
+  console.log(allComponents);
+});
 </script>
 
 <WindowHost>
@@ -59,8 +68,13 @@ onMount(() => {
   
   Nu blir startsidan betydligt enklare. Den behöver bara initiera context och välja vilka fönster som ska öppnas initialt.
   svelte
-  
-
+  <h3>Registrerade komponenter i systemet:</h3>
+  <ul>
+    <!-- Vi destrukturerar [key, value] från din Map-array -->
+    {#each allComponents as [key, component]}
+      <li>Nyckel: <strong>{key}</strong></li>
+    {/each}
+  </ul>
 
     <!-- Eventuellt permanent innehåll i arbetsytan -->
   {/snippet}
