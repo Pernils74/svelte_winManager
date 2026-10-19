@@ -531,7 +531,7 @@ async function minimize() {
       useCORS: true,
 
       // Ta inte med resize-handtagen i miniatyren.
-      ignoreElements: (element: HTMLElement) =>
+      ignoreElements: (element: Element) =>
         element.classList.contains("resize-handle"),
     });
 

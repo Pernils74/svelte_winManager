@@ -564,7 +564,10 @@ export class WindowManager {
 
   async detachWindow(id: WindowId, target: "tab" | "tauri"): Promise<void> {
     const win = this.find(id);
-    if (!win || id === ROOT_WIN_ID) return;
+    if (!win || id === ROOT_WIN_ID) {
+      console.log(id, win.title);
+      return;
+    }
 
     if (!win.componentKey) {
       console.error(
