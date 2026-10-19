@@ -1,28 +1,3 @@
-// export type WindowTarget = "internal" | "tab" | "tauri";
-
-// export interface ExternalWindowDescriptor {
-//   winId: string;
-//   title: string;
-//   componentKey: string;
-//   payload: unknown;
-// }
-
-// export interface WindowBackend {
-//   open(window: ExternalWindowDescriptor): Promise<void>;
-
-//   close(winId: string): Promise<void>;
-
-//   send(
-//     winId: string,
-//     payload: unknown,
-//   ): Promise<void>;
-
-//   onMessage(
-//     winId: string,
-//     callback: (payload: unknown) => void,
-//   ): () => void;
-// }
-
 // src/lib/windowBackend.ts
 
 export type WindowTarget = "internal" | "tab" | "tauri";
@@ -93,6 +68,7 @@ export class WindowBackendManager implements WindowBackend {
   private destroyed = false;
   private initListenerPromise: Promise<void> | null = null;
 
+  // Leta upp din constructor i WindowBackendManager och uppdatera till detta:
   constructor() {
     this.target = isTauri() ? "tauri" : "tab";
 
@@ -102,6 +78,31 @@ export class WindowBackendManager implements WindowBackend {
         this.channel.onmessage = (event: MessageEvent<BrowserMessage>) => {
           this.handleBrowserMessage(event.data);
         };
+      }
+
+      // 🟢 NYTT FÖR WEBBLÄSARFLIKAR: Läs av initial data från localStorage vid boot
+      const currentWinId = new URLSearchParams(window.location.search).get(
+        "winId",
+      );
+      if (currentWinId) {
+        // Använd queueMicrotask eller kort timeout så Svelte hinner binda onMessage först
+        queueMicrotask(() => {
+          const storageKey = initStorageKey(currentWinId);
+          const rawInitPayload = localStorage.getItem(storageKey);
+          if (rawInitPayload) {
+            try {
+              const parsed = JSON.parse(rawInitPayload);
+              // Skicka ut datan till den lokala lyssnaren i den nya fliken
+              this.notifyListeners(currentWinId, parsed);
+              localStorage.removeItem(storageKey); // Städning!
+            } catch (e) {
+              console.error(
+                "[WindowBackend] Misslyckades att parsa initial localStorage-payload",
+                e,
+              );
+            }
+          }
+        });
       }
     }
 
@@ -372,11 +373,19 @@ export class WindowBackendManager implements WindowBackend {
       });
     });
 
-    // Säkra även event-importen på samma sätt
-    const eventPath = "@tauri-apps/api/event";
-    const { emit } = await import(eventPath);
-
-    await emit(`init-payload-${winId}`, payload);
+    // Small timeout so the window can settle
+    setTimeout(async () => {
+      try {
+        const eventPath = "@tauri-apps/api/event";
+        const { emit } = await import(eventPath);
+        await emit(`init-payload-${winId}`, payload);
+      } catch (error) {
+        console.error(
+          "[WindowBackend] Kunde inte skicka init-payload till Tauri",
+          error,
+        );
+      }
+    }, 150);
   }
 
   private async initTauriListeners(): Promise<void> {

@@ -1,4 +1,5 @@
 import { type Component, createContext } from "svelte";
+import { registerComponent } from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -210,7 +211,7 @@ export class WindowManager {
       title: options.title ?? component.name ?? "Window",
       thumbnail: null,
       component,
-      componentKey: options.componentKey,
+      componentKey: component.name, //options.componentKey,
       props: options.props ?? {},
       parentId,
       boundingEl: options.boundingEl ?? null,
@@ -565,7 +566,6 @@ export class WindowManager {
   async detachWindow(id: WindowId, target: "tab" | "tauri"): Promise<void> {
     const win = this.find(id);
     if (!win || id === ROOT_WIN_ID) {
-      console.log(id, win.title);
       return;
     }
 

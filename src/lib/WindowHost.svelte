@@ -2,11 +2,8 @@
 import { onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
-
-import { getComponentByKey } from "./windowRegistry"; // Importera registret!
-
-// Längst upp i WindowHost.svelte:
-import { receive, send } from "./windowTransitions";
+import { getComponentByKey } from "./windowRegistry";
+import { page } from "$app/state";
 
 interface Props {
   children?: Snippet;
@@ -16,14 +13,22 @@ interface Props {
 let { children, topbarContent }: Props = $props();
 const wManager = getWindowManager();
 
-// Kolla URL-parametrar för att se om detta fönster är fristående
-let isStandalone = $state(false);
-let standaloneComponentKey = $state<string | null>(null);
-let standaloneWinId = $state<string | null>(null);
+// 🟢 REAKTIVA SVELTE 5 RUNOR: Hämtar parametrar direkt från SvelteKits router i realtid
+let standaloneWinId = $derived(page.url.searchParams.get("winId"));
+let standaloneComponentKey = $derived(
+  page.url.searchParams.get("componentKey"),
+);
+let standaloneTitle = $derived(
+  page.url.searchParams.get("title") ?? "Fristående",
+);
+
+// Avgör om vi är ett fristående fönster och vilken komponent som ska laddas
+let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
 let StandaloneComponent = $derived(getComponentByKey(standaloneComponentKey));
 
 let contentEl = $state<HTMLElement | undefined>(undefined);
 let winCount = $derived(wManager.winCount);
+
 let minimizedWindows = $derived(
   wManager.windows.filter(
     (win) => win.winId !== ROOT_WIN_ID && win.state.isMinimized,
@@ -31,54 +36,57 @@ let minimizedWindows = $derived(
 );
 let rootWindows = $derived(wManager.getChildren(ROOT_WIN_ID));
 
-onMount(() => {
-  const urlParams = new URLSearchParams(window.location.search);
-  standaloneWinId = urlParams.get("winId");
-  standaloneComponentKey = urlParams.get("componentKey");
+// 🟢 REAKTIV SYNK: Lyssnar på meddelanden så fort det fristående fönstret vaknar till liv
+$effect(() => {
+  if (isStandalone && standaloneWinId) {
+    const targetWinId = standaloneWinId;
+    let localWin = wManager.find(targetWinId);
 
-  if (standaloneWinId && standaloneComponentKey) {
-    isStandalone = true;
-
-    // Hitta fönsterinstansen lokalt eller skapa en tom skal-payload
-    let localWin = wManager.find(standaloneWinId);
     if (!localWin) {
-      // Om fönstret laddas i en helt ny flik, lyssna på inkommande payload-synk
-      wManager.backend.onMessage(standaloneWinId, (incomingPayload) => {
-        const win = wManager.find(standaloneWinId);
-        if (win) {
-          win.payload = incomingPayload;
-        } else {
-          // Skapa en instans lokalt i det nya JavaScript-kontextet
-          wManager.windows.push({
-            winId: standaloneWinId!,
-            title: urlParams.get("title") ?? "Fristående",
-            thumbnail: null,
-            component: null,
-            props: {},
-            parentId: null,
-            boundingEl: null,
-            state: {
-              left: 0,
-              top: 0,
-              width: window.innerWidth,
-              height: window.innerHeight,
-              isMinimized: false,
-              isMaximized: true,
-              transparency: 1,
-            },
-            storedState: null,
-            extraHeight: 0,
-            zIndex: 1,
-            tileOffset: 0,
-            showButtons: false,
-            docking: {},
-            payload: incomingPayload,
-          });
-        }
-      });
+      // Registrera lyssnaren för inkommande payloads via BroadcastChannel/Tauri
+      const unsubscribe = wManager.backend.onMessage(
+        targetWinId,
+        (incomingPayload) => {
+          const win = wManager.find(targetWinId);
+          if (win) {
+            win.payload = incomingPayload;
+          } else {
+            // Skapa instansen i det nya JavaScript-kontextets minne
+            wManager.windows.push({
+              winId: targetWinId,
+              title: standaloneTitle,
+              thumbnail: null,
+              component: null,
+              props: {},
+              parentId: null,
+              boundingEl: null,
+              state: {
+                left: 0,
+                top: 0,
+                width: window.innerWidth,
+                height: window.innerHeight,
+                isMinimized: false,
+                isMaximized: true,
+                transparency: 1,
+              },
+              storedState: null,
+              extraHeight: 0,
+              zIndex: 1,
+              tileOffset: 0,
+              showButtons: false,
+              docking: {},
+              payload: incomingPayload,
+            });
+          }
+        },
+      );
+
+      return () => unsubscribe();
     }
   }
+});
 
+onMount(() => {
   if (!contentEl) return;
   const updateBounds = () => {
     if (!contentEl) return;
@@ -93,121 +101,112 @@ onMount(() => {
   return () => observer.disconnect();
 });
 </script>
-
-
-{#if isStandalone}
-  <!-- Renderar ENDAST komponenten i helskärm utan fönsterramar, topbars eller taskbars -->
-  <div class="standalone-container">
-    {#if StandaloneComponent && standaloneWinId}
-      {@const winInstance = wManager.find(standaloneWinId)}
-      {#if winInstance}
-        <StandaloneComponent 
-          winId={standaloneWinId} 
-          payload={winInstance.payload}
-          {...winInstance.props} 
-        />
+  
+  {#if isStandalone}
+    <!-- Renderar ENDAST komponenten i helskärm utan fönsterramar, topbars eller taskbars -->
+    <div class="standalone-container">
+      {#if StandaloneComponent && standaloneWinId}
+        {@const winInstance = wManager.find(standaloneWinId)}
+        {#if winInstance}
+           <!-- 🟢 Svelte 5 Guard: Vi renderar komponenten via sin sparade reaktiva variabel -->
+           {@const ComponentToRender = StandaloneComponent}
+           <ComponentToRender
+            winId={standaloneWinId} 
+            payload={winInstance.payload}
+            {...winInstance.props} 
+          />
+        {/if}
+      {:else}
+        <div class="loading">Laddar fristående komponent...</div>
       {/if}
-    {:else}
-      <div class="loading">Laddar fristående komponent...</div>
-    {/if}
-  </div>
-{:else}
-
-
-
-<div class="layout">
+    </div>
+  {:else}
+    <div class="layout">
   <header class="topbar">
-    {#if topbarContent}
-      {@render topbarContent()}
-    {/if}
-
-    <span>Antal öppna fönster: {winCount}</span>
-  </header>
+        {#if topbarContent}
+          {@render topbarContent()}
+        {/if}
+        <span>Antal öppna fönster: {winCount}</span>
+      </header>
 
   <main class="workspace" bind:this={contentEl}>
-
-
-
-
-    {#if contentEl}
-      {#each rootWindows as win (win.winId)}
-        {#if !win.state.isMinimized}
-          <WindowFrame win={win} bounds={contentEl}>
-            {#if win.component}
-              {@const Component = win.component}
-              <Component
-                winId={win.winId}
-                {...win.props}
-                parentId={win.parentId}
-              />
+        {#if contentEl}
+          {#each rootWindows as win (win.winId)}
+            {#if !win.state.isMinimized}
+              <WindowFrame win={win} bounds={contentEl}>
+                {#if win.component}
+                  {@const Component = win.component}
+                  <Component
+                    winId={win.winId}
+                    {...win.props}
+                    parentId={win.parentId}
+                  />
+                {/if}
+              </WindowFrame>
             {/if}
-          </WindowFrame>
-
+          {/each}
         {/if}
-      {/each}
-    {/if}
+  
+        {#if children}
+          {@render children()}
+        {/if}
+      </main>
 
-    {#if children}
-      {@render children()}
-    {/if}
-  </main>
-
-  <!-- <footer class="taskbar">
-    <span>Taskbar</span>
-
-    {#each minimizedWindows as win (win.winId)}
-      <button
-        type="button"
-        class="task-btn"
-        in:receive={{ key: win.winId }}
-        out:send={{ key: win.winId }}
-        onclick={() => wManager.restore(win.winId)}
-      >
-        🔼 {win.title}
-      </button>
-    {/each}
-  </footer> -->
   <footer class="taskbar">
-    <span class="taskbar-label">Taskbar</span>
-  
-    {#each minimizedWindows as win (win.winId)}
-      <div class="task-item">
-        <button
-          type="button"
-          class="task-btn"
-          aria-label={`Återställ ${win.title}`}
-          onclick={() => wManager.restore(win.winId)}
-        >
-          <span class="task-icon" aria-hidden="true">
-            ◫
-          </span>
-          <span class="task-title">{win.title}</span>
-        </button>
-  
-        <div class="thumbnail-popup" aria-hidden="true">
-          <div class="thumbnail-heading">{win.title}</div>
-  
-          {#if win.thumbnail}
-            <img
-              class="thumbnail-image"
-              src={win.thumbnail}
-              alt={`Förhandsvisning av ${win.title}`}
-            />
-          {:else}
-            <div class="thumbnail-placeholder">
-              <span class="placeholder-icon">◫</span>
-              <span>Förhandsvisning saknas</span>
+        <span class="taskbar-label">Taskbar</span>
+      
+        {#each minimizedWindows as win (win.winId)}
+          <div class="task-item">
+            <button
+              type="button"
+              class="task-btn"
+              aria-label={`Återställ ${win.title}`}
+              onclick={() => wManager.restore(win.winId)}
+            >
+              <span class="task-icon" aria-hidden="true">◫</span>
+              <span class="task-title">{win.title}</span>
+            </button>
+      
+            <div class="thumbnail-popup" aria-hidden="true">
+              <div class="thumbnail-heading">{win.title}</div>
+      
+              {#if win.thumbnail}
+                <img
+                  class="thumbnail-image"
+                  src={win.thumbnail}
+                  alt={`Förhandsvisning av ${win.title}`}
+                />
+              {:else}
+                <div class="thumbnail-placeholder">
+                  <span class="placeholder-icon">◫</span>
+                  <span>Förhandsvisning saknas</span>
+                </div>
+              {/if}
             </div>
-          {/if}
-        </div>
-      </div>
-    {/each}
-  </footer>
+          </div>
+        {/each}
+      </footer>
 </div>
-{/if}
+  {/if}
+  
+  <style>
+.standalone-container {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #1e1e1e;
+  overflow: auto;
+}
 
+.loading {
+  color: white;
+  display: grid;
+  place-content: center;
+  height: 100%;
+  font-family: sans-serif;
+}
 
-<style>
 .layout {
   position: absolute;
   inset: 0;
@@ -238,22 +237,6 @@ onMount(() => {
   overflow: hidden;
   isolation: isolate;
 }
-
-/* .taskbar {
-  position: relative;
-  z-index: 10;
-  flex: 0 0 2.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.75rem;
-  background: #c1414165;
-  border-top: 1px solid #999;
-}
-
-.task-btn {
-  cursor: pointer;
-} */
 
 .taskbar {
   position: relative;
@@ -328,13 +311,11 @@ onMount(() => {
   border-radius: 9px;
   background: #f8f8f8;
   box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
-
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: translate(-50%, 8px) scale(0.97);
   transform-origin: bottom center;
-
   transition:
     opacity 140ms ease,
     transform 140ms ease,
@@ -349,9 +330,9 @@ onMount(() => {
 }
 
 .thumbnail-heading {
-  padding: 3px 4px 8px;
+  padding: 3 px 4 px 8 px;
   color: #222;
-  font-size: 0.85rem;
+  font-size: 0.85 rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;

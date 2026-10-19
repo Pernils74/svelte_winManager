@@ -198,56 +198,6 @@ function snapPosition(
   return nearest?.target ?? raw;
 }
 
-function beginInteraction_old(
-  event: MouseEvent,
-  mode: InteractionMode,
-) {
-  if (event.button !== 0) return;
-  if (win.winId === ROOT_WIN_ID) return;
-
-  const target = event.target;
-  if (
-    target instanceof Element &&
-    target.closest("button, input, select, textarea, a")
-  ) {
-    return;
-  }
-
-  if (win.state.isMaximized && mode === "move") return;
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  let activeWin = win;
-
-  // Ctrl + drag i titelraden skapar en kopia.
-  // Endast flyttning duplicerar; storleksändring gör det inte.
-  if (event.ctrlKey && mode === "move") {
-    const copy = manager.duplicate(win.winId);
-    if (!copy) return;
-
-    activeWin = copy;
-  }
-
-  manager.focus(activeWin.winId);
-
-  dragWinId = activeWin.winId;
-  dragMode = mode;
-
-  dragStartX = event.clientX;
-  dragStartY = event.clientY;
-
-  startLeft = activeWin.state.left;
-  startTop = activeWin.state.top;
-  startWidth = activeWin.state.width;
-  startHeight = activeWin.state.height;
-
-  document.body.style.userSelect = "none";
-
-  window.addEventListener("mousemove", onMouseMove);
-  window.addEventListener("mouseup", endInteraction);
-}
-
 // type InteractionMode = "move" | ResizeMode;
 
 let reparentDrag = false;

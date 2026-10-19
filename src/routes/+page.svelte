@@ -9,10 +9,11 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.s
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts
-
 -->
+
+<!-- gammalt ...
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts -->
 
 <!-- +page.svelte -->
 <script lang="ts">
