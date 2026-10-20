@@ -1,4 +1,7 @@
+# .gitignore
 node_modules
+desktop-dist
+dist
 
 # Output
 .output

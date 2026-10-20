@@ -1,10 +1,26 @@
 {
+  "name": "svelte-win-manager",
+  "version": "1.0.0",
   "fmt": {
     "include": ["src/**/*.svelte", "src/**/*.ts", "src/**/*.js", "static/"],
     "lineWidth": 80,
-    "useTabs": false,
+    "useTabs": true,
     "indentWidth": 2,
-    "singleQuote": false
+    "singleQuote": false,
+    "printWidth": 80,
+    "proseWrap": "always"
   },
-  "unstable": ["fmt-component"]
+  "unstable": ["fmt-component"],
+  "exclude": [
+    "node_modules/",
+    "build/",
+    "desktop-dist/"
+  ],
+  "desktop": {
+    "output": {
+      "windows": "./desktop-dist/MyApp.exe",
+      "macos": "./desktop-dist/MyApp.app",
+      "linux": "./desktop-dist/MyApp"
+    }
+  }
 }

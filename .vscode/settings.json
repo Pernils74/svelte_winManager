@@ -1,5 +1,6 @@
 // settings.json
 {
+  "deno.enablePaths": ["./deno.json"],
   "deno.enable": true,
   "deno.lint": true,
   "editor.formatOnSave": true,
@@ -7,6 +8,6 @@
   "[svelte]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
   },
-  "svelte.plugin.svelte.format.enable": false,  
+  "svelte.plugin.svelte.format.enable": true,  
 }
 

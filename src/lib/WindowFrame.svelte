@@ -42,6 +42,12 @@ let titleId = $derived(`win-title-${win.winId}`);
 let titlebarVisible = $state(true);
 let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
 
+let localMinimized = $derived(
+  manager.windows.filter((w) =>
+    w.parentId === win.winId && w.state.isMinimized
+  ),
+);
+
 let dragMode: InteractionMode | null = null;
 let dragWinId: string | null = null;
 let dragStartX = 0;
@@ -553,6 +559,7 @@ $effect(() => {
   ></div>
   {/if}
 
+  
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="titlebar"
@@ -577,26 +584,23 @@ $effect(() => {
 
       <div class="controls">
 
-  <!-- Visa bara Tauri-knappen om vi faktiskt kör i en Tauri-app -->
-  {#if typeof window !== "undefined" && "__TAURI_INTERNALS__" in window}
-    <button 
-      type="button" 
-      title="Frikoppla till skrivbordsfönster" 
-      onclick={() => manager.detachWindow(win.winId, "tauri")}>
-      🗔
-    </button>
-  {:else}
-    <button 
-      type="button" 
-      title="Frikoppla till ny webbläsarflik" 
-      onclick={() => manager.detachWindow(win.winId, "tab")}>
-      🗗
-    </button>
-  {/if}
-    
-
-
-  
+      <!-- Visa bara Tauri-knappen om vi faktiskt kör i en Tauri-app -->
+      {#if typeof window !== "undefined" && "__TAURI_INTERNALS__" in window}
+        <button 
+          type="button" 
+          title="Frikoppla till skrivbordsfönster" 
+          onclick={() => manager.detachWindow(win.winId, "tauri")}>
+          🗔
+        </button>
+      {:else}
+        <button 
+          type="button" 
+          title="Frikoppla till ny webbläsarflik" 
+          onclick={() => manager.detachWindow(win.winId, "tab")}>
+          🗗
+        </button>
+      {/if}
+ 
         <button
           type="button"
           title="Maximera/återställ"
@@ -623,11 +627,8 @@ $effect(() => {
 
   <div class="content" bind:this={contentEl}>
     {@render children()}
-
     {#each manager.getChildren(win.winId) as child (child.winId)}
       {#if !child.state.isMinimized && child.component}
-      
-      
       <WindowFrame win={child} bounds={contentEl}>
         {@const ChildComponent = child.component}
           <ChildComponent
@@ -640,6 +641,44 @@ $effect(() => {
       {/if}
     {/each}
   </div>
+
+
+
+
+  <!-- 🌟 VARJE FÖNSTERS EGNA LOKALA TASKBAR 🌟 -->
+  {#if manager.windows.some(w => w.parentId === win.winId && w.state.isMinimized)}
+    {@const localMinimized = manager.windows.filter(w => w.parentId === win.winId && w.state.isMinimized)}
+    <footer class="local-taskbar">
+      {#each localMinimized as subWin (subWin.winId)}
+        <div class="task-item">
+          <button
+            type="button"
+            class="task-btn"
+            onclick={() => manager.restore(subWin.winId)}
+          >
+            <span class="task-icon">◫</span>
+            <span class="task-title">{subWin.title}</span>
+          </button>
+          
+          <!-- Miniatyr-popup vid hover -->
+          <div class="thumbnail-popup">
+            <div class="thumbnail-heading">{subWin.title}</div>
+            {#if subWin.thumbnail}
+              <img class="thumbnail-image" src={subWin.thumbnail} alt="" />
+            {:else}
+              <div class="thumbnail-placeholder">Förhandsvisning saknas</div>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    </footer>
+  {/if}
+
+
+
+
+
+
 
   {#each resizeHandles as handle (handle)}
     <div
@@ -700,6 +739,17 @@ $effect(() => {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.local-taskbar {
+  flex: 0 0 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.5rem;
+  background: #f0f0f0;
+  border-top: 1px solid #ccc;
+}
+/* Återanvänd dina snygga .task-item, .task-btn och .thumbnail-popup stilar här */
 
 .controls {
   display: flex;
