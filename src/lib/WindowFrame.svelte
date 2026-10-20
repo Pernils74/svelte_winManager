@@ -701,7 +701,8 @@ $effect(() => {
   background: white;
   border-radius: 6px;
   box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);
-  overflow: hidden;
+  /* overflow: hidden; */
+  overflow: visible;
 }
 
 /* 🟢 NY STIL FÖR ATT FÅNGA HOVER VID SKÄRMKANTEN */
@@ -740,15 +741,74 @@ $effect(() => {
   text-overflow: ellipsis;
 }
 
-.local-taskbar {
-  flex: 0 0 2rem;
+/* Behåll miniatyren kopplad till respektive knapp */
+.local-taskbar .task-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Dölj miniatyren som standard */
+.local-taskbar .thumbnail-popup {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(8px);
+
+  width: 260px;
+  max-width: min(260px, 80vw);
+  padding: 10px;
+
+  background: #ffffff;
+  color: #222222;
+  border: 1px solid #b8c4d4;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms ease;
+}
+
+/* Visa miniatyren vid hover eller tangentbordsfokus */
+.local-taskbar .task-item:hover .thumbnail-popup,
+.local-taskbar .task-item:focus-within .thumbnail-popup {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.local-taskbar .thumbnail-heading {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.local-taskbar .thumbnail-image {
+  display: block;
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.local-taskbar .thumbnail-placeholder {
+  min-height: 100px;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.5rem;
-  background: #f0f0f0;
-  border-top: 1px solid #ccc;
+  justify-content: center;
+  color: #666666;
+  font-size: 12px;
 }
+
 /* Återanvänd dina snygga .task-item, .task-btn och .thumbnail-popup stilar här */
 
 .controls {

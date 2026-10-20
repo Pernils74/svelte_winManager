@@ -101,96 +101,79 @@ onMount(() => {
   return () => observer.disconnect();
 });
 </script>
-  
-  {#if isStandalone}
-    <!-- Renderar ENDAST komponenten i helskärm utan fönsterramar, topbars eller taskbars -->
-    <div class="standalone-container">
-      {#if StandaloneComponent && standaloneWinId}
-        {@const winInstance = wManager.find(standaloneWinId)}
-        {#if winInstance}
-           <!-- 🟢 Svelte 5 Guard: Vi renderar komponenten via sin sparade reaktiva variabel -->
-           {@const ComponentToRender = StandaloneComponent}
-           <ComponentToRender
-            winId={standaloneWinId} 
-            payload={winInstance.payload}
-            {...winInstance.props} 
-          />
-        {/if}
+
+{#if isStandalone}
+  <!-- Fristående läge: visa endast komponenten -->
+  <div class="standalone-container">
+    {#if StandaloneComponent && standaloneWinId}
+      {@const winInstance = wManager.find(standaloneWinId)}
+
+      {#if winInstance}
+        {@const ComponentToRender = StandaloneComponent}
+
+        <ComponentToRender
+          winId={standaloneWinId}
+          payload={winInstance.payload}
+          {...winInstance.props}
+        />
       {:else}
-        <div class="loading">Laddar fristående komponent...</div>
+        <div class="loading">
+          Fönstret kunde inte hittas.
+        </div>
       {/if}
-    </div>
-  {:else}
-    <div class="layout">
-  <header class="topbar">
-        {#if topbarContent}
-          {@render topbarContent()}
-        {/if}
-        <span>Antal öppna fönster: {winCount}</span>
-      </header>
+    {:else}
+      <div class="loading">
+        Laddar fristående komponent...
+      </div>
+    {/if}
+  </div>
+{:else}
+  <!-- Vanligt skrivbordsläge -->
+  <div class="layout">
+    <header class="topbar">
+      {#if topbarContent}
+        {@render topbarContent()}
+      {/if}
 
-  <main class="workspace" bind:this={contentEl}>
-        {#if contentEl}
-          {#each rootWindows as win (win.winId)}
-            {#if !win.state.isMinimized}
-              <WindowFrame win={win} bounds={contentEl}>
-                {#if win.component}
-                  {@const Component = win.component}
-                  <Component
-                    winId={win.winId}
-                    {...win.props}
-                    parentId={win.parentId}
-                  />
-                {/if}
-              </WindowFrame>
-            {/if}
-          {/each}
-        {/if}
-  
-        {#if children}
-          {@render children()}
-        {/if}
-      </main>
+      <span>Antal öppna fönster: {winCount}</span>
+    </header>
 
-  <!-- <footer class="taskbar">
-        <span class="taskbar-label">Taskbar</span>
-        {#each minimizedWindows as win (win.winId)}
-          <div class="task-item">
-            <button
-              type="button"
-              class="task-btn"
-              aria-label={`Återställ ${win.title}`}
-              onclick={() => wManager.restore(win.winId)}
-            >
-              <span class="task-icon" aria-hidden="true">◫</span>
-              <span class="task-title">{win.title}</span>
-            </button>
-      
-            <div class="thumbnail-popup" aria-hidden="true">
-              <div class="thumbnail-heading">{win.title}</div>
-              {#if win.thumbnail}
-                <img
-                  class="thumbnail-image"
-                  src={win.thumbnail}
-                  alt={`Förhandsvisning av ${win.title}`}
+    <main class="workspace" bind:this={contentEl}>
+      {#if contentEl}
+        {#each rootWindows as win (win.winId)}
+          {#if !win.state.isMinimized}
+            <WindowFrame win={win} bounds={contentEl}>
+              {#if win.component}
+                {@const Component = win.component}
+
+                <Component
+                  winId={win.winId}
+                  {...win.props}
+                  parentId={win.parentId}
                 />
-              {:else}
-                <div class="thumbnail-placeholder">
-                  <span class="placeholder-icon">◫</span>
-                  <span>Förhandsvisning saknas</span>
-                </div>
               {/if}
-            </div>
-          </div>
+            </WindowFrame>
+          {/if}
         {/each}
-      </footer> -->
+      {/if}
+
+      {#if children}
+        {@render children()}
+      {/if}
+    </main>
 
 
-    <!-- 🌟 TASKBAR ENBART FÖR SKRIVBORDSYTAN (ROOT) 🌟 -->
-    {@const rootMinimized = wManager.windows.filter(w => w.parentId === ROOT_WIN_ID && w.state.isMinimized)}
-    {#if rootMinimized.length > 0}
+
+    <!-- Aktivitetsfält endast för minimerade huvudfönster -->
+    <!-- {@const rootMinimized = wManager.windows.filter(      (w) => w.parentId === ROOT_WIN_ID && w.state.isMinimized    )}
+    {#if rootMinimized.length > 0} -->
+
+
+    {#if wManager.windows.some((w) => w.parentId === ROOT_WIN_ID && w.state.isMinimized)}
+    {@const rootMinimized = wManager.windows.filter((w) => w.parentId === ROOT_WIN_ID && w.state.isMinimized)}
       <footer class="taskbar">
         <span class="taskbar-label">Skrivbord</span>
+
         {#each rootMinimized as win (win.winId)}
           <div class="task-item">
             <button
@@ -202,26 +185,27 @@ onMount(() => {
               <span class="task-icon" aria-hidden="true">◫</span>
               <span class="task-title">{win.title}</span>
             </button>
-            
-            <!-- Förhandsvisning -->
+
+            <!-- Förhandsvisning vid hover, styrs av CSS -->
             <div class="thumbnail-popup" aria-hidden="true">
-              <div class="thumbnail-heading">{win.title}</div>
+              <div class="thumbnail-heading">
+                {win.title}
+              </div>
+
               {#if win.thumbnail}
                 <img class="thumbnail-image" src={win.thumbnail} alt="" />
               {:else}
-                <div class="thumbnail-placeholder">Förhandsvisning saknas</div>
+                <div class="thumbnail-placeholder">
+                  Förhandsvisning saknas
+                </div>
               {/if}
             </div>
           </div>
         {/each}
       </footer>
-    {"}"}
-
-
-
-
-</div>
-  {/if}
+    {/if}
+  </div>
+{/if}
   
   <style>
 .standalone-container {

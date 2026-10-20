@@ -279,7 +279,7 @@ export class WindowManager {
     return copy;
   }
 
-  reparent(
+  reparent_old(
     id: WindowId,
     newParentId: WindowId,
     screenRect?: {
@@ -337,6 +337,144 @@ export class WindowManager {
     win.boundingEl = parentElement;
 
     this.focus(id);
+    return true;
+  }
+
+  reparent(
+    id: WindowId,
+    newParentId: WindowId,
+    screenRect?: {
+      left?: number;
+      top?: number;
+      width?: number;
+      height?: number;
+    },
+  ): boolean {
+    const win = this.find(id);
+    const newParent = this.find(newParentId);
+
+    if (!win || !newParent || id === ROOT_WIN_ID) {
+      return false;
+    }
+
+    // Förhindra att ett fönster blir sin egen förälder
+    // eller flyttas in i ett av sina egna barn.
+    if (
+      id === newParentId ||
+      this.getDescendants(id).some(
+        (child) => child.winId === newParentId,
+      )
+    ) {
+      return false;
+    }
+
+    // Hämta den gamla förälderns koordinatsystem.
+    const oldParentElement = win.boundingEl;
+    const oldParentRect = oldParentElement?.getBoundingClientRect();
+
+    // Hämta den nya förälderns koordinatsystem.
+    const parentElement = newParentId === ROOT_WIN_ID
+      ? null
+      : newParent.boundingEl;
+
+    const parentRect = parentElement?.getBoundingClientRect();
+
+    // Beräkna storleken på den gamla förälderns yta.
+    const oldParentWidth = oldParentRect?.width ??
+      this.find(win.parentId)?.state.width ??
+      0;
+
+    const oldParentHeight = oldParentRect?.height ??
+      this.find(win.parentId)?.state.height ??
+      0;
+
+    // Beräkna storleken på den nya förälderns yta.
+    const newParentWidth = parentRect?.width ??
+      newParent.state.width ??
+      0;
+
+    const newParentHeight = parentRect?.height ??
+      newParent.state.height ??
+      0;
+
+    // Fönstrets nuvarande position i skärmkoordinater.
+    const currentAbsoluteLeft = (oldParentRect?.left ?? 0) + win.state.left;
+
+    const currentAbsoluteTop = (oldParentRect?.top ?? 0) + win.state.top;
+
+    // Använd skärmpositionen från dragningen om den finns.
+    const targetScreenLeft = screenRect?.left ?? currentAbsoluteLeft;
+
+    const targetScreenTop = screenRect?.top ?? currentAbsoluteTop;
+
+    // Använd angiven storlek om den skickats med.
+    const sourceWidth = screenRect?.width ?? win.state.width;
+
+    const sourceHeight = screenRect?.height ?? win.state.height;
+
+    // Konvertera skärmpositionen till den gamla
+    // förälderns lokala koordinater.
+    const oldLocalLeft = targetScreenLeft - (oldParentRect?.left ?? 0);
+
+    const oldLocalTop = targetScreenTop - (oldParentRect?.top ?? 0);
+
+    // Skala positionen proportionellt mellan föräldrarna.
+    const scaleX = oldParentWidth > 0 && newParentWidth > 0
+      ? newParentWidth / oldParentWidth
+      : 1;
+
+    const scaleY = oldParentHeight > 0 && newParentHeight > 0
+      ? newParentHeight / oldParentHeight
+      : 1;
+
+    let left = oldLocalLeft * scaleX;
+    let top = oldLocalTop * scaleY;
+
+    // Skala även fönstrets storlek.
+    let width = sourceWidth * scaleX;
+    let height = sourceHeight * scaleY;
+
+    // Begränsa storleken till den nya förälderns yta.
+    if (newParentWidth > 0) {
+      width = Math.min(width, newParentWidth);
+    }
+
+    if (newParentHeight > 0) {
+      height = Math.min(height, newParentHeight);
+    }
+
+    // Begränsa positionen så att hela fönstret ryms.
+    if (newParentWidth > 0) {
+      left = Math.max(
+        0,
+        Math.min(left, newParentWidth - width),
+      );
+    } else {
+      left = Math.max(0, left);
+    }
+
+    if (newParentHeight > 0) {
+      top = Math.max(
+        0,
+        Math.min(top, newParentHeight - height),
+      );
+    } else {
+      top = Math.max(0, top);
+    }
+
+    // Uppdatera föräldrarelationen.
+    win.parentId = newParentId;
+    win.boundingEl = parentElement;
+
+    // Uppdatera position och storlek.
+    win.state.left = left;
+    win.state.top = top;
+    win.state.width = width;
+    win.state.height = height;
+
+    // Fokusera det flyttade fönstret.
+    this.focus(id);
+
     return true;
   }
 
