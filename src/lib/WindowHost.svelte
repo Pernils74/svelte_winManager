@@ -152,9 +152,8 @@ onMount(() => {
         {/if}
       </main>
 
-  <footer class="taskbar">
+  <!-- <footer class="taskbar">
         <span class="taskbar-label">Taskbar</span>
-      
         {#each minimizedWindows as win (win.winId)}
           <div class="task-item">
             <button
@@ -169,7 +168,6 @@ onMount(() => {
       
             <div class="thumbnail-popup" aria-hidden="true">
               <div class="thumbnail-heading">{win.title}</div>
-      
               {#if win.thumbnail}
                 <img
                   class="thumbnail-image"
@@ -185,8 +183,44 @@ onMount(() => {
             </div>
           </div>
         {/each}
+      </footer> -->
+
+
+    <!-- 🌟 TASKBAR ENBART FÖR SKRIVBORDSYTAN (ROOT) 🌟 -->
+    {@const rootMinimized = wManager.windows.filter(w => w.parentId === ROOT_WIN_ID && w.state.isMinimized)}
+    {#if rootMinimized.length > 0}
+      <footer class="taskbar">
+        <span class="taskbar-label">Skrivbord</span>
+        {#each rootMinimized as win (win.winId)}
+          <div class="task-item">
+            <button
+              type="button"
+              class="task-btn"
+              aria-label={`Återställ ${win.title}`}
+              onclick={() => wManager.restore(win.winId)}
+            >
+              <span class="task-icon" aria-hidden="true">◫</span>
+              <span class="task-title">{win.title}</span>
+            </button>
+            
+            <!-- Förhandsvisning -->
+            <div class="thumbnail-popup" aria-hidden="true">
+              <div class="thumbnail-heading">{win.title}</div>
+              {#if win.thumbnail}
+                <img class="thumbnail-image" src={win.thumbnail} alt="" />
+              {:else}
+                <div class="thumbnail-placeholder">Förhandsvisning saknas</div>
+              {/if}
+            </div>
+          </div>
+        {/each}
       </footer>
-</div>
+    {"}"}
+
+
+
+
+<!-- </div> -->
   {/if}
   
   <style>
