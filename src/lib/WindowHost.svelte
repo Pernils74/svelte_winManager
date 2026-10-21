@@ -180,7 +180,7 @@ onMount(() => {
               type="button"
               class="task-btn"
               aria-label={`Återställ ${win.title}`}
-              onclick={() => wManager.restore(win.winId)}
+              onclick={() => wManager.restore(win)}
             >
               <span class="task-icon" aria-hidden="true">◫</span>
               <span class="task-title">{win.title}</span>

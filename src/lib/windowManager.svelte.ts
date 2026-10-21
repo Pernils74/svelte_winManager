@@ -281,7 +281,7 @@ export class WindowManager {
       return undefined;
     }
 
-    const copy = this.open(source.component, {
+    const wincopy = this.open(source.component, {
       title: `${source.title} (kopia)`,
       parentId: source.parentId ?? ROOT_WIN_ID,
       boundingEl: source.boundingEl,
@@ -299,69 +299,8 @@ export class WindowManager {
       titlebar: source.titlebar,
     });
 
-    this.focus(copy.winId);
-    return copy;
-  }
-
-  reparent_old(
-    id: WindowId,
-    newParentId: WindowId,
-    screenRect?: {
-      left?: number;
-      top?: number;
-      width?: number;
-      height?: number;
-    },
-  ): boolean {
-    const win = this.find(id);
-    const newParent = this.find(newParentId);
-
-    if (!win || !newParent || id === ROOT_WIN_ID) return false;
-
-    // Förhindra att ett fönster blir sin egen förälder
-    // eller flyttas in i ett av sina egna barn.
-    if (
-      id === newParentId ||
-      this.getDescendants(id).some((child) => child.winId === newParentId)
-    ) {
-      return false;
-    }
-
-    const parentElement = newParentId === ROOT_WIN_ID
-      ? null
-      : newParent.boundingEl;
-
-    const parentRect = parentElement?.getBoundingClientRect();
-
-    const originLeft = parentRect?.left ?? 0;
-    const originTop = parentRect?.top ?? 0;
-
-    // 1. Spara fönstrets nuvarande absoluta/skärm-position som fallback
-    // (om inget screenRect skickades med, räknar vi ut var det står just nu)
-    const currentAbsoluteLeft =
-      (win.boundingEl?.getBoundingClientRect().left ?? 0) + win.state.left;
-    const currentAbsoluteTop =
-      (win.boundingEl?.getBoundingClientRect().top ?? 0) + win.state.top;
-
-    // Uppdatera föräldra-ID
-    win.parentId = newParentId;
-
-    // 2. Beräkna de nya koordinaterna. Om specifika värden saknas i screenRect,
-    // räknar vi om fönstrets nuvarande position till det nya koordinatsystemet.
-    const targetScreenLeft = screenRect?.left ?? currentAbsoluteLeft;
-    const targetScreenTop = screenRect?.top ?? currentAbsoluteTop;
-
-    win.state.left = targetScreenLeft - originLeft;
-    win.state.top = targetScreenTop - originTop;
-
-    // Behåll nuvarande bredd/höjd om det inte skickas med nya i screenRect
-    win.state.width = screenRect?.width ?? win.state.width;
-    win.state.height = screenRect?.height ?? win.state.height;
-
-    win.boundingEl = parentElement;
-
-    this.focus(id);
-    return true;
+    this.focus(wincopy);
+    return wincopy;
   }
 
   reparent(
@@ -497,7 +436,8 @@ export class WindowManager {
     win.state.height = height;
 
     // Fokusera det flyttade fönstret.
-    this.focus(id);
+    // this.focus(id);
+    this.focus(win);
 
     return true;
   }
@@ -539,36 +479,127 @@ export class WindowManager {
     });
   }
 
-  focus(id: WindowId): void {
-    const win = this.find(id);
+  // focus(id: WindowId): void {
+  focus(win: WindowInstance): void {
+    // const win = this.find(id);
     if (win && win.winId !== ROOT_WIN_ID) {
       win.zIndex = ++this.zCounter;
     }
   }
 
-  minimize(id: WindowId): void {
-    const win = this.find(id);
-    if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) {
-      return;
-    }
-
+  minimize(win: WindowInstance): void {
+    if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) return;
     win.storedState = rectOf(win);
-    this.update(id, { isMinimized: true });
+    win.state.isMinimized = true; // Du kan skriva direkt till statet eftersom det är en runa!
   }
 
-  restore(id: WindowId): void {
-    const win = this.find(id);
+  restore(win: WindowInstance): void {
+    if (!win || win.winId === ROOT_WIN_ID) return;
+    if (win.storedState) Object.assign(win.state, win.storedState);
+    win.state.isMinimized = false;
+    this.focus(win); // Skicka vidare objektet till nästa metod
+  }
+
+  /**
+   * Resizes a window while proportionally expanding or shrinking adjacent docked sibling windows.
+   */
+  resizeDockedWindow(
+    win: WindowInstance,
+    mode: ResizeMode | string,
+    proposed: Partial<WindowRect>,
+  ): void {
     if (!win || win.winId === ROOT_WIN_ID) return;
 
-    if (win.storedState) {
-      Object.assign(win.state, win.storedState);
+    const old = rectOf(win);
+    const next: WindowRect = { ...old, ...proposed };
+
+    // Endast syskon i samma koordinatsystem kan påverkas.
+    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
+    const neighbors = siblings.filter((other) => {
+      if (other.winId === win.winId || other.state.isMinimized) return false;
+
+      const b = other.state;
+      return (
+        (mode.includes("left") &&
+          Math.abs(b.left + b.width - old.left) <= EPSILON &&
+          overlaps(old.top, old.top + old.height, b.top, b.top + b.height)) ||
+        (mode.includes("right") &&
+          Math.abs(b.left - (old.left + old.width)) <= EPSILON &&
+          overlaps(old.top, old.top + old.height, b.top, b.top + b.height)) ||
+        (mode.includes("top") &&
+          Math.abs(b.top + b.height - old.top) <= EPSILON &&
+          overlaps(old.left, old.left + old.width, b.left, b.left + b.width)) ||
+        (mode.includes("bottom") &&
+          Math.abs(b.top - (old.top + old.height)) <= EPSILON &&
+          overlaps(old.left, old.left + old.width, b.left, b.left + b.width))
+      );
+    });
+
+    if (mode.includes("left") || mode.includes("right")) {
+      for (const other of neighbors) {
+        const b = other.state;
+
+        if (
+          mode.includes("left") &&
+          Math.abs(b.left + b.width - old.left) <= EPSILON
+        ) {
+          const delta = next.left - old.left;
+          const allowed = Math.max(delta, MIN_WIDTH - b.width);
+          next.left = old.left + allowed;
+          next.width = old.width - allowed;
+
+          // 🌟 Skriv direkt till grannens reaktiva tillstånd istället för this.update
+          other.state.width = b.width + allowed;
+        } else if (
+          mode.includes("right") &&
+          Math.abs(b.left - (old.left + old.width)) <= EPSILON
+        ) {
+          const delta = next.left + next.width - (old.left + old.width);
+          const allowed = Math.min(delta, b.width - MIN_WIDTH);
+          next.width = old.width + allowed;
+
+          // 🌟 Ingen update behövs, tilldela fälten direkt
+          other.state.left = b.left + allowed;
+          other.state.width = b.width - allowed;
+        }
+      }
     }
 
-    this.update(id, { isMinimized: false });
-    this.focus(id);
+    if (mode.includes("top") || mode.includes("bottom")) {
+      for (const other of neighbors) {
+        const b = other.state;
+
+        if (
+          mode.includes("top") &&
+          Math.abs(b.top + b.height - old.top) <= EPSILON
+        ) {
+          const delta = next.top - old.top;
+          const allowed = Math.max(delta, MIN_HEIGHT - b.height);
+          next.top = old.top + allowed;
+          next.height = old.height - allowed;
+
+          // 🌟 Skriv direkt till grannens höjd
+          other.state.height = b.height + allowed;
+        } else if (
+          mode.includes("bottom") &&
+          Math.abs(b.top - (old.top + old.height)) <= EPSILON
+        ) {
+          const delta = next.top + next.height - (old.top + old.height);
+          const allowed = Math.min(delta, b.height - MIN_HEIGHT);
+          next.height = old.height + allowed;
+
+          // 🌟 Uppdatera grannens reaktiva topp-läge och höjd direkt
+          other.state.top = b.top + allowed;
+          other.state.height = b.height - allowed;
+        }
+      }
+    }
+
+    // 🌟 Slutligen uppdaterar vi det dragna fönstrets egna koordinater med Object.assign
+    Object.assign(win.state, next);
   }
 
-  resizeDockedWindow(
+  resizeDockedWindow_old(
     id: WindowId,
     mode: ResizeMode | string,
     proposed: Partial<WindowRect>,
@@ -667,7 +698,7 @@ export class WindowManager {
     if (win.state.isMaximized) {
       if (win.storedState) Object.assign(win.state, win.storedState);
       this.update(id, { isMaximized: false });
-      this.focus(id);
+      this.focus(win);
       return;
     }
 
@@ -727,7 +758,7 @@ export class WindowManager {
       isMaximized: true,
     });
 
-    this.focus(id);
+    this.focus(win);
   }
 
   async detachWindow(id: WindowId, target: "tab" | "tauri"): Promise<void> {

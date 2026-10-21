@@ -239,7 +239,8 @@ function beginInteraction(
 
   reparentDrag = event.shiftKey && mode === "move";
 
-  manager.focus(activeWin.winId);
+  // manager.focus(activeWin.winId);
+  manager.focus(activeWin);
 
   dragWinId = activeWin.winId;
   dragMode = mode;
@@ -317,7 +318,8 @@ function handleMouseUp(event: MouseEvent) {
 function onMouseMove(event: MouseEvent) {
   if (!dragMode || !dragWinId) return;
 
-  const activeWin = manager.find(dragWinId);
+  // const activeWin = manager.find(dragWinId);
+  const activeWin = win;
   if (!activeWin) return;
 
   const dx = event.clientX - dragStartX;
@@ -419,7 +421,7 @@ function onMouseMove(event: MouseEvent) {
   if (dragMode === "move") {
     manager.update(activeWin.winId, nextRect);
   } else {
-    manager.resizeDockedWindow(activeWin.winId, dragMode, nextRect);
+    manager.resizeDockedWindow(activeWin, dragMode, nextRect);
   }
 }
 
@@ -501,7 +503,8 @@ async function minimize() {
   }
 
   // Minimera först när bildtagningen är färdig.
-  manager.minimize(win.winId);
+  // manager.minimize(win.winId);
+  manager.minimize(win);
 }
 
 function close() {
@@ -541,7 +544,8 @@ $effect(() => {
   style:opacity={transparency}
   in:receive={{ key: win.winId }}
   out:send={{ key: win.winId }}
-  onmousedown={() => manager.focus(win.winId)}
+  // onmousedown={() => manager.focus(win.winId)}
+  onmousedown={() => manager.focus(win)}
   onwheel={changeTransparency}
   role="dialog"
   tabindex="0"
@@ -655,7 +659,8 @@ $effect(() => {
           <button
             type="button"
             class="task-btn"
-            onclick={() => manager.restore(subWin.winId)}
+            // onclick={() => manager.restore(subWin.winId)}
+            onclick={() => manager.restore(subWin)}
           >
             <span class="task-icon">◫</span>
             <span class="task-title">{subWin.title}</span>
