@@ -17,7 +17,7 @@ let {
   parentId: string | null;
 } = $props();
 
-const parent = wManager.find(winId);
+const parent = $derived(wManager.find(winId));
 
 function openItem() {
   wManager.open(Scrapping, {
@@ -32,7 +32,7 @@ function openItem() {
 
 function reparent() {
   let win2 = wManager.findByTitle("🪟 Item Window");
-  wManager.reparent(win2?.winId, "root");
+  if (win2) wManager.reparent(win2.winId, "root");
 }
 
 function openScrapping() {

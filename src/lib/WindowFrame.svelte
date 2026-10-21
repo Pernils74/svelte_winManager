@@ -577,9 +577,9 @@ $effect(() => {
     <strong id={titleId}>{win.title}</strong>
 
     {#if win.showButtons}
-      {#if win.actions}
-        {@const Actions = win.actions}
-        <Actions winId={win.winId} />
+      {#if win.titlebar}
+        {@const Titlebar = win.titlebar}
+        <Titlebar winId={win.winId} />
       {/if}
 
       <div class="controls">

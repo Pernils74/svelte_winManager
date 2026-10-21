@@ -31,6 +31,11 @@ import ArenaMonitorButtons from "#lib/ArenaMonitorButtons.svelte";
 import BomActions from "./BomActions.svelte";
 //   import Scrapping from './Scrapping/Scrapping.svelte';
 
+import WindowA from "./window_A.svelte";
+import WindowB from "./window_B.svelte";
+
+import WindowA_Titlebar from "./window_A_titlebar.svelte";
+
 const wManager = initializeWindowManager();
 
 onMount(() => {
@@ -39,14 +44,14 @@ onMount(() => {
     extraHeight: 40,
     width: 700,
     height: 600,
-    actions: ArenaMonitorButtons,
+    titlebar: ArenaMonitorButtons,
   });
   wManager.open(Bom, {
     title: "🪟 Bom Window",
     width: 700,
     height: 600,
     extraHeight: 4,
-    actions: BomActions,
+    titlebar: BomActions,
   });
 });
 

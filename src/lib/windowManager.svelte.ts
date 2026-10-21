@@ -26,7 +26,7 @@ export type ResizeMode =
   | "bottom-left"
   | "bottom-right";
 
-export type WindowActionsComponent = Component<{ winId: string }>;
+export type WindowTiltlebarComponent = Component<{ winId: string }>;
 
 export interface WindowDocking {
   left?: WindowId;
@@ -49,6 +49,7 @@ export interface WindowState extends WindowRect {
 }
 
 export interface WindowInstance<TPayload = unknown> {
+  win: WindowInstance;
   winId: WindowId;
   title: string;
   thumbnail: string | null;
@@ -67,7 +68,7 @@ export interface WindowInstance<TPayload = unknown> {
   showButtons: boolean;
   docking: WindowDocking;
   payload: TPayload;
-  actions?: WindowActionsComponent;
+  titlebar?: WindowTiltlebarComponent;
 }
 
 export interface OpenWindowOptions<TPayload = unknown> {
@@ -87,7 +88,7 @@ export interface OpenWindowOptions<TPayload = unknown> {
   transparency?: number;
   showButtons?: boolean;
   docking?: WindowDocking;
-  actions?: WindowActionsComponent;
+  titlebar?: WindowTiltlebarComponent;
   componentKey?: string;
 }
 
@@ -239,7 +240,7 @@ export class WindowManager {
       showButtons: options.showButtons ?? true,
       docking: options.docking ?? {},
       payload: (options.payload ?? null) as TPayload,
-      actions: options.actions,
+      titlebar: options.titlebar,
     });
 
     this.windows.push(win);
@@ -272,7 +273,7 @@ export class WindowManager {
       showButtons: source.showButtons,
       docking: {},
 
-      actions: source.actions,
+      titlebar: source.titlebar,
     });
 
     this.focus(copy.winId);
