@@ -275,8 +275,13 @@ export class WindowManager {
    * Kopian behåller förälder, komponent, props och utseende,
    * men får ett nytt ID och en egen position.
    */
-  duplicate(id: WindowId, offset = 24): WindowInstance | undefined {
-    const source = this.find(id);
+
+  /**
+   * Creates a standalone copy of a window instance.
+   * The duplicate retains components, props, parentage, and styles,
+   * but receives a unique ID and an offset position.
+   */
+  duplicate(source: WindowInstance, offset = 24): WindowInstance | undefined {
     if (!source || source.winId === ROOT_WIN_ID || !source.component) {
       return undefined;
     }
@@ -295,7 +300,6 @@ export class WindowManager {
       transparency: source.state.transparency,
       showButtons: source.showButtons,
       docking: {},
-
       titlebar: source.titlebar,
     });
 
@@ -833,9 +837,45 @@ export class WindowManager {
     this.focus(win);
   }
 
-  async detachWindow(id: WindowId, target: "tab" | "tauri"): Promise<void> {
-    const win = this.find(id);
-    if (!win || id === ROOT_WIN_ID) {
+  // async detachWindow_old(id: WindowId, target: "tab" | "tauri"): Promise<void> {
+  //   const win = this.find(id);
+  //   if (!win || id === ROOT_WIN_ID) {
+  //     return;
+  //   }
+
+  //   if (!win.componentKey) {
+  //     console.error(
+  //       `[WindowManager] Fönstret "${win.title}" saknar en 'componentKey' och kan inte frikopplas.`,
+  //     );
+  //     return;
+  //   }
+
+  //   const descriptor = {
+  //     winId: win.winId,
+  //     title: win.title,
+  //     componentKey: win.componentKey,
+  //     payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
+  //   };
+
+  //   try {
+  //     // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
+  //     await this.backend.open(descriptor);
+
+  //     // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
+  //     this.closeWin(id);
+  //   } catch (error) {
+  //     console.error(
+  //       "[WindowManager] Misslyckades att frikoppla fönster:",
+  //       error,
+  //     );
+  //   }
+  // }
+
+  async detachWindow(
+    win: WindowInstance,
+    target: "tab" | "tauri",
+  ): Promise<void> {
+    if (!win || win.winId === ROOT_WIN_ID) {
       return;
     }
 
@@ -858,7 +898,7 @@ export class WindowManager {
       await this.backend.open(descriptor);
 
       // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-      this.closeWin(id);
+      this.closeWin(win);
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",
@@ -883,16 +923,29 @@ export class WindowManager {
     }
   }
 
-  closeWin(id: WindowId): void {
-    if (id === ROOT_WIN_ID) return;
+  closeWin(win: WindowInstance): void {
+    if (!win || win.winId === ROOT_WIN_ID) return;
 
+    // Skapa ett Set med ID:t för fönstret vi vill stänga samt alla dess underfönster
     const ids = new Set([
-      id,
-      ...this.getDescendants(id).map((win) => win.winId),
+      win.winId,
+      ...this.getDescendants(win.winId).map((w) => w.winId),
     ]);
 
-    this.windows = this.windows.filter((win) => !ids.has(win.winId));
+    // Filtrera bort alla dessa fönster från den reaktiva arrayen i en enda stöt
+    this.windows = this.windows.filter((w) => !ids.has(w.winId));
   }
+
+  // closeWin_old(id: WindowId): void {
+  //   if (id === ROOT_WIN_ID) return;
+
+  //   const ids = new Set([
+  //     id,
+  //     ...this.getDescendants(id).map((win) => win.winId),
+  //   ]);
+
+  //   this.windows = this.windows.filter((win) => !ids.has(win.winId));
+  // }
 
   setThumbnail(id: WindowId, thumbnail: string | null): void {
     const win = this.find(id);

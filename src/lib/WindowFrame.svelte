@@ -224,7 +224,7 @@ function beginInteraction(
     return;
   }
 
-  if (win.state.isMaximized) return;
+  // if (win.state.isMaximized) return;
 
   event.preventDefault();
   event.stopPropagation();
@@ -232,7 +232,7 @@ function beginInteraction(
   let activeWin = win;
 
   if (event.ctrlKey && mode === "move") {
-    const copy = manager.duplicate(win.winId);
+    const copy = manager.duplicate(win);
     if (!copy) return;
     activeWin = copy;
   }
@@ -509,7 +509,7 @@ async function minimize() {
 
 function close() {
   endInteraction();
-  manager.closeWin(win.winId);
+  manager.closeWin(win);
 }
 
 // Övervaka djupa ändringar i payload och strömma till backend om fönstret körs externt
@@ -593,14 +593,14 @@ $effect(() => {
         <button 
           type="button" 
           title="Frikoppla till skrivbordsfönster" 
-          onclick={() => manager.detachWindow(win.winId, "tauri")}>
+          onclick={() => manager.detachWindow(win, "tauri")}>
           🗔
         </button>
       {:else}
         <button 
           type="button" 
           title="Frikoppla till ny webbläsarflik" 
-          onclick={() => manager.detachWindow(win.winId, "tab")}>
+          onclick={() => manager.detachWindow(win, "tab")}>
           🗗
         </button>
       {/if}
