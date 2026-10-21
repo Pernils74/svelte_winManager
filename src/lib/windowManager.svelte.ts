@@ -48,8 +48,31 @@ export interface WindowState extends WindowRect {
   transparency: number;
 }
 
+/**
+ * Core properties automatically passed down to every application component
+ * rendered inside a window frame. Import this to type-safe your Svelte 5 props.
+ */
+export interface WindowComponentProps<TPayload = any> {
+  /**
+   * The full, reactive window instance object.
+   * Provides direct access to changing the title, reading window bounds, payload, and frame state.
+   */
+  win: WindowInstance<TPayload>;
+
+  /**
+   * The unique identifier for this window instance (usually a crypto UUID).
+   * Commonly passed into manager methods to target this specific window.
+   */
+  winId: WindowId;
+
+  /**
+   * The unique ID of the parent window context.
+   * Returns `null` if the window is resting directly on the main desktop wallpaper root.
+   */
+  parentId: WindowId | null;
+}
+
 export interface WindowInstance<TPayload = unknown> {
-  win: WindowInstance;
   winId: WindowId;
   title: string;
   thumbnail: string | null;

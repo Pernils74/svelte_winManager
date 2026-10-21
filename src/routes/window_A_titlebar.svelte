@@ -1,7 +1,11 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 
-let { winId }: { winId: string } = $props();
+import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
+
+let { win, winId }: WindowComponentProps = $props();
+
+// let { winId }: { winId: string } = $props();
 
 const wManager = getWindowManager();
 

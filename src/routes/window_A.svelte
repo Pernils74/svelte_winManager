@@ -3,6 +3,11 @@ bom bla dkjsdk
  <!-- Bom.svelte -->
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
+const wManager = getWindowManager();
+
+import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
+let { win, winId, parentId }: WindowComponentProps = $props();
+
 // import Item from '../Item.svelte';
 import Scrapping from "./Scrapping.svelte";
 import MouseCords from "./MouseCords.svelte";
@@ -12,16 +17,6 @@ import Window_A_Titlebar from "./window_A_titlebar.svelte";
 import Window_B from "./window_B.svelte";
 import Window_C from "./window_C.svelte";
 import { onMount } from "svelte";
-
-const wManager = getWindowManager();
-
-let {
-  winId,
-  parentId,
-}: {
-  winId: string;
-  parentId: string | null;
-} = $props();
 
 const parent = $derived(wManager.find(winId));
 

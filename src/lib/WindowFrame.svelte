@@ -632,9 +632,10 @@ $effect(() => {
       <WindowFrame win={child} bounds={contentEl}>
         {@const ChildComponent = child.component}
           <ChildComponent
+            win= {child}
             winId={child.winId}
-            {...child.props}
             parentId={child.parentId}
+            {...child.props}
           />
         
        </WindowFrame> 
