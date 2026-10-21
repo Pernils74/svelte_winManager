@@ -691,7 +691,79 @@ export class WindowManager {
     this.update(id, next);
   }
 
-  toggleMaximize(id: WindowId, bounds: HTMLElement): void {
+  toggleMaximize(win: WindowInstance, bounds: HTMLElement): void {
+    if (!win || win.winId === ROOT_WIN_ID) return;
+
+    if (win.state.isMaximized) {
+      if (win.storedState) {
+        Object.assign(win.state, win.storedState);
+      }
+      win.state.isMaximized = false;
+      this.focus(win);
+      return;
+    }
+
+    win.storedState = rectOf(win);
+
+    let maxLeft = 0;
+    let maxTop = 0;
+    let maxRight = bounds.clientWidth;
+    let maxBottom = bounds.clientHeight;
+
+    const a = win.state;
+    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
+
+    for (const other of siblings) {
+      if (other.winId === win.winId || other.state.isMinimized) continue;
+
+      const b = other.state;
+      const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
+        a.top + a.height > b.top + MAXIMIZE_EPSILON;
+      const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
+        a.left + a.width > b.left + MAXIMIZE_EPSILON;
+
+      if (
+        overlapsY &&
+        Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON
+      ) {
+        maxLeft = Math.max(maxLeft, b.left + b.width);
+      }
+
+      if (
+        overlapsY &&
+        Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON
+      ) {
+        maxRight = Math.min(maxRight, b.left);
+      }
+
+      if (
+        overlapsX &&
+        Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON
+      ) {
+        maxTop = Math.max(maxTop, b.top + b.height);
+      }
+
+      if (
+        overlapsX &&
+        Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON
+      ) {
+        maxBottom = Math.min(maxBottom, b.top);
+      }
+    }
+
+    // 🌟 Uppdatera alla reaktiva värden direkt på objektet i en enda stöt
+    Object.assign(win.state, {
+      left: maxLeft,
+      top: maxTop,
+      width: Math.max(0, maxRight - maxLeft),
+      height: Math.max(0, maxBottom - maxTop),
+      isMaximized: true,
+    });
+
+    this.focus(win);
+  }
+
+  toggleMaximize_old(id: WindowId, bounds: HTMLElement): void {
     const win = this.find(id);
     if (!win || win.winId === ROOT_WIN_ID) return;
 

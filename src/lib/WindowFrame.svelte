@@ -455,7 +455,7 @@ function interaction(node: HTMLElement, mode: InteractionMode) {
 
 function toggleMaximize() {
   endInteraction();
-  manager.toggleMaximize(win.winId, bounds);
+  manager.toggleMaximize(win, bounds);
 }
 
 function changeTransparency(event: WheelEvent) {
