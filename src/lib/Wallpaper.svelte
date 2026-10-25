@@ -1,13 +1,45 @@
 <script lang="ts">
 let { word = "test" } = $props();
 
+let container: HTMLDivElement;
+let fontSize = $state(16);
+
 let letters = $derived(word.split(""));
+
+$effect(() => {
+  if (!container) return;
+
+  const resizeObserver = new ResizeObserver(([entry]) => {
+    const width = entry.contentRect.width;
+    const height = entry.contentRect.height;
+
+    if (!width || !height) return;
+
+    // Texten ska uppta ca 70 % av fönstrets bredd.
+    const targetWidth = width * 0.7;
+
+    // Monospace-tecken är ungefär 0.6em breda.
+    const calculatedSize = targetWidth / Math.max(word.length * 0.6, 1);
+
+    // Begränsa storleken även utifrån fönstrets höjd.
+    fontSize = Math.min(calculatedSize, height * 0.7);
+  });
+
+  resizeObserver.observe(container);
+
+  return () => resizeObserver.disconnect();
+});
 </script>
 
-<div class="wallpaper" aria-hidden="true">
-  {#each letters as letter, i}
-    <span class="letter" >{letter}</span>
-  {/each}
+<div class="wallpaper" bind:this={container} aria-hidden="true">
+  <div
+    class="word"
+    style:font-size="{fontSize}px"
+  >
+    {#each letters as letter, i}
+      <span class="letter" key={i}>{letter}</span>
+    {/each}
+  </div>
 </div>
 
 <style>
@@ -19,19 +51,23 @@ let letters = $derived(word.split(""));
   justify-content: center;
   align-items: center;
 
+  overflow: hidden;
   pointer-events: none;
   user-select: none;
-  overflow: hidden;
 
-  font-size: min(10vw, 25vh, 30rem);
+  z-index: -1;
+}
+
+.word {
+  display: flex;
+  gap: 0.1em;
+
   font-weight: 800;
   font-family: monospace;
   text-transform: uppercase;
-  color: hsla(229, 88%, 50%, 0.15);
-
   white-space: nowrap;
-  gap: 0.1em;
-  z-index: 0;
+
+  color: hsla(229, 88%, 50%, 0.15);
 
   transform-origin: center;
   animation: floatRotate 14s ease-in-out infinite alternate;
@@ -52,7 +88,7 @@ let letters = $derived(word.split(""));
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wallpaper {
+  .word {
     animation: none;
   }
 }
