@@ -4,13 +4,16 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowFrame.sve
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.svelte.ts
 
+https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_A.svelte
+https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_B.svelte
 
 
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
 
+
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
 -->
 
 <!-- gammalt ...
@@ -36,7 +39,7 @@ import BomActions from "./BomActions.svelte";
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
 
-import WindowA_Titlebar from "./window_A_titlebar.svelte";
+import WindowATitlebar from "./window_A_titlebar.svelte";
 
 const wManager = initializeWindowManager();
 
@@ -47,8 +50,7 @@ onMount(() => {
     height: 600,
     left: 100,
     top: 300,
-
-    titlebar: WindowA_Titlebar,
+    titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
   });
 
   wManager.open(WindowB, {
@@ -57,7 +59,6 @@ onMount(() => {
     height: 600,
     left: 750,
     top: 300,
-    // titlebar: WindowA_Titlebar,
   });
 });
 
