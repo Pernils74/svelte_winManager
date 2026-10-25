@@ -2,7 +2,7 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
-import Window_C from "./window_C.svelte"; // Se till att du har ett fönster C importerat
+import Window_C from "./window_C.svelte";
 
 // 1. Export the component-specific prop definitions.
 export interface WindowBProps {

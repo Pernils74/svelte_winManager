@@ -25,7 +25,6 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBacke
 import { onMount } from "svelte";
 import Wallpaper from "#lib/Wallpaper.svelte";
 
-//   import ArenaMonitorButtons from '$lib/ArenaMonitorButtons.svelte';
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
