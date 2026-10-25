@@ -11,16 +11,32 @@ const wManager = getWindowManager();
 // Reactive state holding the live input text string
 let message = $state("Hello from A");
 
-function openWindow_B() {
+// 1. Spawns Window B with a static snapshot (Non-reactive prop pattern)
+function openWindow_B_Snapshot() {
   wManager.open(Window_B, {
     parentId: winId,
-    title: "🪟 Window_B",
+    title: "🪟 Window_B (Snapshot)",
     width: 400,
     height: 300,
-    // Passes the current input string value as a static, non-reactive property snapshot
     props: {
       myNoneReactiveProp: message,
     } satisfies WindowBProps,
+  });
+}
+
+// 2. Spawns Window B with a live getter (Reactive prop connection pattern)
+function openWindow_B_Getter() {
+  wManager.open(Window_B, {
+    parentId: winId,
+    title: "🪟 Window_B (Live Link)",
+    width: 400,
+    height: 300,
+    props: {
+      // By wrapping the evaluation inside a getter, Window B will read the state live
+      get myNoneReactiveProp() {
+        return message;
+      },
+    } as any, // Cast as any because the type definition expects a static string evaluation
   });
 }
 
@@ -48,9 +64,16 @@ $effect(() => {
       Live text in A: <code>"{message}"</code>
     </p>
 
-    <button onclick={openWindow_B} class="btn-main">
-      🚀 Spawn Window B with Snapshot
-    </button>
+    <!-- Side-by-side action buttons to contrast the state behaviors -->
+    <div class="action-group">
+      <button onclick={openWindow_B_Snapshot} class="btn-snapshot">
+        📸 Spawn B with Snapshot (Static)
+      </button>
+
+      <button onclick={openWindow_B_Getter} class="btn-main">
+        🔗 Spawn B with Getter (Live Link)
+      </button>
+    </div>
   </div>
 
   <footer class="footer-actions">
@@ -114,6 +137,13 @@ code {
   font-family: monospace;
 }
 
+.action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .footer-actions {
   margin-top: auto;
 }
@@ -140,6 +170,8 @@ button {
   font-weight: 500;
   cursor: pointer;
   transition: background 0.1s;
+  width: 100%;
+  text-align: left;
 }
 
 .btn-main {
@@ -149,5 +181,15 @@ button {
 
 .btn-main:hover {
   background: #1d4ed8;
+}
+
+.btn-snapshot {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.btn-snapshot:hover {
+  background: #e2e8f0;
 }
 </style>

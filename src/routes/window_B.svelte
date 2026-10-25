@@ -17,18 +17,23 @@ let { win, winId, parentId, myNoneReactiveProp }:
 const wManager = getWindowManager();
 
 // 3. Local reactive state to be passed down as payload to Window C
-let counter = $state(0);
+let myData = $state({
+  counter: 0,
+});
 
 function openWindow_C() {
   wManager.open(Window_C, {
     // parentId: winId,
     title: "🪟 Window_C",
     width: 400,
-    height: 300,
+    height: 500,
     // Pass the current state inside the manager's payload context instead of props
-    payload: {
-      bCounter: counter,
-    },
+    payload: myData,
+    // payload: {
+    //   get bCounter() {
+    //     return counter;
+    //   },
+    // },
   });
 }
 
@@ -55,10 +60,11 @@ function reparentToRoot() {
   <!-- Reactive Payload Spawning Demo -->
   <div class="demo-box payload-box">
     <span class="box-label">Payload Preparation (Window B State)</span>
-    <p class="explanation">Current counter value: <strong>{counter}</strong></p>
+    <p
+      class="explanation">Current counter value: <strong>{myData.counter}</strong></p>
 
     <div class="button-group">
-      <button onclick={() => counter++} class="btn-increment">
+      <button onclick={() => myData.counter++} class="btn-increment">
         ➕ Increment Counter
       </button>
       <button onclick={openWindow_C} class="btn-main">

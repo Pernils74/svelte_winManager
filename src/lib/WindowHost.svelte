@@ -135,7 +135,7 @@ onMount(() => {
         {@render topbarContent()}
       {/if}
 
-      <span>Antal öppna fönster: {winCount}</span>
+      <span>Current open windows: {winCount}</span>
     </header>
 
     <main class="workspace" bind:this={contentEl}>

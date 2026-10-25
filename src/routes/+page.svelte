@@ -30,11 +30,6 @@ import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
 import { getAllComponentsAsArray } from "#lib/windowRegistry.ts";
-//   import Item from './Item.svelte';
-import Bom from "./Bom.svelte";
-import ArenaMonitorButtons from "#lib/ArenaMonitorButtons.svelte";
-import BomActions from "./BomActions.svelte";
-//   import Scrapping from './Scrapping/Scrapping.svelte';
 
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
@@ -56,7 +51,7 @@ onMount(() => {
 
   wManager.open(WindowB, {
     title: "🪟 Winodw B",
-    width: 700,
+    width: 500,
     height: 600,
     left: 650,
     top: 300,
@@ -77,110 +72,154 @@ $effect(() => {
 </script>
 
 WindowHost.topbarContent ="hjhkhkjh"
-
 <WindowHost>
   {#snippet children()}
-  <h1>Welcome to Svelte Window Manager</h1>
-  <p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the documentation</p>
-  
-  5. src/routes/+page.svelte
-  
-  <h3>Registrered Components:</h3>
-  <ul>
-    <!-- Vi destrukturerar [key, value] från din Map-array -->
-    {#each allComponents as [key, component]}
-      <li>Keygen: <strong>{key}</strong></li>
-    {/each}
-  </ul>
+    <div class="welcome-container">
+      <h1>Welcome to Svelte Window Manager</h1>
+      <p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the official documentation.</p>
+      
+      <!-- 🌟 NY SEKTION: Häftiga fönsterfunktioner / Genvägar -->
+      <section class="features-grid">
+        <div class="feature-card">
+          <h4>🎛️ Context & Hierarchy</h4>
+          <ul>
+            <li><strong>Reparenting:</strong> Hold <kbd>Shift</kbd> while dragging a titlebar to drop and embed a window inside another window context.</li>
+            <li><strong>Desktop Detach:</strong> Fönsterkomponenter kan enkelt flyttas ut till skrivbordsroten igen genom att kalla på hanterarens reparent-metod.</li>
+          </ul>
+        </div>
 
-  <Wallpaper word="+page.svelte"></Wallpaper>
-    <!-- Eventuellt permanent innehåll i arbetsytan -->
+        <div class="feature-card">
+          <h4>🧬 Cloning & Window State</h4>
+          <ul>
+            <li><strong>Instant Duplicate:</strong> Hold <kbd>Ctrl</kbd> while dragging a titlebar to create a standalone, decoupled copy of that window with an offset.</li>
+            <li><strong>Intelligent Maximize:</strong> Double-click the titlebar to maximize. It automatically respects and tiles around existing adjacent docked borders.</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h4>📐 Proportional Docking & Snapping</h4>
+          <ul>
+            <li><strong>Magnetic Snapping:</strong> Windows automatically snap edge-to-edge when dragged within a 12px threshold of workspace boundaries or sibling frames.</li>
+            <li><strong>Proportional Resize:</strong> Dragging shared borders expands or shrinks adjacent docked windows fluidly while locked to system constraints.</li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="registry-section">
+        <h3>Registered Framework Components:</h3>
+        <div class="badge-list">
+          {#each allComponents as [key, component]}
+            <span class="component-badge">📦 {key}</span>
+          {/each}
+        </div>
+      </div>
+    </div>
+
+    <Wallpaper word="+page.svelte"></Wallpaper>
   {/snippet}
 </WindowHost>
 
 <style>
-:global(html),
-:global(body) {
-  width: 100%;
-  height: 100%;
+.welcome-container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  position: relative;
+  z-index: 1; /* Ligger ovanpå Wallpaper */
+}
+
+h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+}
+
+a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Grid för alla coola Window-features */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin: 2.5rem 0;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.feature-card h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 0.5rem;
+}
+
+.feature-card ul {
   margin: 0;
-  overflow: hidden;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #475569;
+}
+
+kbd {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.75rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+  font-family: inherit;
+}
+
+/* Registry list städad till snygga badges istället för rå <ul> */
+.registry-section {
+  background: rgba(248, 250, 252, 0.6);
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+}
+
+.registry-section h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.badge-list {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.component-badge {
+  background: #edf2f7;
+  color: #2d3748;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  font-weight: 600;
 }
 </style>
-
-<!--
-Startsidan behöver inte längre importera DraggableResizable, ha en contentEl eller själv iterera över alla fönster.
-6. Öppna fönster från andra komponenter
-
-Från exempelvis Bom.svelte kan du öppna ett nytt fönster på samma sätt som tidigare:
-svelte
-
-<script lang="ts">
-  import { getWindowManager } from '$lib/windowManager.svelte';
-  import Item from '../Item.svelte';
-  import Scrapping from '../Scrapping/Scrapping.svelte';
-
-  const wManager = getWindowManager();
-
-  function openItem() {
-    wManager.open(Item, {
-      title: '🪟 Item Window',
-      width: 400,
-      height: 300,
-      props: { art_nr: '12345' }
-    });
-  }
-
-  function openScrapping() {
-    wManager.open(Scrapping, {
-      title: '👁️ Scrapping Window'
-    });
-  }
-</script>
-
-<button onclick={openItem}>Ny item</button>
-<button onclick={openScrapping}>Scrapping</button>
-
-7. Så använder du payload och state
-
-Det är värt att skilja på de två begreppen:
-ts
-
-const win = wManager.open(Item, {
-  title: 'Item',
-  payload: {
-    selectedArticle: '12345',
-    searchTerm: ''
-  }
-});
-
-// Ändra fönstrets UI-tillstånd
-wManager.update(win.winId, {
-  left: 100,
-  top: 80,
-  isMinimized: false
-});
-
-// Ändra dess applikationsdata
-wManager.updatePayload(win.winId, {
-  selectedArticle: '67890',
-  searchTerm: 'motor'
-});
-
-state ska vara den reaktiva information som behövs för att visa och styra fönstret. payload är data som hör till själva applikationsfunktionen. Om du behöver reaktivt uppdatera egenskaper inuti ett godtyckligt payload-objekt bör du definiera det som en egen reaktiv modell, i stället för att låta window manager hantera all möjlig applikationsdata.
-8. Några saker att vara uppmärksam på
-
-Den här refaktoreringen är en grundstruktur och behöver verifieras mot dina befintliga komponenter innan den ersätter koden rakt av.
-
-    ArenaMonitorButtons.svelte: Om den använder win.useArena eller win.useMonitor behöver den uppdateras så att den läser och skriver rätt tillstånd i den nya modellen.
-
-    Initial storlek: WindowFrame mäter komponentens DOM efter montering. Om innehållet laddas asynkront kan du behöva en ResizeObserver för att beräkna en lämplig initial storlek.
-
-    Barnfönster: parentId finns kvar, men barnfönster renderas fortfarande i samma host. Om de ska begränsas till föräldrafönstrets innehållsyta behöver hosten även hantera olika bounding-element.
-
-    Maximering: Här maximeras fönstret inom arbetsytan. Om arbetsytan ändrar storlek medan fönstret är maximerat behöver storleken uppdateras.
-
-    Svelte 5: Exemplet använder snippets och $state i stället för äldre slot-mönster och Svelte 4:s komponentkonventioner.
-
-Min rekommendation: Börja med att få WindowManager, WindowHost och WindowFrame att fungera tillsammans. Därefter kan vi göra ArenaMonitorButtons och barnfönster helt konsekventa med den nya modellen. Det ger en renare arkitektur utan att du behöver skriva om Bom, Item och Scrapping från grunden.
--->

@@ -4,7 +4,7 @@ import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
 // 1. Define the structural interface for the incoming payload from Window B
 interface WindowCPayload {
-  bCounter: number;
+  counter: number;
 }
 
 // 2. Bind the payload interface to the WindowComponentProps generic
@@ -23,12 +23,18 @@ let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
     <!-- 3. Read the payload data safely and reactively via the win instance -->
     <div class="counter-display">
       <span class="label">bCounter Value:</span>
-      <span class="badge">{win.payload?.bCounter ?? 0}</span>
+      <span class="badge">{win.payload?.counter ?? 0}</span>
     </div>
 
     <p class="explanation">
       ⚙️ <strong>MDI State Note:</strong> This value is fetched directly from the window instance payload registry.
     </p>
+  </div>
+
+  <div class="button-group">
+    <button onclick={() => win.payload.counter++} class="btn-increment">
+      ➕ Increment Counter
+    </button>
   </div>
 </div>
 
@@ -102,5 +108,12 @@ let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
   color: #64748b;
   line-height: 1.4;
   margin: 0.25rem 0 0 0;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 </style>

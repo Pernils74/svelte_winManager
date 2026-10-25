@@ -266,6 +266,7 @@ export class WindowManager {
       showButtons: options.showButtons ?? true,
       docking: options.docking ?? {},
       payload: (options.payload ?? null) as TPayload,
+      // payload: options.payload ? $state(options.payload) : (null as any),
       titlebar: options.titlebar,
     });
 
