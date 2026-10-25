@@ -4,7 +4,7 @@ import { getWindowManager } from "#lib/windowManager.svelte.ts";
 const wManager = getWindowManager();
 
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
-let { win, winId, parentId }: WindowComponentProps = $props();
+let { win, winId, parentId, props }: WindowComponentProps = $props();
 
 // import Item from '../Item.svelte';
 import Scrapping from "./Scrapping.svelte";
@@ -37,7 +37,7 @@ function openScrapping() {
   });
 }
 </script>
-<MouseCords />
+{props}
 <button onclick={openItem}>Ny item</button>
 <button onclick={openScrapping}>Scrapping</button>
 <button onclick={reparent}>Byta parent</button>
