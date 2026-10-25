@@ -1,6 +1,4 @@
-
-bom bla dkjsdk
- <!-- Bom.svelte -->
+<!-- Bom.svelte -->
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 const wManager = getWindowManager();
@@ -39,7 +37,7 @@ function openScrapping() {
   });
 }
 </script>
-  <MouseCords />
-  <button onclick={openItem}>Ny item</button>
-  <button onclick={openScrapping}>Scrapping</button>
-  <button onclick={reparent}>Byta parent</button>
+<MouseCords />
+<button onclick={openItem}>Ny item</button>
+<button onclick={openScrapping}>Scrapping</button>
+<button onclick={reparent}>Byta parent</button>

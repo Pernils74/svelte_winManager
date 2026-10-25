@@ -12,7 +12,7 @@ let letters = $derived(word.split(""));
 
 <style>
 .wallpaper {
-  position: fixed;
+  position: absolute;
   inset: 0;
 
   display: flex;
@@ -31,7 +31,7 @@ let letters = $derived(word.split(""));
 
   white-space: nowrap;
   gap: 0.1em;
-  z-index: -1;
+  z-index: 0;
 
   transform-origin: center;
   animation: floatRotate 14s ease-in-out infinite alternate;

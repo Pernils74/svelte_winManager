@@ -1,11 +1,11 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
-
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
-let { win, winId }: WindowComponentProps = $props();
+let { win, winId, parentId }: WindowComponentProps = $props();
 
-// let { winId }: { winId: string } = $props();
+import WindowB from "./window_B.svelte";
+import WindowC from "./window_C.svelte";
 
 const wManager = getWindowManager();
 
@@ -14,14 +14,27 @@ function refresh() {
   // Anropa BOM-specifik uppdatering här.
 }
 
-function openAnotherBom() {
-  // Lägg till den funktion som behövs för att öppna ytterligare BOM.
+function openWindow_B() {
+  wManager.open(WindowB, {
+    title: "🪟 Winodw B",
+    width: 700,
+    height: 600,
+  });
+}
+
+function openWindow_C() {
+  wManager.open(WindowC, {
+    title: "🪟 Winodw C",
+    width: 700,
+    height: 600,
+  });
 }
 </script>
 
 <div class="actions">
   <button onclick={refresh} title="Uppdatera BOM">🔄</button>
-  <button onclick={openAnotherBom} title="Öppna BOM">➕</button>
+  <button onclick={openWindow_B} title="Open Window B">Open 🪟 B </button>
+  <button onclick={openWindow_C} title="Open Window C">Open 🪟 C </button>
 </div>
 
 <style>

@@ -118,7 +118,7 @@ onMount(() => {
   if (win.state.width <= 0 || win.state.height <= 0) {
     manager.update(win.winId, {
       width: win.state.width || rect.width,
-      height: win.state.height || rect.height + win.extraHeight,
+      height: win.state.height || rect.height,
     });
   }
 });
@@ -316,6 +316,134 @@ function handleMouseUp(event: MouseEvent) {
 }
 
 function onMouseMove(event: MouseEvent) {
+  if (!dragMode || !dragWinId) return;
+
+  const activeWin = win;
+  if (!activeWin) return;
+
+  const dx = event.clientX - dragStartX;
+  const dy = event.clientY - dragStartY;
+  const boundsWidth = bounds.clientWidth;
+  const boundsHeight = bounds.clientHeight;
+
+  let nextLeft = startLeft;
+  let nextTop = startTop;
+  let nextWidth = startWidth;
+  let nextHeight = startHeight;
+
+  if (dragMode === "move") {
+    const rawLeft = startLeft + dx;
+    const rawTop = startTop + dy;
+
+    if (reparentDrag) {
+      // Shift + drag: fri position utanför bounds.
+      // Ingen snapping mot bounds eller andra fönster.
+      nextLeft = rawLeft;
+      nextTop = rawTop;
+
+      snappedLeft = null;
+      snappedTop = null;
+    } else {
+      // Vanlig drag: behåll befintlig snapping.
+      const snapX = (
+        targets: number[],
+        raw: number,
+        previous: number | null,
+      ) => snapPosition(raw, targets, previous);
+
+      const children = manager
+        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+        .filter(
+          (other) =>
+            other.winId !== activeWin.winId &&
+            !other.state.isMinimized,
+        );
+
+      const xTargets = [
+        0,
+        boundsWidth - startWidth,
+        ...children.flatMap((other) => [
+          other.state.left,
+          other.state.left + other.state.width,
+          other.state.left - startWidth,
+          other.state.left + other.state.width - startWidth,
+        ]),
+      ];
+
+      const yTargets = [
+        0,
+        boundsHeight - startHeight,
+        ...children.flatMap((other) => [
+          other.state.top,
+          other.state.top + other.state.height,
+          other.state.top - startHeight,
+          other.state.top + other.state.height - startHeight,
+        ]),
+      ];
+
+      nextLeft = snapX(xTargets, rawLeft, snappedLeft);
+      nextTop = snapX(yTargets, rawTop, snappedTop);
+
+      snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
+      snappedTop = nextTop !== rawTop ? nextTop : null;
+    }
+  } else {
+    // Resize: behåll befintlig logik.
+    if (dragMode.includes("right")) {
+      nextWidth = startWidth + dx;
+    }
+
+    if (dragMode.includes("left")) {
+      nextWidth = startWidth - dx;
+      nextLeft = startLeft + dx;
+    }
+
+    if (dragMode.includes("bottom")) {
+      nextHeight = startHeight + dy;
+    }
+
+    if (dragMode.includes("top")) {
+      nextHeight = startHeight - dy;
+      nextTop = startTop + dy;
+    }
+
+    nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
+    nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
+
+    if (dragMode.includes("left")) {
+      nextLeft = startLeft + startWidth - nextWidth;
+    }
+
+    if (dragMode.includes("top")) {
+      nextTop = startTop + startHeight - nextHeight;
+    }
+  }
+
+  // Clamp endast vid vanlig dragning och resize.
+  // Shift + drag får röra sig fritt utanför bounds.
+  if (dragMode !== "move" || !reparentDrag) {
+    nextWidth = Math.min(nextWidth, boundsWidth);
+    nextHeight = Math.min(nextHeight, boundsHeight);
+
+    nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
+    nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
+  }
+
+  const nextRect: WindowRect = {
+    left: nextLeft,
+    top: nextTop,
+    width: nextWidth,
+    height: nextHeight,
+  };
+
+  if (dragMode === "move") {
+    manager.update(activeWin.winId, nextRect);
+  } else {
+    manager.resizeDockedWindow(activeWin, dragMode, nextRect);
+  }
+}
+
+function onMouseMove_old(event: MouseEvent) {
   if (!dragMode || !dragWinId) return;
 
   // const activeWin = manager.find(dragWinId);

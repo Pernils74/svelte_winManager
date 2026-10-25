@@ -26,7 +26,8 @@ export type ResizeMode =
   | "bottom-left"
   | "bottom-right";
 
-export type WindowTiltlebarComponent = Component<{ winId: string }>;
+// export type WindowTiltlebarComponent = Component<{ winId: string }>;
+export type WindowTiltlebarComponent = Component<WindowComponentProps<any>>;
 
 export interface WindowDocking {
   left?: WindowId;
@@ -52,6 +53,8 @@ export interface WindowState extends WindowRect {
  * Core properties automatically passed down to every application component
  * rendered inside a window frame. Import this to type-safe your Svelte 5 props.
  */
+// Ändra denna rad i din windowManager.svelte.ts
+
 export interface WindowComponentProps<TPayload = any> {
   /**
    * The full, reactive window instance object.
@@ -83,7 +86,7 @@ export interface WindowInstance<TPayload = unknown> {
   boundingEl: HTMLElement | null;
   state: WindowState;
   storedState: WindowRect | null;
-  extraHeight: number;
+
   zIndex: number;
   tileOffset: number;
   // useArena: boolean;
@@ -103,7 +106,7 @@ export interface OpenWindowOptions<TPayload = unknown> {
   setId?: WindowId;
   props?: Record<string, unknown>;
   payload?: TPayload;
-  extraHeight?: number;
+
   left?: number;
   top?: number;
   width?: number;
@@ -162,7 +165,7 @@ export class WindowManager {
         transparency: 1,
       },
       storedState: null,
-      extraHeight: 0,
+
       zIndex: 0,
 
       tileOffset: 0,
@@ -254,7 +257,7 @@ export class WindowManager {
         transparency: options.transparency ?? 1,
       },
       storedState: null,
-      extraHeight: options.extraHeight ?? 0,
+
       zIndex: ++this.zCounter,
 
       tileOffset,
@@ -292,7 +295,7 @@ export class WindowManager {
       boundingEl: source.boundingEl,
       props: { ...source.props },
       payload: source.payload,
-      extraHeight: source.extraHeight,
+
       left: source.state.left + offset,
       top: source.state.top + offset,
       width: source.state.width,

@@ -9,6 +9,8 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.s
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
 
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
+
 -->
 
 <!-- gammalt ...
@@ -39,19 +41,23 @@ import WindowA_Titlebar from "./window_A_titlebar.svelte";
 const wManager = initializeWindowManager();
 
 onMount(() => {
-  wManager.open(Bom, {
-    title: "🪟 Bom Window",
-    extraHeight: 40,
-    width: 700,
+  wManager.open(WindowA, {
+    title: "🪟 Winodw A",
+    width: 550,
     height: 600,
-    titlebar: ArenaMonitorButtons,
+    left: 100,
+    top: 300,
+
+    titlebar: WindowA_Titlebar,
   });
-  wManager.open(Bom, {
-    title: "🪟 Bom Window",
+
+  wManager.open(WindowB, {
+    title: "🪟 Winodw B",
     width: 700,
     height: 600,
-    extraHeight: 4,
-    titlebar: BomActions,
+    left: 750,
+    top: 300,
+    // titlebar: WindowA_Titlebar,
   });
 });
 
@@ -61,24 +67,24 @@ $effect(() => {
 });
 </script>
 
+WindowHost.topbarContent ="hjhkhkjh"
+
 <WindowHost>
   {#snippet children()}
-<h1>Welcome to SvelteKit</h1>
-  <p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+  <h1>Welcome to Svelte Window Manager</h1>
+  <p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the documentation</p>
   
   5. src/routes/+page.svelte
   
-  Nu blir startsidan betydligt enklare. Den behöver bara initiera context och välja vilka fönster som ska öppnas initialt.
-  svelte
-  <h3>Registrerade komponenter i systemet:</h3>
+  <h3>Registrered Components:</h3>
   <ul>
     <!-- Vi destrukturerar [key, value] från din Map-array -->
     {#each allComponents as [key, component]}
-      <li>Nyckel: <strong>{key}</strong></li>
+      <li>Keygen: <strong>{key}</strong></li>
     {/each}
   </ul>
 
-  <Wallpaper word="page.svelte"></Wallpaper>
+  <Wallpaper word="+page.svelte"></Wallpaper>
     <!-- Eventuellt permanent innehåll i arbetsytan -->
   {/snippet}
 </WindowHost>

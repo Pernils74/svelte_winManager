@@ -70,7 +70,7 @@ $effect(() => {
                 transparency: 1,
               },
               storedState: null,
-              extraHeight: 0,
+
               zIndex: 1,
               tileOffset: 0,
               showButtons: false,
@@ -110,8 +110,8 @@ onMount(() => {
 
       {#if winInstance}
         {@const ComponentToRender = StandaloneComponent}
-
         <ComponentToRender
+          win={ComponentToRender}
           winId={standaloneWinId}
           payload={winInstance.payload}
           {...winInstance.props}
@@ -147,9 +147,10 @@ onMount(() => {
                 {@const Component = win.component}
 
                 <Component
+                  win={win}
                   winId={win.winId}
-                  {...win.props}
                   parentId={win.parentId}
+                  {...win.props}
                 />
               {/if}
             </WindowFrame>

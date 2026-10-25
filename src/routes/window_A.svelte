@@ -1,7 +1,6 @@
-
-bom bla dkjsdk
- <!-- Bom.svelte -->
+<!-- Bom.svelte -->
 <script lang="ts">
+import Wallpaper from "#lib/Wallpaper.svelte";
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 const wManager = getWindowManager();
 
@@ -21,13 +20,13 @@ import { onMount } from "svelte";
 const parent = $derived(wManager.find(winId));
 
 onMount(() => {
-  win;
+  // console.log("wins ", win);
+  // win;
 });
 
 function openItem() {
   wManager.open(Scrapping, {
     parentId: winId,
-    // boundingEl: parent.boundingEl,
     title: "🪟 Item Window",
     width: 400,
     height: 300,
@@ -35,9 +34,18 @@ function openItem() {
   });
 }
 
+function openWindow_B() {
+  wManager.open(Window_B, {
+    parentId: winId,
+    title: "🪟 Window_B",
+    width: 400,
+    height: 300,
+    props: { art_nr: "12345" },
+  });
+}
+
 function reparent() {
-  let win2 = wManager.findByTitle("🪟 Item Window");
-  if (win2) wManager.reparent(win2.winId, "root");
+  wManager.reparent(win.winId, "root");
 }
 
 function openScrapping() {
@@ -46,7 +54,15 @@ function openScrapping() {
   });
 }
 </script>
-  <MouseCords />
-  <button onclick={openItem}>Ny item</button>
-  <button onclick={openScrapping}>Scrapping</button>
-  <button onclick={reparent}>Byta parent</button>
+
+<MouseCords />
+<button onclick={openWindow_B}>Open Widow B</button>
+<button onclick={openScrapping}>Scrapping</button>
+
+<h3>Current window...</h3>
+<p> winParent: <strong>{win.parentId} </strong> </p>
+<p> winId:     <strong> {winId}</strong></p>
+
+<!-- Current winTitle: {win.title} -->
+<button onclick={reparent}>Switch parent to root</button>
+<Wallpaper word="Window A"></Wallpaper>
