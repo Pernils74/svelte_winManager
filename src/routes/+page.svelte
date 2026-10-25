@@ -6,7 +6,7 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.s
 
 https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_A.svelte
 https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_B.svelte
-
+https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_C.svelte
 
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
@@ -38,6 +38,7 @@ import BomActions from "./BomActions.svelte";
 
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
+import WindowC from "./window_C.svelte";
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
@@ -46,9 +47,9 @@ const wManager = initializeWindowManager();
 onMount(() => {
   wManager.open(WindowA, {
     title: "🪟 Winodw A",
-    width: 550,
+    width: 600,
     height: 600,
-    left: 100,
+    left: 10,
     top: 300,
     titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
   });
@@ -57,9 +58,16 @@ onMount(() => {
     title: "🪟 Winodw B",
     width: 700,
     height: 600,
-    left: 750,
+    left: 650,
     top: 300,
   });
+  // wManager.open(WindowC, {
+  //   title: "🪟 Winodw C",
+  //   width: 700,
+  //   height: 600,
+  //   left: 850,
+  //   top: 800,
+  // });
 });
 
 const allComponents = $derived(getAllComponentsAsArray());

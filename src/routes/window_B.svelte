@@ -2,9 +2,9 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
+import Window_C from "./window_C.svelte"; // Se till att du har ett fönster C importerat
 
 // 1. Export the component-specific prop definitions.
-// Note: These values are static snapshots from the open() call and are NOT reactive.
 export interface WindowBProps {
   myNoneReactiveProp: string; // Becomes locked to what it was at the exact moment of creation
 }
@@ -15,6 +15,22 @@ let { win, winId, parentId, myNoneReactiveProp }:
   & WindowBProps = $props();
 
 const wManager = getWindowManager();
+
+// 3. Local reactive state to be passed down as payload to Window C
+let counter = $state(0);
+
+function openWindow_C() {
+  wManager.open(Window_C, {
+    // parentId: winId,
+    title: "🪟 Window_C",
+    width: 400,
+    height: 300,
+    // Pass the current state inside the manager's payload context instead of props
+    payload: {
+      bCounter: counter,
+    },
+  });
+}
 
 function reparentToRoot() {
   wManager.reparent(win.winId, "root");
@@ -27,14 +43,28 @@ function reparentToRoot() {
     <p>Window ID: <small>{winId}</small></p>
   </header>
 
+  <!-- Static Snapshot Demo -->
   <div class="demo-box">
     <span class="box-label">Static Snapshot Received:</span>
     <p class="snapshot-value">"{myNoneReactiveProp}"</p>
-
     <p class="explanation">
-      ℹ️ <strong>Non-Reactive Notice:</strong> If you modify the text input back inside Window A now, 
-      this value will <em>not</em> change. It remains fixed to the initial snapshot.
+      ℹ️ <strong>Non-Reactive Notice:</strong> Fails to update if Window A input changes.
     </p>
+  </div>
+
+  <!-- Reactive Payload Spawning Demo -->
+  <div class="demo-box payload-box">
+    <span class="box-label">Payload Preparation (Window B State)</span>
+    <p class="explanation">Current counter value: <strong>{counter}</strong></p>
+
+    <div class="button-group">
+      <button onclick={() => counter++} class="btn-increment">
+        ➕ Increment Counter
+      </button>
+      <button onclick={openWindow_C} class="btn-main">
+        🚀 Spawn Window C with Payload
+      </button>
+    </div>
   </div>
 
   <footer class="footer-actions">
@@ -71,6 +101,11 @@ function reparentToRoot() {
   gap: 0.5rem;
 }
 
+.payload-box {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
 .box-label {
   font-size: 0.75rem;
   font-weight: 600;
@@ -95,13 +130,18 @@ function reparentToRoot() {
   font-size: 0.8rem;
   color: #64748b;
   line-height: 1.4;
-  margin: 0.5rem 0 0 0;
+  margin: 0;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .footer-actions {
   margin-top: auto;
-  display: flex;
-  flex-direction: column;
 }
 
 button {
@@ -113,6 +153,27 @@ button {
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.btn-main {
+  background: #16a34a;
+  color: white;
+}
+.btn-main:hover {
+  background: #15803d;
+}
+
+.btn-increment {
+  background: white;
+  color: #1e293b;
+  border-color: #bbf7d0;
+}
+.btn-increment:hover {
+  background: #f0fdf4;
 }
 
 .btn-sub {
@@ -120,22 +181,14 @@ button {
   color: #334155;
   border-color: #cbd5e1;
 }
-
 .btn-sub:hover:not(:disabled) {
   background: #f8fafc;
   border-color: #94a3b8;
 }
-
 .btn-sub:disabled {
   background: #f1f5f9;
   color: #94a3b8;
   border-color: #e2e8f0;
   cursor: not-allowed;
-}
-
-em {
-  color: #dc2626;
-  font-style: normal;
-  font-weight: 600;
 }
 </style>
