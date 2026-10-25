@@ -12,7 +12,7 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_B.sve
 https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_C.svelte
 
 
-
+https://github.com/Pernils74/svelte_winManager/blob/main/README.md
 
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
 -->
