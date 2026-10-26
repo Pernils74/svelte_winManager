@@ -13,8 +13,8 @@ https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.t
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_C.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_A.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_B.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_A.svelte
 
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/README.md

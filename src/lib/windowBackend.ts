@@ -263,7 +263,7 @@ export class WindowBackendManager implements WindowBackend {
   private openBrowserTab(
     descriptor: ExternalWindowDescriptor,
   ): void { // <-- Ändrat från Promise<void> till void
-    const { winId, title, componentKey, payload } = descriptor;
+    const { winId, title, componentKey, payload, props } = descriptor;
 
     const url = new URL(globalThis.location.href);
 
