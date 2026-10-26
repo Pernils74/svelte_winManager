@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: "dev" # Eftersom din standardsida enligt bilden byggs från 'dev'
+    branches: "dev"
 
 permissions:
   contents: read
@@ -23,24 +23,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      # Installera Deno v2
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
         with:
-          node-version: 20
-          cache: npm
+          deno-version: v2.x
 
+      # Kör installation. Deno v2 läser av package.json automatiskt.
       - name: Install dependencies
-        run: npm ci
+        run: deno install
 
+      # Kör bygget. Deno mappar automatiskt "task build" till "vite build" i package.json.
       - name: Build
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
-        run: npm run build
+        run: deno task build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "dist/" # Eftersom din vite.config.ts bygger till mappen 'dist'
+          path: "dist/"
 
       - name: Deploy to GitHub Pages
         id: deployment
