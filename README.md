@@ -1,5 +1,7 @@
 # Svelte Window Manager
 
+Live demo at : https://pernils74.github.io/svelte_winManager/
+
 A lightweight, reactive multi-window manager for Svelte 5 applications.
 
 Svelte Window Manager provides a desktop-like windowing system with movable and
