@@ -86,15 +86,13 @@ $effect(() => {
 
   async function initializeStandaloneWindow() {
     try {
-      // getComponentByKey är asynkron med import.meta.glob().
+      // 🌟 1. Ladda komponenten från ditt routes-register asynkront
       const component = await getComponentByKey(componentKey);
-
       if (cancelled) return;
-
       standaloneComponent = component;
 
+      // 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
       let winInstance = wManager.find(targetWinId);
-
       if (!winInstance) {
         winInstance = {
           winId: targetWinId,
@@ -119,14 +117,13 @@ $effect(() => {
           tileOffset: 0,
           showButtons: false,
           docking: {},
-          payload: null,
+          payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
           isDetached: true,
           context: { type: "browser-tab" },
         };
 
         wManager.windows.push(winInstance);
       } else {
-        // Säkerställ att instansen använder den laddade komponenten.
         winInstance.component = component;
         winInstance.componentKey = componentKey;
         winInstance.title = title;
@@ -134,19 +131,9 @@ $effect(() => {
 
       if (cancelled) return;
 
-      // Lyssna efter initial payload och framtida uppdateringar.
-      unsubscribe = wManager.backend.onMessage(
-        targetWinId,
-        (incomingPayload) => {
-          if (cancelled) return;
-          // 🟢 Använd den säkra updatePayload-metoden istället för direkt tilldelning
-          wManager.updatePayload(targetWinId, incomingPayload);
-          // const current = wManager.find(targetWinId);
-          // if (current) {
-          //   current.payload = incomingPayload;
-          // }
-        },
-      );
+      // 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
+      // Denna ersätter din gamla `wManager.backend.onMessage`
+      unsubscribe = wManager.setupStandaloneSync(targetWinId);
     } catch (error) {
       if (cancelled) return;
 
@@ -169,37 +156,8 @@ $effect(() => {
 
   return () => {
     cancelled = true;
-    unsubscribe?.();
+    unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
   };
-});
-
-// Strömma mutationer tillbaka till main-appen om vi är i standalone-läge
-$effect(() => {
-  // Körs bara om vi är standalone och har en laddad komponent/instans
-  if (!isStandalone || !standaloneWinId) return;
-
-  const winInstance = wManager.find(standaloneWinId);
-  if (!winInstance) return;
-
-  // Genom att läsa winInstance.payload djupt (eller via JSON/JSON-liknande operation)
-  // tvingar vi Sveltes effekt att prenumerera på alla interna mutationer i payload.
-  // Vi använder en strängifiering eller en djup avläsning för att trigga effekten vid varje ändring:
-  const payloadString = JSON.stringify(winInstance.payload);
-
-  // Säkerställ att det faktiskt finns en payload att skicka
-  if (winInstance.payload) {
-    const currentPayload = $state.snapshot(winInstance.payload);
-
-    // Rensa bort funktioner precis som innan
-    const cleanPayload = Object.fromEntries(
-      Object.entries(currentPayload ?? {}).filter(([, val]) =>
-        typeof val !== "function"
-      ),
-    );
-
-    // Strömma tillbaka till BroadcastChannel / Tauri Event
-    wManager.backend.send(winInstance.winId, cleanPayload);
-  }
 });
 
 onMount(() => {

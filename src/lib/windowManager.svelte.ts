@@ -810,6 +810,42 @@ export class WindowManager {
     this.focus(win);
   }
 
+  /**
+   * Startar dubbelriktad payload-synk för ett specifikt frikopplat fönster.
+   * Används både av huvudappen vid sömlös MDI-reparenting och av standalone-flikar.
+   */
+  setupStandaloneSync(winId: WindowId): () => void {
+    // 1. Lyssna inåt
+    const unsubscribeMessage = this.backend.onMessage(
+      winId,
+      (incomingPayload) => {
+        this.updatePayload(winId, incomingPayload);
+      },
+    );
+
+    // 2. Strömma utåt reaktivt
+    const cleanupEffect = $effect.root(() => {
+      $effect(() => {
+        const win = this.find(winId);
+        if (!win || !win.payload) return;
+
+        const currentPayload = $state.snapshot(win.payload);
+        const cleanPayload = Object.fromEntries(
+          Object.entries(currentPayload ?? {}).filter(([, val]) =>
+            typeof val !== "function"
+          ),
+        );
+
+        this.backend.send(winId, cleanPayload);
+      });
+    });
+
+    return () => {
+      unsubscribeMessage();
+      cleanupEffect();
+    };
+  }
+
   async detachWindow(
     win: WindowInstance,
     target: "tab" | "tauri",
@@ -824,14 +860,6 @@ export class WindowManager {
       );
       return;
     }
-    // debugg
-    // console.log("[detachWindow] win:", win);
-    // console.log("[detachWindow] componentKey:", win.componentKey);
-    // console.log("[detachWindow] component:", win.component);
-    // console.log(
-    //   "[detachWindow] registered component:",
-    //   win.componentKey ? getComponentByKey(win.componentKey) : undefined,
-    // );
 
     const descriptor = {
       winId: win.winId,
@@ -845,22 +873,23 @@ export class WindowManager {
     };
 
     try {
-      // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
-      // console.log("[detachWindow] descriptor:", descriptor);
-
       win.isDetached = true;
       await this.backend.open(descriptor);
-
-      // console.log("[detachWindow] backend.open klar");
-      // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
 
       // this.closeWin(win);
       // Ändra först när backend.open lyckats.
       win.context = descriptor.context;
       // 🟢 NYTT: Starta en lyssnare i huvudappen som tar emot flikens ändringar!
-      this.backend.onMessage(win.winId, (incomingPayload) => {
-        this.updatePayload(win.winId, incomingPayload);
-      });
+      this.setupStandaloneSync(win.winId);
+      if (win.payload) {
+        const currentPayload = $state.snapshot(win.payload);
+        const cleanPayload = Object.fromEntries(
+          Object.entries(currentPayload ?? {}).filter(([, val]) =>
+            typeof val !== "function"
+          ),
+        );
+        this.backend.send(win.winId, cleanPayload);
+      }
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",
