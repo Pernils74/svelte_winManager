@@ -1,5 +1,8 @@
 // src/lib/windowBackend.ts
 
+// Längst upp i din fil (eller i funktionen) kan du importera SvelteKits base path:
+// import { base } from "$app/paths";
+
 export type WindowTarget = "internal" | "tab" | "tauri";
 
 export interface ExternalWindowDescriptor {
@@ -296,6 +299,9 @@ export class WindowBackendManager implements WindowBackend {
     const { winId, title, componentKey, payload, props } = descriptor;
 
     const url = new URL(globalThis.location.href);
+
+    // Säkerställ att pathname inkluderar SvelteKits base path (t.ex. /svelte_winManager)
+    // url.pathname = base === "" ? "/" : base;
 
     url.searchParams.set("winId", winId);
     url.searchParams.set("componentKey", componentKey);
