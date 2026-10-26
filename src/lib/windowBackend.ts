@@ -1,7 +1,7 @@
 // src/lib/windowBackend.ts
 
 // Längst upp i din fil (eller i funktionen) kan du importera SvelteKits base path:
-// import { base } from "$app/paths";
+//  import { base } from "$app/paths";
 
 export type WindowTarget = "internal" | "tab" | "tauri";
 
@@ -300,8 +300,18 @@ export class WindowBackendManager implements WindowBackend {
 
     const url = new URL(globalThis.location.href);
 
-    // Säkerställ att pathname inkluderar SvelteKits base path (t.ex. /svelte_winManager)
-    // url.pathname = base === "" ? "/" : base;
+    // 2. Extrahera appens bas-sökväg dynamiskt (t.ex. '/svelte_winManager/' eller '/')
+    // Detta fungerar oavsett om du kör lokalt på localhost:5173 eller live på GitHub Pages!
+    const currentPath = globalThis.location.pathname;
+    const projectBase = currentPath.substring(
+      0,
+      currentPath.indexOf("/", 1) + 1,
+    );
+
+    // Om vi kör live på GitHub Pages sätter vi pathname till undermappens bas, annars behåller vi roten
+    url.pathname = globalThis.location.hostname.includes("github.io")
+      ? projectBase
+      : "/";
 
     url.searchParams.set("winId", winId);
     url.searchParams.set("componentKey", componentKey);
