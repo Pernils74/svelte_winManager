@@ -820,7 +820,7 @@ export class WindowManager {
 
       console.log("[detachWindow] backend.open klar");
       // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-      // this.closeWin(win);
+      this.closeWin(win);
       // Ändra först när backend.open lyckats.
       win.context = descriptor.context;
     } catch (error) {
