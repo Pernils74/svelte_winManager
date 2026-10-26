@@ -50,8 +50,14 @@ let minimizedWindows = $derived(
   ),
 );
 
+// let rootWindows = $derived(
+//   wManager.getChildren(ROOT_WIN_ID),
+// );
+
 let rootWindows = $derived(
-  wManager.getChildren(ROOT_WIN_ID),
+  wManager.getChildren(ROOT_WIN_ID).filter(
+    (win) => !win.isDetached,
+  ),
 );
 
 // Ladda komponenten och skapa fristående fönsterinstans.
@@ -114,6 +120,7 @@ $effect(() => {
           showButtons: false,
           docking: {},
           payload: null,
+          isDetached: true,
           context: { type: "browser-tab" },
         };
 

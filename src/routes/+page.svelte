@@ -77,7 +77,7 @@ onMount(() => {
 
 const allComponents = $derived(getAllRegisteredKeys());
 $effect(() => {
-  console.log(allComponents);
+  // console.log(allComponents);
 });
 </script>
 

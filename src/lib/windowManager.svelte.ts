@@ -100,6 +100,7 @@ export interface WindowInstance<TPayload = unknown> {
   docking: WindowDocking;
   payload: TPayload;
   titlebar?: WindowTiltlebarComponent;
+  isDetached: boolean;
   context: WindowContext;
 }
 
@@ -180,6 +181,7 @@ export class WindowManager {
       showButtons: false,
       docking: {},
       payload: null,
+      isDetached: false,
       context: { type: "workspace" },
     });
   }
@@ -274,6 +276,7 @@ export class WindowManager {
       payload: (options.payload ?? null) as TPayload,
       // payload: options.payload ? $state(options.payload) : (null as any),
       titlebar: options.titlebar,
+      isDetached: false,
       context: { type: "workspace" },
     });
 
@@ -816,11 +819,13 @@ export class WindowManager {
       // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
       console.log("[detachWindow] descriptor:", descriptor);
 
+      win.isDetached = true;
       await this.backend.open(descriptor);
 
       console.log("[detachWindow] backend.open klar");
       // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-      this.closeWin(win);
+
+      // this.closeWin(win);
       // Ändra först när backend.open lyckats.
       win.context = descriptor.context;
     } catch (error) {
