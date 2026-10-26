@@ -37,7 +37,7 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
-import { getAllComponentsAsArray } from "#lib/windowRegistry.ts";
+import { getAllRegisteredKeys } from "#lib/windowRegistry.ts";
 
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
@@ -75,7 +75,7 @@ onMount(() => {
   }
 });
 
-const allComponents = $derived(getAllComponentsAsArray());
+const allComponents = $derived(getAllRegisteredKeys());
 $effect(() => {
   console.log(allComponents);
 });
@@ -118,7 +118,7 @@ WindowHost.topbarContent ="hjhkhkjh"
       <div class="registry-section">
         <h3>Registered Framework Components:</h3>
         <div class="badge-list">
-          {#each allComponents as [key, component]}
+          {#each allComponents as key}
             <span class="component-badge">📦 {key}</span>
           {/each}
         </div>

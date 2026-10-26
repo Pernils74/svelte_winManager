@@ -1,6 +1,6 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
-import { getAllComponentsAsArray } from "#lib/windowRegistry.ts";
+import { getAllRegisteredKeys } from "#lib/windowRegistry.ts";
 
 let {
   componentKey = "Unknown",
@@ -8,7 +8,7 @@ let {
   componentKey?: string;
 } = $props();
 
-const allComponents = $derived(getAllComponentsAsArray());
+const allComponents = $derived(getAllRegisteredKeys());
 </script>
 
 <div class="fallback">

@@ -1,96 +1,112 @@
 import type { Component } from "svelte";
 import WindowComponentFallback from "./WindowComponentFallback.svelte";
 
-// Typ för de asynkrona dynamiska importerna
-type WindowLoader = () => Promise<{ default: Component<any> }>;
+// 🌟 1. Skanna hela routes-trädet rekursivt (** betyder alla undermappar)
+// Vi utgår från src/lib/ och går upp till src/routes/
+const modules = import.meta.glob("../routes/**/*.svelte");
 
-// 1. STATISKT REGISTER: Lägg till dina fönster här.
-// Det gör att nya flikar/Tauri-fönster alltid hittar rätt komponent via sin strängnyckel.
-const windowLoaders: Record<string, WindowLoader> = {
-  window_A: () => import("../routes/window_A.svelte"),
-  window_B: () => import("../routes/window_B.svelte"),
-  window_C: () => import("../routes/window_C.svelte"),
-};
+const windowLoaders: Record<string, () => Promise<any>> = {};
 
-// Cache för redan laddade komponenter så vi slipper importera samma fil flera gånger
+// 🌟 2. Bygg upp registret baserat på hela trädstrukturen
+for (const path in modules) {
+  // path är t.ex: "../routes/window_A.svelte" eller "../routes/admin/tools/Window.svelte"
+
+  // Ta bort "../routes/" från början och ".svelte" från slutet
+  let cleanPath = path.replace("../routes/", "").replace(".svelte", "");
+
+  // Skapa en säker strängnyckel genom att byta ut "/" mot "_"
+  // Exempel: "admin/tools/Window" blir "admin_tools_Window"
+  const key = cleanPath.replace(/\//g, "_");
+
+  windowLoaders[key] = modules[path];
+}
+
 const loadedComponents = new Map<string, Component<any>>();
 
 /**
- * Hämtar en komponent asynkront baserat på dess strängnyckel.
- * Om komponenten saknas eller misslyckas att ladda returneras en Fallback-komponent.
+ * Hämtar en komponent asynkront baserat på dess genererade strukturnyckel.
  */
 export async function getComponentByKey(
   key: string | null | undefined,
 ): Promise<Component<any>> {
   if (!key) return WindowComponentFallback;
 
-  // Returnera från cache om den redan har laddats en gång
   const loaded = loadedComponents.get(key);
   if (loaded) return loaded;
 
   const loader = windowLoaders[key];
 
-  // DEV MODE ALERT: Om komponenten inte finns i det statiska registret
   if (!loader) {
     console.error(
-      `[windowRegistry] ⚠ Komponenten "${key}" saknas i registret! Kom ihåg att lägga till den i 'windowLoaders' inuti windowRegistry.ts.`,
+      `[windowRegistry] Fönster-nyckeln "${key}" hittades inte i trädstrukturen.\n` +
+        `Tillgängliga nycklar:`,
+      Object.keys(windowLoaders),
     );
     return WindowComponentFallback;
   }
 
   try {
     const module = await loader();
-    loadedComponents.set(key, module.default);
-    return module.default;
+    const component = module.default;
+    loadedComponents.set(key, component);
+    return component;
   } catch (error) {
     console.error(
-      `[windowRegistry] Misslyckades att ladda komponenten "${key}":`,
+      `[windowRegistry] Misslyckades att läsa in ${key} från disk:`,
       error,
     );
     return WindowComponentFallback;
   }
 }
 
+export function getRealComponentName(component: any): string {
+  if (!component) return "UnknownComponent";
+
+  const symbols = Object.getOwnPropertySymbols(component);
+  const filenameSymbol = symbols.find((s) =>
+    s.toString() === "Symbol(filename)"
+  );
+
+  if (filenameSymbol) {
+    const filePath = component[filenameSymbol]; // T.ex. "src/routes/admin/tools/Window.svelte"
+    if (filePath) {
+      // Hitta var "src/routes/" eller "routes/" börjar och klipp ut resten fram till ".svelte"
+      const routesMatch = filePath.match(/routes\/(.+)\.svelte$/);
+      if (routesMatch && routesMatch[1]) {
+        // Gör exakt samma transformering: byt "/" mot "_"
+        return routesMatch[1].replace(/\//g, "_");
+      }
+    }
+  }
+
+  // Fallback om symboler saknas (t.ex. i produktion)
+  if (
+    component.name && component.name !== "wrapper" && component.name !== "Proxy"
+  ) {
+    return component.name;
+  }
+
+  return "UnknownComponent";
+}
+
 /**
- * Synkron kontroll för att se om en nyckel är giltig och registrerad.
- * Eftersom imports är asynkrona kollar denna mot registret (windowLoaders) snarare än färdigladdade komponenter.
+ * Synkron kontroll av komponenten.
  */
-export function resolveComponent(key: string | null | undefined): {
-  component: Component<any> | null;
-  missing: boolean;
-  key: string;
-} {
+export function resolveComponent(key: string | null | undefined) {
   if (!key) {
-    return {
-      component: WindowComponentFallback,
-      missing: true,
-      key: "No component key provided",
-    };
+    return { component: WindowComponentFallback, missing: true, key: "No key" };
   }
 
-  // Kolla om nyckeln överhuvudtaget existerar i vår statiska definition
   const hasLoader = key in windowLoaders;
-  const cachedComponent = loadedComponents.get(key);
-
-  if (!hasLoader) {
-    return {
-      component: WindowComponentFallback,
-      missing: true,
-      key,
-    };
-  }
-
   return {
-    // Returnera cachen om den finns, annars null (eftersom getComponentByKey måste kallas asynkront för att ladda filen)
-    component: cachedComponent ?? null,
-    missing: false,
+    component: loadedComponents.get(key) ?? null,
+    missing: !hasLoader,
     key,
   };
 }
 
 /**
- * Returnerar en array med namnen på alla registrerade fönster.
- * Nyttigt för menyer eller felsökning.
+ * Returnerar alla genererade nycklar i trädstrukturen.
  */
 export function getAllRegisteredKeys(): string[] {
   return Object.keys(windowLoaders);
