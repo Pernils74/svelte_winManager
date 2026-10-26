@@ -173,6 +173,35 @@ $effect(() => {
   };
 });
 
+// Strömma mutationer tillbaka till main-appen om vi är i standalone-läge
+$effect(() => {
+  // Körs bara om vi är standalone och har en laddad komponent/instans
+  if (!isStandalone || !standaloneWinId) return;
+
+  const winInstance = wManager.find(standaloneWinId);
+  if (!winInstance) return;
+
+  // Genom att läsa winInstance.payload djupt (eller via JSON/JSON-liknande operation)
+  // tvingar vi Sveltes effekt att prenumerera på alla interna mutationer i payload.
+  // Vi använder en strängifiering eller en djup avläsning för att trigga effekten vid varje ändring:
+  const payloadString = JSON.stringify(winInstance.payload);
+
+  // Säkerställ att det faktiskt finns en payload att skicka
+  if (winInstance.payload) {
+    const currentPayload = $state.snapshot(winInstance.payload);
+
+    // Rensa bort funktioner precis som innan
+    const cleanPayload = Object.fromEntries(
+      Object.entries(currentPayload ?? {}).filter(([, val]) =>
+        typeof val !== "function"
+      ),
+    );
+
+    // Strömma tillbaka till BroadcastChannel / Tauri Event
+    wManager.backend.send(winInstance.winId, cleanPayload);
+  }
+});
+
 onMount(() => {
   if (!contentEl) return;
   const updateBounds = () => {
@@ -215,8 +244,6 @@ onMount(() => {
       {#if winInstance}
         {@const ComponentToRender = standaloneComponent}
 
- <!-- 🟢 NYTT: Starta en effekt inuti fliken som strömmar mutationer tillbaka till main-appen -->
-        {@render standaloneStreamer(winInstance)}
 
         <ComponentToRender
           win={winInstance}
@@ -252,21 +279,7 @@ onMount(() => {
 
 
 
-<!-- Lägg till detta snippet längst ner i din WindowHost eller i script-delen -->
-{#snippet standaloneStreamer(win: any)}
-  {#key win.winId}
-    {@const effectHook = $effect(() => {
-      if (win.payload) {
-        const currentPayload = $state.snapshot(win.payload);
-        const cleanPayload = Object.fromEntries(
-          Object.entries(currentPayload ?? {}).filter(([, val]) => typeof val !== "function")
-        );
-        // Strömma tillbaka till BroadcastChannel / Tauri Event
-        wManager.backend.send(win.winId, cleanPayload);
-      }
-    })}
-  {/key}
-{/snippet}
+
 
 
     <main class="workspace" bind:this={contentEl}>
