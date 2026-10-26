@@ -139,12 +139,12 @@ $effect(() => {
         targetWinId,
         (incomingPayload) => {
           if (cancelled) return;
-
-          const current = wManager.find(targetWinId);
-
-          if (current) {
-            current.payload = incomingPayload;
-          }
+          // 🟢 Använd den säkra updatePayload-metoden istället för direkt tilldelning
+          wManager.updatePayload(targetWinId, incomingPayload);
+          // const current = wManager.find(targetWinId);
+          // if (current) {
+          //   current.payload = incomingPayload;
+          // }
         },
       );
     } catch (error) {
@@ -175,10 +175,8 @@ $effect(() => {
 
 onMount(() => {
   if (!contentEl) return;
-
   const updateBounds = () => {
     if (!contentEl) return;
-
     wManager.setRootBounds(
       contentEl.clientWidth,
       contentEl.clientHeight,
@@ -194,6 +192,10 @@ onMount(() => {
 });
 </script>
 
+
+
+
+
 {#if isStandalone}
   <div class="standalone-container">
     {#if standaloneLoading}
@@ -207,10 +209,14 @@ onMount(() => {
         <p>Komponentnyckel: {standaloneComponentKey}</p>
       </div>
     {:else if standaloneComponent && standaloneWinId}
-      {@const winInstance = wManager.find(standaloneWinId)}
 
+
+      {@const winInstance = wManager.find(standaloneWinId)}
       {#if winInstance}
         {@const ComponentToRender = standaloneComponent}
+
+ <!-- 🟢 NYTT: Starta en effekt inuti fliken som strömmar mutationer tillbaka till main-appen -->
+        {@render standaloneStreamer(winInstance)}
 
         <ComponentToRender
           win={winInstance}
@@ -219,6 +225,9 @@ onMount(() => {
           payload={winInstance.payload}
           {...winInstance.props}
         />
+
+
+
       {:else}
         <div class="loading">
           Fönsterinstansen kunde inte hittas.
@@ -239,6 +248,26 @@ onMount(() => {
 
       <span>Current open windows: {winCount}</span>
     </header>
+
+
+
+
+<!-- Lägg till detta snippet längst ner i din WindowHost eller i script-delen -->
+{#snippet standaloneStreamer(win: any)}
+  {#key win.winId}
+    {@const effectHook = $effect(() => {
+      if (win.payload) {
+        const currentPayload = $state.snapshot(win.payload);
+        const cleanPayload = Object.fromEntries(
+          Object.entries(currentPayload ?? {}).filter(([, val]) => typeof val !== "function")
+        );
+        // Strömma tillbaka till BroadcastChannel / Tauri Event
+        wManager.backend.send(win.winId, cleanPayload);
+      }
+    })}
+  {/key}
+{/snippet}
+
 
     <main class="workspace" bind:this={contentEl}>
       {#if contentEl}
@@ -264,6 +293,10 @@ onMount(() => {
         {@render children()}
       {/if}
     </main>
+
+
+
+
 
     {#if minimizedWindows.length > 0}
       <footer class="taskbar">

@@ -184,6 +184,12 @@ export class WindowManager {
       isDetached: false,
       context: { type: "workspace" },
     });
+
+    if (typeof window !== "undefined") {
+      // Vi kan tjuvlyssna på backend-managerns interna meddelandehantering.
+      // Eftersom du har BroadcastChannel instansierad i din backend, modifierar vi
+      // handleBrowserMessage i windowBackend.ts så att huvudappen också reagerar!
+    }
   }
 
   get winCount(): number {
@@ -472,9 +478,32 @@ export class WindowManager {
     Object.assign(win.state, updates);
   }
 
-  updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
+  updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
     const win = this.find(id);
     if (win) win.payload = payload;
+  }
+
+  updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
+    const win = this.find(id);
+    if (!win) return;
+
+    // 🟢 Skydd mot eviga loopar: Jämför strängifierad data
+    const oldPayloadStr = JSON.stringify($state.snapshot(win.payload));
+    const newPayloadStr = JSON.stringify(payload);
+
+    if (oldPayloadStr !== newPayloadStr) {
+      // Om det är ett existerande reaktivt objekt vill vi helst inte skriva över
+      // referensen helt om det går, men för enkelhetens skull skriver vi över
+      // eller mergar fält för fält för att behålla reaktivitet:
+      if (
+        win.payload && typeof win.payload === "object" &&
+        typeof payload === "object"
+      ) {
+        Object.assign(win.payload, payload);
+      } else {
+        win.payload = payload;
+      }
+    }
   }
 
   updateAll(updates: Partial<WindowState>): void {
@@ -796,13 +825,13 @@ export class WindowManager {
       return;
     }
     // debugg
-    console.log("[detachWindow] win:", win);
-    console.log("[detachWindow] componentKey:", win.componentKey);
-    console.log("[detachWindow] component:", win.component);
-    console.log(
-      "[detachWindow] registered component:",
-      win.componentKey ? getComponentByKey(win.componentKey) : undefined,
-    );
+    // console.log("[detachWindow] win:", win);
+    // console.log("[detachWindow] componentKey:", win.componentKey);
+    // console.log("[detachWindow] component:", win.component);
+    // console.log(
+    //   "[detachWindow] registered component:",
+    //   win.componentKey ? getComponentByKey(win.componentKey) : undefined,
+    // );
 
     const descriptor = {
       winId: win.winId,
@@ -817,17 +846,21 @@ export class WindowManager {
 
     try {
       // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
-      console.log("[detachWindow] descriptor:", descriptor);
+      // console.log("[detachWindow] descriptor:", descriptor);
 
       win.isDetached = true;
       await this.backend.open(descriptor);
 
-      console.log("[detachWindow] backend.open klar");
+      // console.log("[detachWindow] backend.open klar");
       // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
 
       // this.closeWin(win);
       // Ändra först när backend.open lyckats.
       win.context = descriptor.context;
+      // 🟢 NYTT: Starta en lyssnare i huvudappen som tar emot flikens ändringar!
+      this.backend.onMessage(win.winId, (incomingPayload) => {
+        this.updatePayload(win.winId, incomingPayload);
+      });
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",

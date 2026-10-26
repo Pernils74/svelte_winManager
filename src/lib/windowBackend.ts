@@ -312,6 +312,29 @@ export class WindowBackendManager implements WindowBackend {
     if (!message?.winId || !message.type) return;
 
     if (message.type === "window:close") {
+      const currentWinId = new URLSearchParams(globalThis.location.search).get(
+        "winId",
+      );
+      if (currentWinId === message.winId) {
+        globalThis.close();
+      }
+      return;
+    }
+
+    if (message.type === "payload:update" || message.type === "payload:init") {
+      // 🟢 Distribuera till lokala lyssnare i det här fönstret/fliken
+      this.notifyListeners(message.winId, message.payload);
+
+      // 🟢 NYTT: Om vi är huvudappen, vill vi också uppdatera vår reaktiva fönsterlista direkt!
+      // Vi kan hämta windowManager-instansen globalt eller via meddelande-loopen.
+      // Men det smidigaste är att WindowManager i huvudappen kör `backend.onMessage` för alla sina detached fönster!
+    }
+  }
+
+  private handleBrowserMessage_old(message: BrowserMessage): void {
+    if (!message?.winId || !message.type) return;
+
+    if (message.type === "window:close") {
       const currentWinId = new URLSearchParams(
         globalThis.location.search,
       ).get("winId");
