@@ -1,6 +1,18 @@
 import { type Component, createRawSnippet } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
+import WindowComponentFallback from "./WindowComponentFallback.svelte";
+
+import WindowA from "../routes/window_A.svelte";
+import WindowB from "../routes/window_B.svelte";
+import WindowC from "../routes/window_C.svelte";
+
+const windowComponents: Record<string, Component<any>> = {
+  window_A: WindowA,
+  window_B: WindowB,
+  window_C: WindowC,
+};
+
 // En dynamisk runtime-karta där öppnade komponenter registreras automatiskt
 const dynamicRegistry = new SvelteMap<string, Component<any>>(); //new Map<string, Component<any>>();
 
@@ -81,51 +93,50 @@ export function getAllComponentsAsArray(): [string, Component<any>][] {
   return Array.from(dynamicRegistry.entries());
 }
 
-/**
- * Hämtar en komponent baserat på dess textnyckel.
- * Om den saknas returneras en visuell felsökningskomponent (popup/fallback).
- */
 export function getComponentByKey(
   key: string | null | undefined,
 ): Component<any> {
-  if (!key) return createFallbackComponent("Inget fönster-ID angavs");
-
-  // 1. Kolla om den finns i vårt dynamiska register
-  if (dynamicRegistry.has(key)) {
-    return dynamicRegistry.get(key)!;
+  if (!key) {
+    return WindowComponentFallback;
   }
 
-  // 2. Fallback: Om den saknas, returnera en hjälpsam Svelte-komponent runtime
-  return createFallbackComponent(key);
+  const component = dynamicRegistry.get(key);
+
+  if (component) {
+    return component;
+  }
+
+  console.error(
+    `[windowRegistry] Component not registered: "${key}"`,
+    "Registered components:",
+    getAllComponentsAsArray().map(([registeredKey]) => registeredKey),
+  );
+
+  return WindowComponentFallback;
 }
 
-/**
- * Genererar en Svelte 5-komponent som visar ett felmeddelande i fönstret
- */
-function createFallbackComponent(componentKey: string): Component<any> {
-  // Vi skapar en rå rendering för Svelte 5 som ritar ut ett felmeddelande
-  return new Proxy({}, {
-    get() {
-      return (internals: any, props: any) => {
-        const div = document.createElement("div");
-        div.style.padding = "20px";
-        div.style.background = "#fff0f0";
-        div.style.border = "2px dashed #ff4d4d";
-        div.style.borderRadius = "8px";
-        div.style.color = "#cc0000";
-        div.style.fontFamily = "sans-serif";
-        div.style.margin = "15px";
+export function resolveComponent(key: string | null | undefined) {
+  if (!key) {
+    return {
+      component: WindowComponentFallback,
+      missing: true,
+      key: "No component key provided",
+    };
+  }
 
-        div.innerHTML = `
-          <h3 style="margin-top:0;">⚠️ Fönster-komponent saknas</h3>
-          <p>Kunde inte ladda komponenten: <strong>"${componentKey}"</strong></p>
-          <p style="font-size: 0.9em; color: #555;">
-            <strong>Lösning:</strong> Om detta är en ny flik eller ett Tauri-fönster, 
-            måste komponenten inkluderas i ditt huvudregister så att det nya JavaScript-kontextet känner till den.
-          </p>
-        `;
-        return { c: () => {}, d: () => div };
-      };
-    },
-  }) as Component<any>;
+  const component = dynamicRegistry.get(key);
+
+  if (!component) {
+    return {
+      component: WindowComponentFallback,
+      missing: true,
+      key,
+    };
+  }
+
+  return {
+    component,
+    missing: false,
+    key,
+  };
 }

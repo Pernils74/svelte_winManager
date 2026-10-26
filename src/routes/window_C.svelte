@@ -1,5 +1,6 @@
 <!-- window_C.svelte -->
 <script lang="ts">
+import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
 // 1. Define the structural interface for the incoming payload from Window B
@@ -9,6 +10,14 @@ interface WindowCPayload {
 
 // 2. Bind the payload interface to the WindowComponentProps generic
 let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
+
+const wManager = getWindowManager();
+function handleDetach(target: "tab" | "tauri") {
+  if (win) {
+    // Anropa din API-metod för att flytta fönstret till extern flik eller Tauri
+    wManager.detachWindow(win, target);
+  }
+}
 </script>
 
 <div class="window-container">
@@ -36,6 +45,14 @@ let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
       ➕ Increment Counter
     </button>
   </div>
+
+  <button
+    onclick={() => handleDetach("tab")}
+    class="btn-detach"
+    title="Öppna i ny webbläsarflik"
+  >
+  🖥️ Detach to a new browser tab
+  </button>
 </div>
 
 <style>

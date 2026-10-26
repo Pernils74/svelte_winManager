@@ -1,5 +1,9 @@
 import { type Component, createContext } from "svelte";
-import { getRealComponentName, registerComponent } from "./windowRegistry.ts";
+import {
+  getComponentByKey,
+  getRealComponentName,
+  registerComponent,
+} from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -75,6 +79,11 @@ export interface WindowComponentProps<TPayload = any> {
   parentId: WindowId | null;
 }
 
+type WindowContext =
+  | { type: "workspace" }
+  | { type: "browser-tab" }
+  | { type: "tauri-window" };
+
 export interface WindowInstance<TPayload = unknown> {
   winId: WindowId;
   title: string;
@@ -95,6 +104,7 @@ export interface WindowInstance<TPayload = unknown> {
   docking: WindowDocking;
   payload: TPayload;
   titlebar?: WindowTiltlebarComponent;
+  context: WindowContext;
 }
 
 export interface OpenWindowOptions<TPayload = unknown> {
@@ -174,6 +184,7 @@ export class WindowManager {
       showButtons: false,
       docking: {},
       payload: null,
+      context: { type: "workspace" },
     });
   }
 
@@ -233,7 +244,8 @@ export class WindowManager {
 
     const currentOffset = siblingCount * tileOffset;
 
-    console.log(getRealComponentName(component), "  ddddddddd");
+    // console.log(getRealComponentName(component), "  ddddddddd");
+
     const initialKey = getRealComponentName(component);
     // 2. Registrera komponenten. Funktionen returnerar nu det uppackade, RIKTIGA namnet!
     const compKey = registerComponent(initialKey, component);
@@ -268,6 +280,7 @@ export class WindowManager {
       payload: (options.payload ?? null) as TPayload,
       // payload: options.payload ? $state(options.payload) : (null as any),
       titlebar: options.titlebar,
+      context: { type: "workspace" },
     });
 
     this.windows.push(win);
@@ -771,110 +784,6 @@ export class WindowManager {
     this.focus(win);
   }
 
-  toggleMaximize_old(id: WindowId, bounds: HTMLElement): void {
-    const win = this.find(id);
-    if (!win || win.winId === ROOT_WIN_ID) return;
-
-    if (win.state.isMaximized) {
-      if (win.storedState) Object.assign(win.state, win.storedState);
-      this.update(id, { isMaximized: false });
-      this.focus(win);
-      return;
-    }
-
-    win.storedState = rectOf(win);
-
-    let maxLeft = 0;
-    let maxTop = 0;
-    let maxRight = bounds.clientWidth;
-    let maxBottom = bounds.clientHeight;
-
-    const a = win.state;
-    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
-
-    for (const other of siblings) {
-      if (other.winId === id || other.state.isMinimized) continue;
-
-      const b = other.state;
-      const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
-        a.top + a.height > b.top + MAXIMIZE_EPSILON;
-      const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
-        a.left + a.width > b.left + MAXIMIZE_EPSILON;
-
-      if (
-        overlapsY &&
-        Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON
-      ) {
-        maxLeft = Math.max(maxLeft, b.left + b.width);
-      }
-
-      if (
-        overlapsY &&
-        Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON
-      ) {
-        maxRight = Math.min(maxRight, b.left);
-      }
-
-      if (
-        overlapsX &&
-        Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON
-      ) {
-        maxTop = Math.max(maxTop, b.top + b.height);
-      }
-
-      if (
-        overlapsX &&
-        Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON
-      ) {
-        maxBottom = Math.min(maxBottom, b.top);
-      }
-    }
-
-    this.update(id, {
-      left: maxLeft,
-      top: maxTop,
-      width: Math.max(0, maxRight - maxLeft),
-      height: Math.max(0, maxBottom - maxTop),
-      isMaximized: true,
-    });
-
-    this.focus(win);
-  }
-
-  // async detachWindow_old(id: WindowId, target: "tab" | "tauri"): Promise<void> {
-  //   const win = this.find(id);
-  //   if (!win || id === ROOT_WIN_ID) {
-  //     return;
-  //   }
-
-  //   if (!win.componentKey) {
-  //     console.error(
-  //       `[WindowManager] Fönstret "${win.title}" saknar en 'componentKey' och kan inte frikopplas.`,
-  //     );
-  //     return;
-  //   }
-
-  //   const descriptor = {
-  //     winId: win.winId,
-  //     title: win.title,
-  //     componentKey: win.componentKey,
-  //     payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
-  //   };
-
-  //   try {
-  //     // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
-  //     await this.backend.open(descriptor);
-
-  //     // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-  //     this.closeWin(id);
-  //   } catch (error) {
-  //     console.error(
-  //       "[WindowManager] Misslyckades att frikoppla fönster:",
-  //       error,
-  //     );
-  //   }
-  // }
-
   async detachWindow(
     win: WindowInstance,
     target: "tab" | "tauri",
@@ -889,20 +798,37 @@ export class WindowManager {
       );
       return;
     }
+    // debugg
+    console.log("[detachWindow] win:", win);
+    console.log("[detachWindow] componentKey:", win.componentKey);
+    console.log("[detachWindow] component:", win.component);
+    console.log(
+      "[detachWindow] registered component:",
+      win.componentKey ? getComponentByKey(win.componentKey) : undefined,
+    );
 
     const descriptor = {
       winId: win.winId,
       title: win.title,
       componentKey: win.componentKey,
-      payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
+      payload: $state.snapshot(win.payload),
+      props: $state.snapshot(win.props),
+      context: {
+        type: target === "tab" ? "browser-tab" : "tauri-window",
+      } as WindowContext,
     };
 
     try {
       // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
+      console.log("[detachWindow] descriptor:", descriptor);
+
       await this.backend.open(descriptor);
 
+      console.log("[detachWindow] backend.open klar");
       // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-      this.closeWin(win);
+      // this.closeWin(win);
+      // Ändra först när backend.open lyckats.
+      win.context = descriptor.context;
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",
@@ -939,17 +865,6 @@ export class WindowManager {
     // Filtrera bort alla dessa fönster från den reaktiva arrayen i en enda stöt
     this.windows = this.windows.filter((w) => !ids.has(w.winId));
   }
-
-  // closeWin_old(id: WindowId): void {
-  //   if (id === ROOT_WIN_ID) return;
-
-  //   const ids = new Set([
-  //     id,
-  //     ...this.getDescendants(id).map((win) => win.winId),
-  //   ]);
-
-  //   this.windows = this.windows.filter((win) => !ids.has(win.winId));
-  // }
 
   setThumbnail(id: WindowId, thumbnail: string | null): void {
     const win = this.find(id);

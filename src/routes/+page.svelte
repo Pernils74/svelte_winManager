@@ -7,9 +7,9 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.s
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
 
+https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_C.svelte
 https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_A.svelte
 https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_B.svelte
-https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_C.svelte
 
 
 https://github.com/Pernils74/svelte_winManager/blob/main/README.md
@@ -18,8 +18,11 @@ https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelt
 -->
 
 <!-- gammalt ...
+
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts -->
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts
+
+-->
 
 <!-- +page.svelte -->
 <script lang="ts">
@@ -41,7 +44,7 @@ const wManager = initializeWindowManager();
 
 onMount(() => {
   wManager.open(WindowA, {
-    title: "🪟 Winodw A",
+    title: "🪟 Window A",
     width: 600,
     height: 600,
     left: 10,
@@ -50,19 +53,21 @@ onMount(() => {
   });
 
   wManager.open(WindowB, {
-    title: "🪟 Winodw B",
+    title: "🪟 Window B",
     width: 500,
     height: 600,
     left: 650,
     top: 300,
   });
-  // wManager.open(WindowC, {
-  //   title: "🪟 Winodw C",
-  //   width: 700,
-  //   height: 600,
-  //   left: 850,
-  //   top: 800,
-  // });
+  if (1 == 0) {
+    wManager.open(WindowC, {
+      title: "🪟 Window C",
+      width: 700,
+      height: 600,
+      left: 850,
+      top: 800,
+    });
+  }
 });
 
 const allComponents = $derived(getAllComponentsAsArray());

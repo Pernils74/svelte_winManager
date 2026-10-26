@@ -37,54 +37,124 @@ let minimizedWindows = $derived(
 let rootWindows = $derived(wManager.getChildren(ROOT_WIN_ID));
 
 // 🟢 REAKTIV SYNK: Lyssnar på meddelanden så fort det fristående fönstret vaknar till liv
+// $effect(() => {
+//   if (isStandalone && standaloneWinId) {
+//     const targetWinId = standaloneWinId;
+//     let localWin = wManager.find(targetWinId);
+
+//     if (!localWin) {
+//       console.log(standaloneComponentKey, StandaloneComponent);
+//       // Registrera lyssnaren för inkommande payloads via BroadcastChannel/Tauri
+//       const unsubscribe = wManager.backend.onMessage(
+//         targetWinId,
+//         (incomingPayload) => {
+//           const win = wManager.find(targetWinId);
+//           if (win) {
+//             win.payload = incomingPayload;
+//           } else {
+//             // Skapa instansen i det nya JavaScript-kontextets minne
+//             wManager.windows.push({
+//               winId: targetWinId,
+//               title: standaloneTitle,
+//               thumbnail: null,
+//               component: StandaloneComponent, //null,
+//               props: {},
+//               parentId: null,
+//               boundingEl: null,
+//               state: {
+//                 left: 0,
+//                 top: 0,
+//                 width: window.innerWidth,
+//                 height: window.innerHeight,
+//                 isMinimized: false,
+//                 isMaximized: true,
+//                 transparency: 1,
+//               },
+//               storedState: null,
+
+//               zIndex: 1,
+//               tileOffset: 0,
+//               showButtons: false,
+//               docking: {},
+//               payload: incomingPayload,
+//             });
+//           }
+//         },
+//       );
+
+//       return () => unsubscribe();
+//     }
+//   }
+// });
+
 $effect(() => {
-  if (isStandalone && standaloneWinId) {
-    const targetWinId = standaloneWinId;
-    let localWin = wManager.find(targetWinId);
-
-    if (!localWin) {
-      // Registrera lyssnaren för inkommande payloads via BroadcastChannel/Tauri
-      const unsubscribe = wManager.backend.onMessage(
-        targetWinId,
-        (incomingPayload) => {
-          const win = wManager.find(targetWinId);
-          if (win) {
-            win.payload = incomingPayload;
-          } else {
-            // Skapa instansen i det nya JavaScript-kontextets minne
-            wManager.windows.push({
-              winId: targetWinId,
-              title: standaloneTitle,
-              thumbnail: null,
-              component: null,
-              props: {},
-              parentId: null,
-              boundingEl: null,
-              state: {
-                left: 0,
-                top: 0,
-                width: window.innerWidth,
-                height: window.innerHeight,
-                isMinimized: false,
-                isMaximized: true,
-                transparency: 1,
-              },
-              storedState: null,
-
-              zIndex: 1,
-              tileOffset: 0,
-              showButtons: false,
-              docking: {},
-              payload: incomingPayload,
-            });
-          }
-        },
-      );
-
-      return () => unsubscribe();
-    }
+  if (!isStandalone || !standaloneWinId || !standaloneComponentKey) {
+    return;
   }
+
+  const targetWinId = standaloneWinId;
+
+  let winInstance = wManager.find(targetWinId);
+
+  if (!winInstance) {
+    wManager.windows.push({
+      winId: targetWinId,
+      title: standaloneTitle,
+      componentKey: standaloneComponentKey,
+      thumbnail: null,
+      component: StandaloneComponent,
+      props: {},
+      parentId: null,
+      boundingEl: null,
+      state: {
+        left: 0,
+        top: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        isMinimized: false,
+        isMaximized: true,
+        transparency: 1,
+      },
+      storedState: null,
+      zIndex: 1,
+      tileOffset: 0,
+      showButtons: false,
+      docking: {},
+      payload: null, // {}
+    });
+  }
+
+  console.log(
+    "[WindowHost] Instans efter skapande:",
+    wManager.find(targetWinId),
+  );
+
+  const unsubscribe = wManager.backend.onMessage(
+    targetWinId,
+    (incomingPayload) => {
+      console.log("[WindowHost] Initial/uppdaterad payload:", incomingPayload);
+
+      const current = wManager.find(targetWinId);
+      if (current) current.payload = incomingPayload;
+    },
+  );
+
+  return () => unsubscribe();
 });
+
+//   const unsubscribe = wManager.backend.onMessage(
+//     targetWinId,
+//     (incomingPayload) => {
+//       const current = wManager.find(targetWinId);
+
+//       if (current) {
+//         current.payload = incomingPayload;
+//       }
+//     },
+//   );
+
+//   return () => unsubscribe();
+// });
 
 onMount(() => {
   if (!contentEl) return;
@@ -107,12 +177,14 @@ onMount(() => {
   <div class="standalone-container">
     {#if StandaloneComponent && standaloneWinId}
       {@const winInstance = wManager.find(standaloneWinId)}
-
       {#if winInstance}
         {@const ComponentToRender = StandaloneComponent}
         <ComponentToRender
-          win={ComponentToRender}
-          winId={standaloneWinId}
+
+          // win={ComponentToRender}
+          // winId={standaloneWinId}
+          win={winInstance}
+          winId={winInstance.winId}
           payload={winInstance.payload}
           {...winInstance.props}
         />

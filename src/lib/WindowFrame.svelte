@@ -711,7 +711,7 @@ $effect(() => {
     {#if win.showButtons}
       {#if win.titlebar}
         {@const Titlebar = win.titlebar}
-        <Titlebar winId={win.winId} />
+        <Titlebar win={win} winId={win.winId} parentId={win.parentId} />
       {/if}
 
       <div class="controls">

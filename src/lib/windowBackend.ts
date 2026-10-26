@@ -7,6 +7,7 @@ export interface ExternalWindowDescriptor {
   title: string;
   componentKey: string;
   payload: unknown;
+  props: unknown;
 }
 
 export interface WindowBackend {
@@ -140,7 +141,9 @@ export class WindowBackendManager implements WindowBackend {
         const modulePath = "@tauri-apps/api/webviewWindow";
 
         // 2. Gör importen via variabeln
-        const { getAllWebviewWindows } = await import(modulePath);
+        const { getAllWebviewWindows } = await import(
+          /* @vite-ignore */ modulePath
+        );
 
         const label = `detached-${winId}`;
         const windows = await getAllWebviewWindows();
@@ -185,7 +188,7 @@ export class WindowBackendManager implements WindowBackend {
       try {
         // Göm strängen för byggverktyget (Vite/Rollup)
         const eventPath = "@tauri-apps/api/event";
-        const { emit } = await import(eventPath);
+        const { emit } = await import(/* @vite-ignore */ eventPath);
 
         await emit(`sync-payload-${winId}`, payload);
       } catch (error) {
@@ -381,7 +384,7 @@ export class WindowBackendManager implements WindowBackend {
     setTimeout(async () => {
       try {
         const eventPath = "@tauri-apps/api/event";
-        const { emit } = await import(eventPath);
+        const { emit } = await import(/* @vite-ignore */ eventPath);
         await emit(`init-payload-${winId}`, payload);
       } catch (error) {
         console.error(
@@ -404,7 +407,7 @@ export class WindowBackendManager implements WindowBackend {
     try {
       // Göm strängen för byggverktyget (Vite/Rollup) så det går att bygga för enbart webb
       const eventPath = "@tauri-apps/api/event";
-      const { listen } = await import(eventPath);
+      const { listen } = await import(/* @vite-ignore */ eventPath);
 
       const unlistenInit = await listen(
         `init-payload-${winId}`,
