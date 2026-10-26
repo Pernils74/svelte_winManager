@@ -215,6 +215,36 @@ export class WindowBackendManager implements WindowBackend {
    */
   onMessage(
     winId: string,
+    callback: MessageCallback, //  (payload: unknown) => void,
+  ): () => void {
+    let callbacks = this.listeners.get(winId);
+
+    if (!callbacks) {
+      callbacks = new Set();
+      this.listeners.set(winId, callbacks);
+    }
+
+    callbacks.add(callback);
+
+    // Återspela initialpayloaden om den redan har kommit.
+    if (this.latestPayloads.has(winId)) {
+      callback(this.latestPayloads.get(winId));
+    }
+
+    return () => {
+      const current = this.listeners.get(winId);
+      if (!current) return;
+
+      current.delete(callback);
+
+      if (current.size === 0) {
+        this.listeners.delete(winId);
+      }
+    };
+  }
+
+  onMessage_old(
+    winId: string,
     callback: MessageCallback,
   ): () => void {
     if (!this.listeners.has(winId)) {
@@ -463,7 +493,20 @@ export class WindowBackendManager implements WindowBackend {
   // Shared helpers
   // --------------------------------------------------
 
-  private notifyListeners(
+  private latestPayloads = new Map<string, unknown>();
+
+  private notifyListeners(winId: string, payload: unknown) {
+    this.latestPayloads.set(winId, payload);
+
+    const callbacks = this.listeners.get(winId);
+    if (!callbacks) return;
+
+    for (const callback of callbacks) {
+      callback(payload);
+    }
+  }
+
+  private notifyListeners_old(
     winId: string,
     payload: unknown,
   ): void {
