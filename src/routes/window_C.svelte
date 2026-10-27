@@ -9,11 +9,6 @@ interface WindowCPayload {
 }
 
 // 2. Bind the payload interface to the WindowComponentProps generic
-<<<<<<< HEAD
-let { win = $bindable(), winId, parentId }: WindowComponentProps<
-  WindowCPayload
-> = $props();
-=======
 let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
 
 const wManager = getWindowManager();
@@ -23,7 +18,6 @@ function handleDetach(target: "tab" | "tauri") {
     wManager.detachWindow(win, target);
   }
 }
->>>>>>> dev
 </script>
 
 <div class="window-container">
