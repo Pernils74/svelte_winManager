@@ -1,5 +1,5 @@
 import { type Component, createContext } from "svelte";
-import { getRealComponentName, registerComponent } from "./windowRegistry.ts";
+import { getComponentByKey, getRealComponentName } from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -75,6 +75,11 @@ export interface WindowComponentProps<TPayload = any> {
   parentId: WindowId | null;
 }
 
+type WindowContext =
+  | { type: "workspace" }
+  | { type: "browser-tab" }
+  | { type: "tauri-window" };
+
 export interface WindowInstance<TPayload = unknown> {
   winId: WindowId;
   title: string;
@@ -95,6 +100,8 @@ export interface WindowInstance<TPayload = unknown> {
   docking: WindowDocking;
   payload: TPayload;
   titlebar?: WindowTiltlebarComponent;
+  isDetached: boolean;
+  context: WindowContext;
 }
 
 export interface OpenWindowOptions<TPayload = unknown> {
@@ -174,7 +181,15 @@ export class WindowManager {
       showButtons: false,
       docking: {},
       payload: null,
+      isDetached: false,
+      context: { type: "workspace" },
     });
+
+    if (typeof window !== "undefined") {
+      // Vi kan tjuvlyssna på backend-managerns interna meddelandehantering.
+      // Eftersom du har BroadcastChannel instansierad i din backend, modifierar vi
+      // handleBrowserMessage i windowBackend.ts så att huvudappen också reagerar!
+    }
   }
 
   get winCount(): number {
@@ -233,10 +248,9 @@ export class WindowManager {
 
     const currentOffset = siblingCount * tileOffset;
 
-    console.log(getRealComponentName(component), "  ddddddddd");
-    const initialKey = getRealComponentName(component);
-    // 2. Registrera komponenten. Funktionen returnerar nu det uppackade, RIKTIGA namnet!
-    const compKey = registerComponent(initialKey, component);
+    // 🌟 NYTT: Gräv ut den trädsäkra nyckeln (t.ex. "settings_window_B")
+    // från komponenten via vår uppdaterade getRealComponentName
+    const compKey = options.componentKey ?? getRealComponentName(component);
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
@@ -268,6 +282,8 @@ export class WindowManager {
       payload: (options.payload ?? null) as TPayload,
       // payload: options.payload ? $state(options.payload) : (null as any),
       titlebar: options.titlebar,
+      isDetached: false,
+      context: { type: "workspace" },
     });
 
     this.windows.push(win);
@@ -462,9 +478,32 @@ export class WindowManager {
     Object.assign(win.state, updates);
   }
 
-  updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
+  updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
     const win = this.find(id);
     if (win) win.payload = payload;
+  }
+
+  updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
+    const win = this.find(id);
+    if (!win) return;
+
+    // 🟢 Skydd mot eviga loopar: Jämför strängifierad data
+    const oldPayloadStr = JSON.stringify($state.snapshot(win.payload));
+    const newPayloadStr = JSON.stringify(payload);
+
+    if (oldPayloadStr !== newPayloadStr) {
+      // Om det är ett existerande reaktivt objekt vill vi helst inte skriva över
+      // referensen helt om det går, men för enkelhetens skull skriver vi över
+      // eller mergar fält för fält för att behålla reaktivitet:
+      if (
+        win.payload && typeof win.payload === "object" &&
+        typeof payload === "object"
+      ) {
+        Object.assign(win.payload, payload);
+      } else {
+        win.payload = payload;
+      }
+    }
   }
 
   updateAll(updates: Partial<WindowState>): void {
@@ -771,109 +810,41 @@ export class WindowManager {
     this.focus(win);
   }
 
-  toggleMaximize_old(id: WindowId, bounds: HTMLElement): void {
-    const win = this.find(id);
-    if (!win || win.winId === ROOT_WIN_ID) return;
+  /**
+   * Startar dubbelriktad payload-synk för ett specifikt frikopplat fönster.
+   * Används både av huvudappen vid sömlös MDI-reparenting och av standalone-flikar.
+   */
+  setupStandaloneSync(winId: WindowId): () => void {
+    // 1. Lyssna inåt
+    const unsubscribeMessage = this.backend.onMessage(
+      winId,
+      (incomingPayload) => {
+        this.updatePayload(winId, incomingPayload);
+      },
+    );
 
-    if (win.state.isMaximized) {
-      if (win.storedState) Object.assign(win.state, win.storedState);
-      this.update(id, { isMaximized: false });
-      this.focus(win);
-      return;
-    }
+    // 2. Strömma utåt reaktivt
+    const cleanupEffect = $effect.root(() => {
+      $effect(() => {
+        const win = this.find(winId);
+        if (!win || !win.payload) return;
 
-    win.storedState = rectOf(win);
+        const currentPayload = $state.snapshot(win.payload);
+        const cleanPayload = Object.fromEntries(
+          Object.entries(currentPayload ?? {}).filter(([, val]) =>
+            typeof val !== "function"
+          ),
+        );
 
-    let maxLeft = 0;
-    let maxTop = 0;
-    let maxRight = bounds.clientWidth;
-    let maxBottom = bounds.clientHeight;
-
-    const a = win.state;
-    const siblings = this.getChildren(win.parentId ?? ROOT_WIN_ID);
-
-    for (const other of siblings) {
-      if (other.winId === id || other.state.isMinimized) continue;
-
-      const b = other.state;
-      const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
-        a.top + a.height > b.top + MAXIMIZE_EPSILON;
-      const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
-        a.left + a.width > b.left + MAXIMIZE_EPSILON;
-
-      if (
-        overlapsY &&
-        Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON
-      ) {
-        maxLeft = Math.max(maxLeft, b.left + b.width);
-      }
-
-      if (
-        overlapsY &&
-        Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON
-      ) {
-        maxRight = Math.min(maxRight, b.left);
-      }
-
-      if (
-        overlapsX &&
-        Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON
-      ) {
-        maxTop = Math.max(maxTop, b.top + b.height);
-      }
-
-      if (
-        overlapsX &&
-        Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON
-      ) {
-        maxBottom = Math.min(maxBottom, b.top);
-      }
-    }
-
-    this.update(id, {
-      left: maxLeft,
-      top: maxTop,
-      width: Math.max(0, maxRight - maxLeft),
-      height: Math.max(0, maxBottom - maxTop),
-      isMaximized: true,
+        this.backend.send(winId, cleanPayload);
+      });
     });
 
-    this.focus(win);
+    return () => {
+      unsubscribeMessage();
+      cleanupEffect();
+    };
   }
-
-  // async detachWindow_old(id: WindowId, target: "tab" | "tauri"): Promise<void> {
-  //   const win = this.find(id);
-  //   if (!win || id === ROOT_WIN_ID) {
-  //     return;
-  //   }
-
-  //   if (!win.componentKey) {
-  //     console.error(
-  //       `[WindowManager] Fönstret "${win.title}" saknar en 'componentKey' och kan inte frikopplas.`,
-  //     );
-  //     return;
-  //   }
-
-  //   const descriptor = {
-  //     winId: win.winId,
-  //     title: win.title,
-  //     componentKey: win.componentKey,
-  //     payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
-  //   };
-
-  //   try {
-  //     // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
-  //     await this.backend.open(descriptor);
-
-  //     // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-  //     this.closeWin(id);
-  //   } catch (error) {
-  //     console.error(
-  //       "[WindowManager] Misslyckades att frikoppla fönster:",
-  //       error,
-  //     );
-  //   }
-  // }
 
   async detachWindow(
     win: WindowInstance,
@@ -894,15 +865,31 @@ export class WindowManager {
       winId: win.winId,
       title: win.title,
       componentKey: win.componentKey,
-      payload: $state.snapshot(win.payload), // Säkra reaktiv data till ren JSON
+      payload: $state.snapshot(win.payload),
+      props: $state.snapshot(win.props),
+      context: {
+        type: target === "tab" ? "browser-tab" : "tauri-window",
+      } as WindowContext,
     };
 
     try {
-      // Öppna det externa fönstret via backend (Tauri eller Webbläsarflik)
+      win.isDetached = true;
       await this.backend.open(descriptor);
 
-      // Stäng det interna fönstret i din MDI-miljö efter lyckad frikoppling
-      this.closeWin(win);
+      // this.closeWin(win);
+      // Ändra först när backend.open lyckats.
+      win.context = descriptor.context;
+      // 🟢 NYTT: Starta en lyssnare i huvudappen som tar emot flikens ändringar!
+      this.setupStandaloneSync(win.winId);
+      if (win.payload) {
+        const currentPayload = $state.snapshot(win.payload);
+        const cleanPayload = Object.fromEntries(
+          Object.entries(currentPayload ?? {}).filter(([, val]) =>
+            typeof val !== "function"
+          ),
+        );
+        this.backend.send(win.winId, cleanPayload);
+      }
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",
@@ -939,17 +926,6 @@ export class WindowManager {
     // Filtrera bort alla dessa fönster från den reaktiva arrayen i en enda stöt
     this.windows = this.windows.filter((w) => !ids.has(w.winId));
   }
-
-  // closeWin_old(id: WindowId): void {
-  //   if (id === ROOT_WIN_ID) return;
-
-  //   const ids = new Set([
-  //     id,
-  //     ...this.getDescendants(id).map((win) => win.winId),
-  //   ]);
-
-  //   this.windows = this.windows.filter((win) => !ids.has(win.winId));
-  // }
 
   setThumbnail(id: WindowId, thumbnail: string | null): void {
     const win = this.find(id);

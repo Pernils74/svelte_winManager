@@ -1,25 +1,33 @@
+
+
+
+
+
 <!--
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowFrame.svelte
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/WindowHost.svelte
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowManager.svelte.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowRegistry.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/windowBackend.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_A.svelte
-https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_B.svelte
-https://github.com/Pernils74/svelte_winManager/blob/main/src/routes/window_C.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_C.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_B.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_A.svelte
 
 
-https://github.com/Pernils74/svelte_winManager/blob/main/README.md
+https://github.com/Pernils74/svelte_winManager/blob/dev/README.md
 
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
 -->
 
 <!-- gammalt ...
+
 https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts -->
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts
+
+-->
 
 <!-- +page.svelte -->
 <script lang="ts">
@@ -29,7 +37,7 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
-import { getAllComponentsAsArray } from "#lib/windowRegistry.ts";
+import { getAllRegisteredKeys } from "#lib/windowRegistry.ts";
 
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
@@ -41,7 +49,7 @@ const wManager = initializeWindowManager();
 
 onMount(() => {
   wManager.open(WindowA, {
-    title: "🪟 Winodw A",
+    title: "🪟 Window A",
     width: 600,
     height: 600,
     left: 10,
@@ -50,24 +58,26 @@ onMount(() => {
   });
 
   wManager.open(WindowB, {
-    title: "🪟 Winodw B",
+    title: "🪟 Window B",
     width: 500,
     height: 600,
     left: 650,
     top: 300,
   });
-  // wManager.open(WindowC, {
-  //   title: "🪟 Winodw C",
-  //   width: 700,
-  //   height: 600,
-  //   left: 850,
-  //   top: 800,
-  // });
+  if (1 == 0) {
+    wManager.open(WindowC, {
+      title: "🪟 Window C",
+      width: 700,
+      height: 600,
+      left: 850,
+      top: 800,
+    });
+  }
 });
 
-const allComponents = $derived(getAllComponentsAsArray());
+const allComponents = $derived(getAllRegisteredKeys());
 $effect(() => {
-  console.log(allComponents);
+  // console.log(allComponents);
 });
 </script>
 
@@ -108,7 +118,7 @@ WindowHost.topbarContent ="hjhkhkjh"
       <div class="registry-section">
         <h3>Registered Framework Components:</h3>
         <div class="badge-list">
-          {#each allComponents as [key, component]}
+          {#each allComponents as key}
             <span class="component-badge">📦 {key}</span>
           {/each}
         </div>

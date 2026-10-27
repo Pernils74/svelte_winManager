@@ -1,50 +1,85 @@
-import { type Component, createRawSnippet } from "svelte";
-import { SvelteMap } from "svelte/reactivity";
+import type { Component } from "svelte";
+import WindowComponentFallback from "./WindowComponentFallback.svelte";
 
-// En dynamisk runtime-karta där öppnade komponenter registreras automatiskt
-const dynamicRegistry = new SvelteMap<string, Component<any>>(); //new Map<string, Component<any>>();
+// 🌟 1. Skanna hela routes-trädet rekursivt (** betyder alla undermappar)
+// Vi utgår från src/lib/ och går upp till src/routes/
+const modules = import.meta.glob("../routes/**/*.svelte");
+
+const windowLoaders: Record<string, () => Promise<any>> = {};
+
+// 🌟 2. Bygg upp registret baserat på hela trädstrukturen
+for (const path in modules) {
+  // path är t.ex: "../routes/window_A.svelte" eller "../routes/admin/tools/Window.svelte"
+
+  // Ta bort "../routes/" från början och ".svelte" från slutet
+  let cleanPath = path.replace("../routes/", "").replace(".svelte", "");
+
+  // Skapa en säker strängnyckel genom att byta ut "/" mot "_"
+  // Exempel: "admin/tools/Window" blir "admin_tools_Window"
+  const key = cleanPath.replace(/\//g, "_");
+
+  windowLoaders[key] = modules[path];
+}
+
+const loadedComponents = new Map<string, Component<any>>();
 
 /**
- * Registrerar en komponent i runtime
+ * Hämtar en komponent asynkront baserat på dess genererade strukturnyckel.
  */
-// export function registerComponent(key: string, component: Component<any>) {
-//   if (!dynamicRegistry.has(key)) {
-//     dynamicRegistry.set(key, component);
-//   }
-// }
+export async function getComponentByKey(
+  key: string | null | undefined,
+): Promise<Component<any>> {
+  if (!key) return WindowComponentFallback;
 
-/**
- * Hjälpfunktion som gräver fram det riktiga namnet bakom Sveltes/Vites HMR-wrappers
- */
+  const loaded = loadedComponents.get(key);
+  if (loaded) return loaded;
+
+  const loader = windowLoaders[key];
+
+  if (!loader) {
+    console.error(
+      `[windowRegistry] Fönster-nyckeln "${key}" hittades inte i trädstrukturen.\n` +
+        `Tillgängliga nycklar:`,
+      Object.keys(windowLoaders),
+    );
+    return WindowComponentFallback;
+  }
+
+  try {
+    const module = await loader();
+    const component = module.default;
+    loadedComponents.set(key, component);
+    return component;
+  } catch (error) {
+    console.error(
+      `[windowRegistry] Misslyckades att läsa in ${key} från disk:`,
+      error,
+    );
+    return WindowComponentFallback;
+  }
+}
+
 export function getRealComponentName(component: any): string {
   if (!component) return "UnknownComponent";
 
-  // 1. Kolla om det finns en filnamn-symbol (Svelte 5 standard)
-  // Detta kommer att ge oss en sträng som "src/routes/Bom.svelte"
   const symbols = Object.getOwnPropertySymbols(component);
   const filenameSymbol = symbols.find((s) =>
     s.toString() === "Symbol(filename)"
   );
 
   if (filenameSymbol) {
-    const filePath = component[filenameSymbol]; // t.ex. "src/routes/Bom.svelte"
+    const filePath = component[filenameSymbol]; // T.ex. "src/routes/admin/tools/Window.svelte"
     if (filePath) {
-      // Plocka ut bara filnamnet utan sökväg och ändelse (Bom)
-      const match = filePath.match(/\/([^/]+)\.svelte$/);
-      if (match && match[1]) {
-        return match[1];
+      // Hitta var "src/routes/" eller "routes/" börjar och klipp ut resten fram till ".svelte"
+      const routesMatch = filePath.match(/routes\/(.+)\.svelte$/);
+      if (routesMatch && routesMatch[1]) {
+        // Gör exakt samma transformering: byt "/" mot "_"
+        return routesMatch[1].replace(/\//g, "_");
       }
     }
   }
 
-  // 2. Fallback: Kolla i Symbol(hmr) om den finns
-  const hmrSymbol = symbols.find((s) => s.toString() === "Symbol(hmr)");
-  if (hmrSymbol && component[hmrSymbol]?.fn) {
-    const realFn = component[hmrSymbol].fn;
-    if (realFn.name) return realFn.name;
-  }
-
-  // 3. Fallback för produktion (där det inte finns några symboler eller wrappers)
+  // Fallback om symboler saknas (t.ex. i produktion)
   if (
     component.name && component.name !== "wrapper" && component.name !== "Proxy"
   ) {
@@ -55,77 +90,24 @@ export function getRealComponentName(component: any): string {
 }
 
 /**
- * Registrerar en komponent i runtime och packar upp eventuella proxies
+ * Synkron kontroll av komponenten.
  */
-export function registerComponent(
-  key: string,
-  component: Component<any>,
-): string {
-  // Om nyckeln som skickas in är en wrapper/proxy, leta upp det riktiga namnet istället
-  let realKey = key;
-  if (key === "Proxy" || key === "Wrapper" || key === "ProxyComponent") {
-    realKey = getRealComponentName(component);
+export function resolveComponent(key: string | null | undefined) {
+  if (!key) {
+    return { component: WindowComponentFallback, missing: true, key: "No key" };
   }
 
-  if (!dynamicRegistry.has(realKey)) {
-    dynamicRegistry.set(realKey, component);
-  }
-
-  return realKey; // Returnera den uppackade, riktiga nyckeln
+  const hasLoader = key in windowLoaders;
+  return {
+    component: loadedComponents.get(key) ?? null,
+    missing: !hasLoader,
+    key,
+  };
 }
 
 /**
- * Alternativ: Returnerar alla registrerade komponenter som en array av [key, Component] par
+ * Returnerar alla genererade nycklar i trädstrukturen.
  */
-export function getAllComponentsAsArray(): [string, Component<any>][] {
-  return Array.from(dynamicRegistry.entries());
-}
-
-/**
- * Hämtar en komponent baserat på dess textnyckel.
- * Om den saknas returneras en visuell felsökningskomponent (popup/fallback).
- */
-export function getComponentByKey(
-  key: string | null | undefined,
-): Component<any> {
-  if (!key) return createFallbackComponent("Inget fönster-ID angavs");
-
-  // 1. Kolla om den finns i vårt dynamiska register
-  if (dynamicRegistry.has(key)) {
-    return dynamicRegistry.get(key)!;
-  }
-
-  // 2. Fallback: Om den saknas, returnera en hjälpsam Svelte-komponent runtime
-  return createFallbackComponent(key);
-}
-
-/**
- * Genererar en Svelte 5-komponent som visar ett felmeddelande i fönstret
- */
-function createFallbackComponent(componentKey: string): Component<any> {
-  // Vi skapar en rå rendering för Svelte 5 som ritar ut ett felmeddelande
-  return new Proxy({}, {
-    get() {
-      return (internals: any, props: any) => {
-        const div = document.createElement("div");
-        div.style.padding = "20px";
-        div.style.background = "#fff0f0";
-        div.style.border = "2px dashed #ff4d4d";
-        div.style.borderRadius = "8px";
-        div.style.color = "#cc0000";
-        div.style.fontFamily = "sans-serif";
-        div.style.margin = "15px";
-
-        div.innerHTML = `
-          <h3 style="margin-top:0;">⚠️ Fönster-komponent saknas</h3>
-          <p>Kunde inte ladda komponenten: <strong>"${componentKey}"</strong></p>
-          <p style="font-size: 0.9em; color: #555;">
-            <strong>Lösning:</strong> Om detta är en ny flik eller ett Tauri-fönster, 
-            måste komponenten inkluderas i ditt huvudregister så att det nya JavaScript-kontextet känner till den.
-          </p>
-        `;
-        return { c: () => {}, d: () => div };
-      };
-    },
-  }) as Component<any>;
+export function getAllRegisteredKeys(): string[] {
+  return Object.keys(windowLoaders);
 }

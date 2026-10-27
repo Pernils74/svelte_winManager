@@ -1,5 +1,8 @@
 // src/lib/windowBackend.ts
 
+// Längst upp i din fil (eller i funktionen) kan du importera SvelteKits base path:
+//  import { base } from "$app/paths";
+
 export type WindowTarget = "internal" | "tab" | "tauri";
 
 export interface ExternalWindowDescriptor {
@@ -7,6 +10,7 @@ export interface ExternalWindowDescriptor {
   title: string;
   componentKey: string;
   payload: unknown;
+  props: unknown;
 }
 
 export interface WindowBackend {
@@ -140,7 +144,9 @@ export class WindowBackendManager implements WindowBackend {
         const modulePath = "@tauri-apps/api/webviewWindow";
 
         // 2. Gör importen via variabeln
-        const { getAllWebviewWindows } = await import(modulePath);
+        const { getAllWebviewWindows } = await import(
+          /* @vite-ignore */ modulePath
+        );
 
         const label = `detached-${winId}`;
         const windows = await getAllWebviewWindows();
@@ -185,7 +191,7 @@ export class WindowBackendManager implements WindowBackend {
       try {
         // Göm strängen för byggverktyget (Vite/Rollup)
         const eventPath = "@tauri-apps/api/event";
-        const { emit } = await import(eventPath);
+        const { emit } = await import(/* @vite-ignore */ eventPath);
 
         await emit(`sync-payload-${winId}`, payload);
       } catch (error) {
@@ -211,6 +217,36 @@ export class WindowBackendManager implements WindowBackend {
    * Returnerar en funktion för att avregistrera lyssnaren.
    */
   onMessage(
+    winId: string,
+    callback: MessageCallback, //  (payload: unknown) => void,
+  ): () => void {
+    let callbacks = this.listeners.get(winId);
+
+    if (!callbacks) {
+      callbacks = new Set();
+      this.listeners.set(winId, callbacks);
+    }
+
+    callbacks.add(callback);
+
+    // Återspela initialpayloaden om den redan har kommit.
+    if (this.latestPayloads.has(winId)) {
+      callback(this.latestPayloads.get(winId));
+    }
+
+    return () => {
+      const current = this.listeners.get(winId);
+      if (!current) return;
+
+      current.delete(callback);
+
+      if (current.size === 0) {
+        this.listeners.delete(winId);
+      }
+    };
+  }
+
+  onMessage_old(
     winId: string,
     callback: MessageCallback,
   ): () => void {
@@ -260,9 +296,22 @@ export class WindowBackendManager implements WindowBackend {
   private openBrowserTab(
     descriptor: ExternalWindowDescriptor,
   ): void { // <-- Ändrat från Promise<void> till void
-    const { winId, title, componentKey, payload } = descriptor;
+    const { winId, title, componentKey, payload, props } = descriptor;
 
     const url = new URL(globalThis.location.href);
+
+    // 2. Extrahera appens bas-sökväg dynamiskt (t.ex. '/svelte_winManager/' eller '/')
+    // Detta fungerar oavsett om du kör lokalt på localhost:5173 eller live på GitHub Pages!
+    const currentPath = globalThis.location.pathname;
+    const projectBase = currentPath.substring(
+      0,
+      currentPath.indexOf("/", 1) + 1,
+    );
+
+    // Om vi kör live på GitHub Pages sätter vi pathname till undermappens bas, annars behåller vi roten
+    url.pathname = globalThis.location.hostname.includes("github.io")
+      ? projectBase
+      : "/";
 
     url.searchParams.set("winId", winId);
     url.searchParams.set("componentKey", componentKey);
@@ -306,6 +355,29 @@ export class WindowBackendManager implements WindowBackend {
   }
 
   private handleBrowserMessage(message: BrowserMessage): void {
+    if (!message?.winId || !message.type) return;
+
+    if (message.type === "window:close") {
+      const currentWinId = new URLSearchParams(globalThis.location.search).get(
+        "winId",
+      );
+      if (currentWinId === message.winId) {
+        globalThis.close();
+      }
+      return;
+    }
+
+    if (message.type === "payload:update" || message.type === "payload:init") {
+      // 🟢 Distribuera till lokala lyssnare i det här fönstret/fliken
+      this.notifyListeners(message.winId, message.payload);
+
+      // 🟢 NYTT: Om vi är huvudappen, vill vi också uppdatera vår reaktiva fönsterlista direkt!
+      // Vi kan hämta windowManager-instansen globalt eller via meddelande-loopen.
+      // Men det smidigaste är att WindowManager i huvudappen kör `backend.onMessage` för alla sina detached fönster!
+    }
+  }
+
+  private handleBrowserMessage_old(message: BrowserMessage): void {
     if (!message?.winId || !message.type) return;
 
     if (message.type === "window:close") {
@@ -381,7 +453,7 @@ export class WindowBackendManager implements WindowBackend {
     setTimeout(async () => {
       try {
         const eventPath = "@tauri-apps/api/event";
-        const { emit } = await import(eventPath);
+        const { emit } = await import(/* @vite-ignore */ eventPath);
         await emit(`init-payload-${winId}`, payload);
       } catch (error) {
         console.error(
@@ -404,7 +476,7 @@ export class WindowBackendManager implements WindowBackend {
     try {
       // Göm strängen för byggverktyget (Vite/Rollup) så det går att bygga för enbart webb
       const eventPath = "@tauri-apps/api/event";
-      const { listen } = await import(eventPath);
+      const { listen } = await import(/* @vite-ignore */ eventPath);
 
       const unlistenInit = await listen(
         `init-payload-${winId}`,
@@ -437,7 +509,20 @@ export class WindowBackendManager implements WindowBackend {
   // Shared helpers
   // --------------------------------------------------
 
-  private notifyListeners(
+  private latestPayloads = new Map<string, unknown>();
+
+  private notifyListeners(winId: string, payload: unknown) {
+    this.latestPayloads.set(winId, payload);
+
+    const callbacks = this.listeners.get(winId);
+    if (!callbacks) return;
+
+    for (const callback of callbacks) {
+      callback(payload);
+    }
+  }
+
+  private notifyListeners_old(
     winId: string,
     payload: unknown,
   ): void {
