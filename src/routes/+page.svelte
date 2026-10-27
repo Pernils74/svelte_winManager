@@ -1,8 +1,5 @@
 
 
-
-
-
 <!--
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte

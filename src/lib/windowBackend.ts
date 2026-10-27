@@ -10,7 +10,12 @@ export interface ExternalWindowDescriptor {
   title: string;
   componentKey: string;
   payload: unknown;
-  props: unknown;
+  props: Record<string, unknown>;
+}
+
+export interface DetachedWindowState {
+  payload: unknown;
+  props: Record<string, unknown>;
 }
 
 export interface WindowBackend {
@@ -18,22 +23,49 @@ export interface WindowBackend {
 
   open(window: ExternalWindowDescriptor): Promise<void>;
   close(winId: string): Promise<void>;
-  send(winId: string, payload: unknown): Promise<void>;
+  // send(
+  //   winId: string,
+  //   payload: unknown,
+  //   props?: Record<string, unknown>,
+  // ): Promise<void>;
+  send(
+    winId: string,
+    state: DetachedWindowState,
+  ): Promise<void>;
+
   onMessage(
     winId: string,
-    callback: (payload: unknown) => void,
+    callback: (state: DetachedWindowState) => void,
   ): () => void;
 
   destroy(): void;
 }
 
-type MessageCallback = (payload: unknown) => void;
+// type MessageCallback = (payload: unknown) => void;
+type MessageCallback = (state: DetachedWindowState) => void;
+
+// type BrowserMessage =
+//   | {
+//     winId: string;
+//     type: "payload:update";
+//     payload: unknown;
+//   }
+//   | {
+//     winId: string;
+//     type: "props:update";
+//     props: Record<string, unknown>;
+//   }
+//   | {
+//     winId: string;
+//     type: "window:close";
+//   };
 
 type BrowserMessage =
   | {
     winId: string;
-    type: "payload:update" | "payload:init";
-    payload: unknown;
+    // type: "payload:update" | "payload:init";
+    type: "state:update";
+    state: DetachedWindowState;
   }
   | {
     winId: string;
@@ -97,7 +129,16 @@ export class WindowBackendManager implements WindowBackend {
             try {
               const parsed = JSON.parse(rawInitPayload);
               // Skicka ut datan till den lokala lyssnaren i den nya fliken
-              this.notifyListeners(currentWinId, parsed);
+              // this.notifyListeners(currentWinId, parsed);
+              // this.notifyListeners(currentWinId, parsed.payload, parsed.props);
+              this.notifyListeners(
+                currentWinId,
+                {
+                  payload: parsed.payload,
+                  props: parsed.props ?? {},
+                },
+              );
+
               localStorage.removeItem(storageKey); // Städning!
             } catch (e) {
               console.error(
@@ -186,14 +227,20 @@ export class WindowBackendManager implements WindowBackend {
   /**
    * Skickar uppdaterad payload till det frikopplade fönstret.
    */
-  async send(winId: string, payload: unknown): Promise<void> {
+
+  async send(
+    winId: string,
+    state: DetachedWindowState,
+  ): Promise<void> {
     if (this.target === "tauri") {
       try {
         // Göm strängen för byggverktyget (Vite/Rollup)
         const eventPath = "@tauri-apps/api/event";
         const { emit } = await import(/* @vite-ignore */ eventPath);
-
-        await emit(`sync-payload-${winId}`, payload);
+        await emit(`sync-payload-${winId}`, {
+          payload: state.payload,
+          props: state.props,
+        });
       } catch (error) {
         console.error(
           `[WindowBackend] Kunde inte skicka payload till ${winId}:`,
@@ -204,10 +251,16 @@ export class WindowBackendManager implements WindowBackend {
       return;
     }
 
+    // this.postBrowserMessage({
+    //   winId,
+    //   type: "payload:update",
+    //   payload,
+    //   props,
+    // });
     this.postBrowserMessage({
       winId,
-      type: "payload:update",
-      payload,
+      type: "state:update",
+      state,
     });
   }
 
@@ -226,12 +279,14 @@ export class WindowBackendManager implements WindowBackend {
       callbacks = new Set();
       this.listeners.set(winId, callbacks);
     }
-
     callbacks.add(callback);
 
     // Återspela initialpayloaden om den redan har kommit.
-    if (this.latestPayloads.has(winId)) {
-      callback(this.latestPayloads.get(winId));
+    // if (this.latestPayloads.has(winId)) {
+    //   callback(this.latestPayloads.get(winId));
+    // }
+    if (this.latestStates.has(winId)) {
+      callback(this.latestStates.get(winId)!);
     }
 
     return () => {
@@ -320,7 +375,7 @@ export class WindowBackendManager implements WindowBackend {
     try {
       localStorage.setItem(
         initStorageKey(winId),
-        JSON.stringify(payload),
+        JSON.stringify({ payload, props }),
       );
     } catch (error) {
       console.error(
@@ -329,9 +384,7 @@ export class WindowBackendManager implements WindowBackend {
       );
       throw error;
     }
-
     const tab = globalThis.open(url.toString(), `_blank_${winId}`);
-
     if (!tab) {
       localStorage.removeItem(initStorageKey(winId));
 
@@ -366,37 +419,11 @@ export class WindowBackendManager implements WindowBackend {
       }
       return;
     }
-
-    if (message.type === "payload:update" || message.type === "payload:init") {
-      // 🟢 Distribuera till lokala lyssnare i det här fönstret/fliken
-      this.notifyListeners(message.winId, message.payload);
-
-      // 🟢 NYTT: Om vi är huvudappen, vill vi också uppdatera vår reaktiva fönsterlista direkt!
-      // Vi kan hämta windowManager-instansen globalt eller via meddelande-loopen.
-      // Men det smidigaste är att WindowManager i huvudappen kör `backend.onMessage` för alla sina detached fönster!
-    }
-  }
-
-  private handleBrowserMessage_old(message: BrowserMessage): void {
-    if (!message?.winId || !message.type) return;
-
-    if (message.type === "window:close") {
-      const currentWinId = new URLSearchParams(
-        globalThis.location.search,
-      ).get("winId");
-
-      if (currentWinId === message.winId) {
-        globalThis.close();
-      }
-
-      return;
-    }
-
-    if (
-      message.type === "payload:update" ||
-      message.type === "payload:init"
-    ) {
-      this.notifyListeners(message.winId, message.payload);
+    if (message.type === "state:update") { //|| message.type === "payload:init") {
+      this.notifyListeners(
+        message.winId,
+        message.state,
+      );
     }
   }
 
@@ -407,7 +434,7 @@ export class WindowBackendManager implements WindowBackend {
   private async openTauri(
     descriptor: ExternalWindowDescriptor,
   ): Promise<void> {
-    const { winId, title, componentKey, payload } = descriptor;
+    const { winId, title, componentKey, payload, props } = descriptor;
 
     // Säkra importen genom att gömma strängen för byggverktyget
     const webviewWindowPath = "@tauri-apps/api/webviewWindow";
@@ -454,7 +481,14 @@ export class WindowBackendManager implements WindowBackend {
       try {
         const eventPath = "@tauri-apps/api/event";
         const { emit } = await import(/* @vite-ignore */ eventPath);
-        await emit(`init-payload-${winId}`, payload);
+        // await emit(`init-payload-${winId}`, payload);
+        await emit(
+          `init-payload-${winId}`,
+          {
+            payload,
+            props,
+          },
+        );
       } catch (error) {
         console.error(
           "[WindowBackend] Kunde inte skicka init-payload till Tauri",
@@ -481,7 +515,18 @@ export class WindowBackendManager implements WindowBackend {
       const unlistenInit = await listen(
         `init-payload-${winId}`,
         (event: any) => {
-          this.notifyListeners(winId, event.payload);
+          const data = event.payload;
+          if (data && typeof data === "object" && "payload" in data) {
+            this.notifyListeners(
+              winId,
+              data as DetachedWindowState,
+            );
+          } else {
+            this.notifyListeners(winId, {
+              payload: data,
+              props: {},
+            });
+          }
           unlistenInit();
         },
       );
@@ -489,7 +534,19 @@ export class WindowBackendManager implements WindowBackend {
       const unlistenSync = await listen(
         `sync-payload-${winId}`,
         (event: any) => {
-          this.notifyListeners(winId, event.payload);
+          const data = event.payload;
+          if (data && typeof data === "object" && "payload" in data) {
+            this.notifyListeners(
+              winId,
+              data as DetachedWindowState,
+            );
+          } else {
+            this.notifyListeners(winId, {
+              payload: data,
+              props: {},
+            });
+            // this.notifyListeners(winId, data);
+          }
         },
       );
 
@@ -509,26 +566,18 @@ export class WindowBackendManager implements WindowBackend {
   // Shared helpers
   // --------------------------------------------------
 
-  private latestPayloads = new Map<string, unknown>();
+  private latestStates = new Map<string, DetachedWindowState>();
 
-  private notifyListeners(winId: string, payload: unknown) {
-    this.latestPayloads.set(winId, payload);
-
+  private notifyListeners(
+    winId: string,
+    state: DetachedWindowState,
+  ): void {
+    this.latestStates.set(winId, state);
     const callbacks = this.listeners.get(winId);
     if (!callbacks) return;
-
     for (const callback of callbacks) {
-      callback(payload);
+      callback(state);
     }
-  }
-
-  private notifyListeners_old(
-    winId: string,
-    payload: unknown,
-  ): void {
-    this.listeners.get(winId)?.forEach((callback) => {
-      callback(payload);
-    });
   }
 }
 

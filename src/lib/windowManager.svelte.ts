@@ -247,16 +247,10 @@ export class WindowManager {
     // const offset = options.noTile ? 0 : siblingCount * 20;
 
     const currentOffset = siblingCount * tileOffset;
+    const compKey = options.componentKey ?? getComponentKey(component);
 
-    // 🌟 NYTT: Gräv ut den trädsäkra nyckeln (t.ex. "settings_window_B")
-    // från komponenten via vår uppdaterade getRealComponentName
-    // const compKey = options.componentKey ?? getRealComponentName(component);
-
-    const compKey = options.componentKey ??
-      getComponentKey(component);
-
-    console.log("[open] component.name", component.name);
-    console.log("[open] componentKey", compKey);
+    // console.log("[open] component.name", component.name);
+    // console.log("[open] componentKey", compKey);
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
@@ -484,10 +478,10 @@ export class WindowManager {
     Object.assign(win.state, updates);
   }
 
-  updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
-    const win = this.find(id);
-    if (win) win.payload = payload;
-  }
+  // updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
+  //   const win = this.find(id);
+  //   if (win) win.payload = payload;
+  // }
 
   updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
     const win = this.find(id);
@@ -510,6 +504,23 @@ export class WindowManager {
         win.payload = payload;
       }
     }
+  }
+
+  updateProps(
+    id: WindowId,
+    props: Record<string, unknown>,
+  ): void {
+    const win = this.find(id);
+    if (!win) return;
+    let changed = false;
+    for (const [key, value] of Object.entries(props)) {
+      if (win.props[key] !== value) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
+    Object.assign(win.props, props);
   }
 
   updateAll(updates: Partial<WindowState>): void {
@@ -822,10 +833,28 @@ export class WindowManager {
    */
   setupStandaloneSync(winId: WindowId): () => void {
     // 1. Lyssna inåt
+    // const unsubscribeMessage = this.backend.onMessage(
+    //   winId,
+    //   (incomingPayload) => {
+    //     this.updatePayload(winId, incomingPayload);
+    //   },
+    // );
+
+    // const unsubscribeMessage = this.backend.onMessage(
+    //   winId,
+    //   (state) => {
+    //     this.updatePayload(winId, state.payload);
+    //   },
+    // );
+
     const unsubscribeMessage = this.backend.onMessage(
       winId,
-      (incomingPayload) => {
-        this.updatePayload(winId, incomingPayload);
+      (state) => {
+        const win = this.find(winId);
+        if (!win) return;
+        this.updatePayload(winId, state.payload);
+        this.updateProps(winId, state.props);
+        // win.props = state.props;
       },
     );
 
@@ -841,8 +870,11 @@ export class WindowManager {
             typeof val !== "function"
           ),
         );
-
-        this.backend.send(winId, cleanPayload);
+        // this.backend.send(winId, cleanPayload);
+        this.backend.send(winId, {
+          payload: cleanPayload,
+          props: $state.snapshot(win.props),
+        });
       });
     });
 
@@ -859,7 +891,6 @@ export class WindowManager {
     if (!win || win.winId === ROOT_WIN_ID) {
       return;
     }
-
     if (!win.componentKey) {
       console.error(
         `[WindowManager] Fönstret "${win.title}" saknar en 'componentKey' och kan inte frikopplas.`,
@@ -896,7 +927,11 @@ export class WindowManager {
             typeof val !== "function"
           ),
         );
-        this.backend.send(win.winId, cleanPayload);
+        // this.backend.send(win.winId, cleanPayload);
+        this.backend.send(win.winId, {
+          payload: cleanPayload,
+          props: $state.snapshot(win.props),
+        });
       }
     } catch (error) {
       console.error(
