@@ -37,7 +37,10 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
-import { getAllRegisteredKeys } from "#lib/windowRegistry.ts";
+import {
+  getAllRegisteredKeys,
+  registerComponents,
+} from "#lib/windowRegistry.ts";
 
 import WindowA from "./window_A.svelte";
 import WindowB from "./window_B.svelte";
@@ -46,6 +49,14 @@ import WindowC from "./window_C.svelte";
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
 const wManager = initializeWindowManager();
+// registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
+
+registerComponents(
+  import.meta.glob(
+    "/src/routes/**/*.svelte",
+    { eager: true },
+  ),
+);
 
 onMount(() => {
   wManager.open(WindowA, {

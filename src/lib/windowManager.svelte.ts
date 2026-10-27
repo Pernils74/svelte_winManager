@@ -1,5 +1,5 @@
 import { type Component, createContext } from "svelte";
-import { getComponentByKey, getRealComponentName } from "./windowRegistry.ts";
+import { getComponentByKey, getComponentKey } from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -250,7 +250,13 @@ export class WindowManager {
 
     // 🌟 NYTT: Gräv ut den trädsäkra nyckeln (t.ex. "settings_window_B")
     // från komponenten via vår uppdaterade getRealComponentName
-    const compKey = options.componentKey ?? getRealComponentName(component);
+    // const compKey = options.componentKey ?? getRealComponentName(component);
+
+    const compKey = options.componentKey ??
+      getComponentKey(component);
+
+    console.log("[open] component.name", component.name);
+    console.log("[open] componentKey", compKey);
 
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
@@ -861,6 +867,8 @@ export class WindowManager {
       return;
     }
 
+    console.log("componentKey", win.componentKey);
+
     const descriptor = {
       winId: win.winId,
       title: win.title,
@@ -937,11 +945,32 @@ export class WindowManager {
 
 const [getContextManager, setContextManager] = createContext<WindowManager>();
 
-export function initializeWindowManager(): WindowManager {
+// export function initializeWindowManager(): WindowManager {
+//   try {
+//     return getContextManager();
+//   } catch {
+//     const manager = new WindowManager();
+//     setContextManager(manager);
+//     return manager;
+//   }
+// }
+
+export interface WindowManagerOptions {
+  modules?: Record<string, () => Promise<any>>;
+  backend?: WindowBackend;
+}
+
+export function initializeWindowManager(
+  options?: WindowManagerOptions,
+): WindowManager {
   try {
     return getContextManager();
   } catch {
-    const manager = new WindowManager();
+    const manager = new WindowManager(
+      options?.backend,
+      // options?.modules,
+    );
+
     setContextManager(manager);
     return manager;
   }
