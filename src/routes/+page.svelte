@@ -49,7 +49,14 @@ import WindowC from "./window_C.svelte";
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
 const wManager = initializeWindowManager();
-registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
+// registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
+
+registerComponents(
+  import.meta.glob(
+    "/src/routes/**/*.svelte",
+    { eager: true },
+  ),
+);
 
 onMount(() => {
   wManager.open(WindowA, {

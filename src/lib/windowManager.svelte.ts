@@ -1,5 +1,5 @@
 import { type Component, createContext } from "svelte";
-import { getComponentByKey, getRealComponentName } from "./windowRegistry.ts";
+import { getComponentByKey, getComponentKey } from "./windowRegistry.ts";
 
 import {
   createWindowBackend,
@@ -250,7 +250,10 @@ export class WindowManager {
 
     // 🌟 NYTT: Gräv ut den trädsäkra nyckeln (t.ex. "settings_window_B")
     // från komponenten via vår uppdaterade getRealComponentName
-    const compKey = options.componentKey ?? getRealComponentName(component);
+    // const compKey = options.componentKey ?? getRealComponentName(component);
+
+    const compKey = options.componentKey ??
+      getComponentKey(component);
 
     console.log("[open] component.name", component.name);
     console.log("[open] componentKey", compKey);
