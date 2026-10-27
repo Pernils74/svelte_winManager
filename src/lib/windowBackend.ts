@@ -564,6 +564,7 @@ export class WindowBackendManager implements WindowBackend {
 
   // --------------------------------------------------
   // Shared helpers
+  //
   // --------------------------------------------------
 
   private latestStates = new Map<string, DetachedWindowState>();
