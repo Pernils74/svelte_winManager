@@ -40,6 +40,13 @@ function openWindow_C() {
 function reparentToRoot() {
   wManager.reparent(win.winId, "root");
 }
+
+function handleDetach(target: "tab" | "tauri") {
+  if (win) {
+    // Anropa din API-metod för att flytta fönstret till extern flik eller Tauri
+    wManager.detachWindow(win, target);
+  }
+}
 </script>
 
 <div class="window-container">
@@ -80,6 +87,14 @@ function reparentToRoot() {
     </button>
   </footer>
 </div>
+
+<button
+  onclick={() => handleDetach("tab")}
+  class="btn-detach"
+  title="Öppna i ny webbläsarflik"
+>
+  🖥️ Detach to a new browser tab
+  </button>
 
 <style>
 .window-container {
