@@ -758,8 +758,8 @@ $effect(() => {
   </div>
 
   <div class="content" bind:this={contentEl}>
-    {@render children()}
-    {#each manager.getChildren(win.winId) as child (child.winId)}
+    {@render children()}    
+    {#each manager.getChildren(win.winId) as  child (child.winId)}
       {#if !child.state.isMinimized && child.component}
       <WindowFrame win={child} bounds={contentEl}>
         {@const ChildComponent = child.component}
