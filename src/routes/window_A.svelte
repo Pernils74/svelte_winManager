@@ -25,19 +25,23 @@ function openWindow_B_Snapshot() {
 }
 
 // 2. Spawns Window B with a live getter (Reactive prop connection pattern)
+const childIds = $state<string[]>([]);
 function openWindow_B_Getter() {
-  wManager.open(Window_B, {
+  const child = wManager.open(Window_B, {
     parentId: winId,
     title: "🪟 Window_B (Live Link)",
     width: 400,
     height: 300,
     props: {
       // By wrapping the evaluation inside a getter, Window B will read the state live
-      get myNoneReactiveProp() {
-        return message;
-      },
+      // get myNoneReactiveProp() {
+      //   return message;
+      // },
+      myNoneReactiveProp: message,
     } as any, // Cast as any because the type definition expects a static string evaluation
   });
+
+  childIds.push(child.winId);
 }
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
@@ -45,6 +49,11 @@ $effect(() => {
   // win.titlebar = WindowATitlebar;
   // Possible, but less efficient as it triggers an extra reactive update cycle after mounting.
   // Prefer passing the titlebar component directly inside the wManager.open() options.
+  for (const id of childIds) {
+    wManager.updateProps(id, {
+      myNoneReactiveProp: message,
+    });
+  }
 });
 </script>
 
@@ -71,7 +80,7 @@ $effect(() => {
       </button>
 
       <button onclick={openWindow_B_Getter} class="btn-main">
-        🔗 Spawn B with Getter (Live Link)
+        🔗 Spawn B with Reactive Props
       </button>
     </div>
   </div>

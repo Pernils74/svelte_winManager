@@ -760,7 +760,7 @@ $effect(() => {
   <div class="content" bind:this={contentEl}>
     {@render children()}    
     {#each manager.getChildren(win.winId) as  child (child.winId)}
-      {#if !child.state.isMinimized && child.component}
+      {#if  child.component && !child.state.isMinimized && !child.isDetached  }
       <WindowFrame win={child} bounds={contentEl}>
         {@const ChildComponent = child.component}
           <ChildComponent

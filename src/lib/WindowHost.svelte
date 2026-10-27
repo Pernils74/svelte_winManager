@@ -1,4 +1,5 @@
 
+ <!-- WindowHost.svelte -->
 <script lang="ts">
 import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
@@ -171,11 +172,20 @@ onMount(() => {
   };
 
   updateBounds();
-
   const observer = new ResizeObserver(updateBounds);
   observer.observe(contentEl);
-
   return () => observer.disconnect();
+});
+
+// debug effect
+$effect(() => {
+  console.log(
+    "rootWindows",
+    rootWindows.map((w) => ({
+      title: w.title,
+      detached: w.isDetached,
+    })),
+  );
 });
 </script>
 

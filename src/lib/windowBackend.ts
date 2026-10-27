@@ -292,33 +292,8 @@ export class WindowBackendManager implements WindowBackend {
     return () => {
       const current = this.listeners.get(winId);
       if (!current) return;
-
       current.delete(callback);
-
       if (current.size === 0) {
-        this.listeners.delete(winId);
-      }
-    };
-  }
-
-  onMessage_old(
-    winId: string,
-    callback: MessageCallback,
-  ): () => void {
-    if (!this.listeners.has(winId)) {
-      this.listeners.set(winId, new Set());
-    }
-
-    this.listeners.get(winId)!.add(callback);
-
-    return () => {
-      const callbacks = this.listeners.get(winId);
-
-      if (!callbacks) return;
-
-      callbacks.delete(callback);
-
-      if (callbacks.size === 0) {
         this.listeners.delete(winId);
       }
     };

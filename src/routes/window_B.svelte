@@ -47,6 +47,12 @@ function handleDetach(target: "tab" | "tauri") {
     wManager.detachWindow(win, target);
   }
 }
+
+let localText = $state("");
+
+$effect(() => {
+  localText = win.props.myNoneReactiveProp as string;
+});
 </script>
 
 <div class="window-container">
@@ -62,6 +68,7 @@ function handleDetach(target: "tab" | "tauri") {
     <p class="explanation">
       ℹ️ <strong>Non-Reactive Notice:</strong> Fails to update if Window A input changes.
     </p>
+    <p class="snapshot-value">"{localText}"</p>
   </div>
 
   <!-- Reactive Payload Spawning Demo -->

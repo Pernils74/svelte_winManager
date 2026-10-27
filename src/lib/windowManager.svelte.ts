@@ -860,20 +860,33 @@ export class WindowManager {
 
     // 2. Strömma utåt reaktivt
     const cleanupEffect = $effect.root(() => {
+      // $effect(() => {
+      //   const win = this.find(winId);
+      //   if (!win || !win.payload) return;
+
+      //   const currentPayload = $state.snapshot(win.payload);
+      //   const cleanPayload = Object.fromEntries(
+      //     Object.entries(currentPayload ?? {}).filter(([, val]) =>
+      //       typeof val !== "function"
+      //     ),
+      //   );
+      //   // this.backend.send(winId, cleanPayload);
+      //   this.backend.send(winId, {
+      //     payload: cleanPayload,
+      //     props: $state.snapshot(win.props),
+      //   });
+      // });
+
       $effect(() => {
         const win = this.find(winId);
-        if (!win || !win.payload) return;
+        if (!win) return;
 
-        const currentPayload = $state.snapshot(win.payload);
-        const cleanPayload = Object.fromEntries(
-          Object.entries(currentPayload ?? {}).filter(([, val]) =>
-            typeof val !== "function"
-          ),
-        );
-        // this.backend.send(winId, cleanPayload);
+        const payload = $state.snapshot(win.payload);
+        const props = $state.snapshot(win.props);
+
         this.backend.send(winId, {
-          payload: cleanPayload,
-          props: $state.snapshot(win.props),
+          payload,
+          props,
         });
       });
     });
@@ -920,19 +933,24 @@ export class WindowManager {
       win.context = descriptor.context;
       // 🟢 NYTT: Starta en lyssnare i huvudappen som tar emot flikens ändringar!
       this.setupStandaloneSync(win.winId);
-      if (win.payload) {
-        const currentPayload = $state.snapshot(win.payload);
-        const cleanPayload = Object.fromEntries(
-          Object.entries(currentPayload ?? {}).filter(([, val]) =>
-            typeof val !== "function"
-          ),
-        );
-        // this.backend.send(win.winId, cleanPayload);
-        this.backend.send(win.winId, {
-          payload: cleanPayload,
-          props: $state.snapshot(win.props),
-        });
-      }
+      this.backend.send(win.winId, {
+        payload: $state.snapshot(win.payload),
+        props: $state.snapshot(win.props),
+      });
+
+      // if (win.payload) {
+      //   const currentPayload = $state.snapshot(win.payload);
+      //   const cleanPayload = Object.fromEntries(
+      //     Object.entries(currentPayload ?? {}).filter(([, val]) =>
+      //       typeof val !== "function"
+      //     ),
+      //   );
+      //   // this.backend.send(win.winId, cleanPayload);
+      //   this.backend.send(win.winId, {
+      //     payload: cleanPayload,
+      //     props: $state.snapshot(win.props),
+      //   });
+      // }
     } catch (error) {
       console.error(
         "[WindowManager] Misslyckades att frikoppla fönster:",
