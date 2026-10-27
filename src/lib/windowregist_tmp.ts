@@ -1,6 +1,6 @@
 // src/lib/windowRegistry.ts
 import type { Component } from "svelte";
-import WindowComponentFallback from "./WindowComponentFallback.svelte";
+import WindowComponentFallback from "./WindowComponentFallback.svelte.ts";
 
 // 🌟 VITE-MAGI: Denna rad skannar automatiskt av hela din routes-mapp (och undermappar)
 // efter alla .svelte-filer och skapar asynkra loaders automatiskt.

@@ -1,7 +1,7 @@
 import { type Component, createRawSnippet } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 
-import WindowComponentFallback from "./WindowComponentFallback.svelte";
+import WindowComponentFallback from "./WindowComponentFallback.svelte.ts";
 
 import WindowA from "../routes/window_A.svelte";
 import WindowB from "../routes/window_B.svelte";

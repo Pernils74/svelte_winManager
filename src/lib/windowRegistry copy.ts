@@ -1,5 +1,5 @@
 import type { Component } from "svelte";
-import WindowComponentFallback from "./WindowComponentFallback.svelte";
+import WindowComponentFallback from "./WindowComponentFallback.svelte.ts";
 
 // Typ för de asynkrona dynamiska importerna
 type WindowLoader = () => Promise<{ default: Component<any> }>;
