@@ -8,7 +8,9 @@ interface WindowCPayload {
 }
 
 // 2. Bind the payload interface to the WindowComponentProps generic
-let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
+let { win = $bindable(), winId, parentId }: WindowComponentProps<
+  WindowCPayload
+> = $props();
 </script>
 
 <div class="window-container">
