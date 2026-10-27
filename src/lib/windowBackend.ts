@@ -535,6 +535,7 @@ export class WindowBackendManager implements WindowBackend {
 /**
  * Fabrik för att skapa backend.
  */
+//
 export function createWindowBackend(): WindowBackendManager {
   return new WindowBackendManager();
 }
