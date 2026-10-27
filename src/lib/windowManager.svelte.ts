@@ -252,6 +252,9 @@ export class WindowManager {
     // från komponenten via vår uppdaterade getRealComponentName
     const compKey = options.componentKey ?? getRealComponentName(component);
 
+    console.log("[open] component.name", component.name);
+    console.log("[open] componentKey", compKey);
+
     const win = $state<WindowInstance<TPayload>>({
       winId: options.setId ?? crypto.randomUUID(),
       title: options.title ?? component.name ?? "Window",
@@ -860,6 +863,8 @@ export class WindowManager {
       );
       return;
     }
+
+    console.log("componentKey", win.componentKey);
 
     const descriptor = {
       winId: win.winId,

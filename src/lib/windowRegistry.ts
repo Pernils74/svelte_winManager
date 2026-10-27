@@ -6,13 +6,6 @@ import WindowComponentFallback from "./WindowComponentFallback.svelte";
 // Vi utgår från src/lib/ och går upp till src/routes/
 // const modules = import.meta.glob("../routes/**/*.svelte");
 
-export interface WindowRegistryConfig {
-  modules: Record<
-    string,
-    () => Promise<any>
-  >;
-}
-
 const windowLoaders: Record<string, () => Promise<any>> = {};
 
 // // 🌟 2. Bygg upp registret baserat på hela trädstrukturen
@@ -42,6 +35,12 @@ export function registerComponents(
       .replace(".svelte", "");
 
     const key = cleanPath.replace(/\//g, "_");
+
+    if (windowLoaders[key]) {
+      console.warn(
+        `[windowRegistry] Duplicate key: ${key}`,
+      );
+    }
 
     windowLoaders[key] = modules[path];
   }
