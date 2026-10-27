@@ -1,27 +1,51 @@
+// windowRegistry.ts
 import type { Component } from "svelte";
 import WindowComponentFallback from "./WindowComponentFallback.svelte";
 
 // 🌟 1. Skanna hela routes-trädet rekursivt (** betyder alla undermappar)
 // Vi utgår från src/lib/ och går upp till src/routes/
-const modules = import.meta.glob("../routes/**/*.svelte");
+// const modules = import.meta.glob("../routes/**/*.svelte");
+
+export interface WindowRegistryConfig {
+  modules: Record<
+    string,
+    () => Promise<any>
+  >;
+}
 
 const windowLoaders: Record<string, () => Promise<any>> = {};
 
-// 🌟 2. Bygg upp registret baserat på hela trädstrukturen
-for (const path in modules) {
-  // path är t.ex: "../routes/window_A.svelte" eller "../routes/admin/tools/Window.svelte"
+// // 🌟 2. Bygg upp registret baserat på hela trädstrukturen
+// for (const path in modules) {
+//   // path är t.ex: "../routes/window_A.svelte" eller "../routes/admin/tools/Window.svelte"
 
-  // Ta bort "../routes/" från början och ".svelte" från slutet
-  let cleanPath = path.replace("../routes/", "").replace(".svelte", "");
+//   // Ta bort "../routes/" från början och ".svelte" från slutet
+//   let cleanPath = path.replace("../routes/", "").replace(".svelte", "");
 
-  // Skapa en säker strängnyckel genom att byta ut "/" mot "_"
-  // Exempel: "admin/tools/Window" blir "admin_tools_Window"
-  const key = cleanPath.replace(/\//g, "_");
+//   // Skapa en säker strängnyckel genom att byta ut "/" mot "_"
+//   // Exempel: "admin/tools/Window" blir "admin_tools_Window"
+//   const key = cleanPath.replace(/\//g, "_");
 
-  windowLoaders[key] = modules[path];
-}
+//   windowLoaders[key] = modules[path];
+// }
 
 const loadedComponents = new Map<string, Component<any>>();
+
+export type ComponentLoader = () => Promise<any>;
+
+export function registerComponents(
+  modules: Record<string, ComponentLoader>,
+): void {
+  for (const path in modules) {
+    const cleanPath = path
+      .replace(/^.*routes\//, "")
+      .replace(".svelte", "");
+
+    const key = cleanPath.replace(/\//g, "_");
+
+    windowLoaders[key] = modules[path];
+  }
+}
 
 /**
  * Hämtar en komponent asynkront baserat på dess genererade strukturnyckel.

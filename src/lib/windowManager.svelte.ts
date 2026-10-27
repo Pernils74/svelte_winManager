@@ -937,11 +937,32 @@ export class WindowManager {
 
 const [getContextManager, setContextManager] = createContext<WindowManager>();
 
-export function initializeWindowManager(): WindowManager {
+// export function initializeWindowManager(): WindowManager {
+//   try {
+//     return getContextManager();
+//   } catch {
+//     const manager = new WindowManager();
+//     setContextManager(manager);
+//     return manager;
+//   }
+// }
+
+export interface WindowManagerOptions {
+  modules?: Record<string, () => Promise<any>>;
+  backend?: WindowBackend;
+}
+
+export function initializeWindowManager(
+  options?: WindowManagerOptions,
+): WindowManager {
   try {
     return getContextManager();
   } catch {
-    const manager = new WindowManager();
+    const manager = new WindowManager(
+      options?.backend,
+      // options?.modules,
+    );
+
     setContextManager(manager);
     return manager;
   }
