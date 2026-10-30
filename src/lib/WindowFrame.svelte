@@ -1,4 +1,35 @@
 <script lang="ts">
+// WindowManager
+//  ├─ state
+//  ├─ hierarchy
+//  ├─ sync
+//  └─ API
+
+// WindowBackend
+//  ├─ tab
+//  ├─ popup
+//  └─ tauri
+
+// WindowFrame
+//  ├─ drag
+//  ├─ resize
+//  ├─ snap
+//  ├─ minimize
+//  ├─ maximize
+//  └─ render
+
+// Application Components
+//  ├─ Window_A
+//  ├─ Window_B
+//  ├─ Window_C
+//  └─ egna komponenter
+
+// Theme (framtida)
+//  ├─ titlebar
+//  ├─ buttons
+//  ├─ colors
+//  └─ layout
+
 import { onDestroy, onMount, type Snippet } from "svelte";
 import WindowFrame from "./WindowFrame.svelte";
 // Längst upp bland dina övriga importer:
@@ -7,21 +38,21 @@ import html2canvas from "html2canvas";
 // import html2canvas from "https://cdn.skypack.dev/html2canvas";
 
 import {
-  getWindowManager,
-  MIN_HEIGHT,
-  MIN_WIDTH,
-  type ResizeMode,
-  ROOT_WIN_ID,
-  type WindowInstance,
-  type WindowRect,
+	getWindowManager,
+	MIN_HEIGHT,
+	MIN_WIDTH,
+	type ResizeMode,
+	ROOT_WIN_ID,
+	type WindowInstance,
+	type WindowRect,
 } from "./windowManager.svelte";
 
 type InteractionMode = "move" | ResizeMode;
 
 interface Props {
-  win: WindowInstance;
-  bounds: HTMLElement;
-  children: Snippet;
+	win: WindowInstance;
+	bounds: HTMLElement;
+	children: Snippet;
 }
 
 let { win, bounds, children }: Props = $props();
@@ -43,9 +74,7 @@ let titlebarVisible = $state(true);
 let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
 
 let localMinimized = $derived(
-  manager.windows.filter((w) =>
-    w.parentId === win.winId && w.state.isMinimized
-  ),
+	manager.windows.filter((w) => w.parentId === win.winId && w.state.isMinimized),
 );
 
 let dragMode: InteractionMode | null = null;
@@ -65,143 +94,143 @@ const RELEASE_DISTANCE = 24;
 const HIDE_DELAY = 700;
 
 const resizeHandles: ResizeMode[] = [
-  "top-left",
-  "top-right",
-  "bottom-left",
-  "bottom-right",
-  "top",
-  "right",
-  "bottom",
-  "left",
+	"top-left",
+	"top-right",
+	"bottom-left",
+	"bottom-right",
+	"top",
+	"right",
+	"bottom",
+	"left",
 ];
 
 function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max));
+	return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
 function clearTitlebarTimeout() {
-  if (hideTitlebarTimeout !== undefined) {
-    clearTimeout(hideTitlebarTimeout);
-    hideTitlebarTimeout = undefined;
-  }
+	if (hideTitlebarTimeout !== undefined) {
+		clearTimeout(hideTitlebarTimeout);
+		hideTitlebarTimeout = undefined;
+	}
 }
 
 function showTitlebar() {
-  clearTitlebarTimeout();
-  titlebarVisible = true;
+	clearTitlebarTimeout();
+	titlebarVisible = true;
 }
 
 function scheduleHideTitlebar() {
-  if (!win.state.isMaximized) return;
+	if (!win.state.isMaximized) return;
 
-  clearTitlebarTimeout();
-  hideTitlebarTimeout = setTimeout(() => {
-    titlebarVisible = false;
-    hideTitlebarTimeout = undefined;
-  }, HIDE_DELAY);
+	clearTitlebarTimeout();
+	hideTitlebarTimeout = setTimeout(() => {
+		titlebarVisible = false;
+		hideTitlebarTimeout = undefined;
+	}, HIDE_DELAY);
 }
 
 $effect(() => {
-  if (win.state.isMaximized) {
-    scheduleHideTitlebar();
-  } else {
-    clearTitlebarTimeout();
-    titlebarVisible = true;
-  }
+	if (win.state.isMaximized) {
+		scheduleHideTitlebar();
+	} else {
+		clearTitlebarTimeout();
+		titlebarVisible = true;
+	}
 });
 
 onMount(() => {
-  // Rooten har ingen WindowFrame. Alla andra fönster
-  // mäts i sin förälders innehållsyta.
-  const rect = frameEl.getBoundingClientRect();
+	// Rooten har ingen WindowFrame. Alla andra fönster
+	// mäts i sin förälders innehållsyta.
+	const rect = frameEl.getBoundingClientRect();
 
-  if (win.state.width <= 0 || win.state.height <= 0) {
-    manager.update(win.winId, {
-      width: win.state.width || rect.width,
-      height: win.state.height || rect.height,
-    });
-  }
+	if (win.state.width <= 0 || win.state.height <= 0) {
+		manager.update(win.winId, {
+			width: win.state.width || rect.width,
+			height: win.state.height || rect.height,
+		});
+	}
 });
 
 onDestroy(() => {
-  clearTitlebarTimeout();
-  cleanupInteraction();
+	clearTitlebarTimeout();
+	cleanupInteraction();
 });
 
 function getSnapTargets(axis: "x" | "y"): number[] {
-  const targets: number[] = [];
-  const currentWidth = win.state.width;
-  const currentHeight = win.state.height;
+	const targets: number[] = [];
+	const currentWidth = win.state.width;
+	const currentHeight = win.state.height;
 
-  if (axis === "x") {
-    targets.push(0, bounds.clientWidth - currentWidth);
-  } else {
-    targets.push(0, bounds.clientHeight - currentHeight);
-  }
+	if (axis === "x") {
+		targets.push(0, bounds.clientWidth - currentWidth);
+	} else {
+		targets.push(0, bounds.clientHeight - currentHeight);
+	}
 
-  const addRectTargets = (rect: WindowRect) => {
-    const right = rect.left + rect.width;
-    const bottom = rect.top + rect.height;
+	const addRectTargets = (rect: WindowRect) => {
+		const right = rect.left + rect.width;
+		const bottom = rect.top + rect.height;
 
-    if (axis === "x") {
-      targets.push(
-        rect.left,
-        right,
-        right - currentWidth,
-        rect.left - currentWidth,
-      );
-    } else {
-      targets.push(
-        rect.top,
-        bottom,
-        bottom - currentHeight,
-        rect.top - currentHeight,
-      );
-    }
-  };
+		if (axis === "x") {
+			targets.push(
+				rect.left,
+				right,
+				right - currentWidth,
+				rect.left - currentWidth,
+			);
+		} else {
+			targets.push(
+				rect.top,
+				bottom,
+				bottom - currentHeight,
+				rect.top - currentHeight,
+			);
+		}
+	};
 
-  // Bara fönster i samma koordinatsystem deltar i dockningen.
-  for (
-    const other of manager.getChildren(
-      win.parentId ?? ROOT_WIN_ID,
-    )
-  ) {
-    if (other.winId === win.winId || other.state.isMinimized) {
-      continue;
-    }
+	// Bara fönster i samma koordinatsystem deltar i dockningen.
+	for (
+		const other of manager.getChildren(
+			win.parentId ?? ROOT_WIN_ID,
+		)
+	) {
+		if (other.winId === win.winId || other.state.isMinimized) {
+			continue;
+		}
 
-    addRectTargets({
-      left: other.state.left,
-      top: other.state.top,
-      width: other.state.width,
-      height: other.state.height,
-    });
-  }
+		addRectTargets({
+			left: other.state.left,
+			top: other.state.top,
+			width: other.state.width,
+			height: other.state.height,
+		});
+	}
 
-  return targets;
+	return targets;
 }
 
 function snapPosition(
-  raw: number,
-  targets: number[],
-  previous: number | null,
+	raw: number,
+	targets: number[],
+	previous: number | null,
 ): number {
-  if (
-    previous !== null &&
-    Math.abs(raw - previous) <= SNAP_DISTANCE + RELEASE_DISTANCE
-  ) {
-    return previous;
-  }
+	if (
+		previous !== null &&
+		Math.abs(raw - previous) <= SNAP_DISTANCE + RELEASE_DISTANCE
+	) {
+		return previous;
+	}
 
-  const nearest = targets
-    .map((target) => ({
-      target,
-      distance: Math.abs(raw - target),
-    }))
-    .filter((item) => item.distance <= SNAP_DISTANCE)
-    .sort((a, b) => a.distance - b.distance)[0];
+	const nearest = targets
+		.map((target) => ({
+			target,
+			distance: Math.abs(raw - target),
+		}))
+		.filter((item) => item.distance <= SNAP_DISTANCE)
+		.sort((a, b) => a.distance - b.distance)[0];
 
-  return nearest?.target ?? raw;
+	return nearest?.target ?? raw;
 }
 
 // type InteractionMode = "move" | ResizeMode;
@@ -209,476 +238,456 @@ function snapPosition(
 let reparentDrag = false;
 
 function beginInteraction(
-  event: MouseEvent,
-  mode: InteractionMode,
+	event: MouseEvent,
+	mode: InteractionMode,
 ) {
-  if (event.button !== 0) return;
-  if (win.winId === ROOT_WIN_ID) return;
+	if (event.button !== 0) return;
+	if (win.winId === ROOT_WIN_ID) return;
 
-  const target = event.target;
+	const target = event.target;
 
-  if (
-    target instanceof Element &&
-    target.closest("button, input, select, textarea, a")
-  ) {
-    return;
-  }
+	if (
+		target instanceof Element &&
+		target.closest("button, input, select, textarea, a")
+	) {
+		return;
+	}
 
-  // if (win.state.isMaximized) return;
+	// if (win.state.isMaximized) return;
 
-  event.preventDefault();
-  event.stopPropagation();
+	event.preventDefault();
+	event.stopPropagation();
 
-  let activeWin = win;
+	let activeWin = win;
 
-  if (event.ctrlKey && mode === "move") {
-    const copy = manager.duplicate(win);
-    if (!copy) return;
-    activeWin = copy;
-  }
+	if (event.ctrlKey && mode === "move") {
+		const copy = manager.duplicate(win);
+		if (!copy) return;
+		activeWin = copy;
+	}
 
-  reparentDrag = event.shiftKey && mode === "move";
+	reparentDrag = event.shiftKey && mode === "move";
 
-  // manager.focus(activeWin.winId);
-  manager.focus(activeWin);
+	// manager.focus(activeWin.winId);
+	manager.focus(activeWin);
 
-  dragWinId = activeWin.winId;
-  dragMode = mode;
+	dragWinId = activeWin.winId;
+	dragMode = mode;
 
-  dragStartX = event.clientX;
-  dragStartY = event.clientY;
+	dragStartX = event.clientX;
+	dragStartY = event.clientY;
 
-  startLeft = activeWin.state.left;
-  startTop = activeWin.state.top;
-  startWidth = activeWin.state.width;
-  startHeight = activeWin.state.height;
+	startLeft = activeWin.state.left;
+	startTop = activeWin.state.top;
+	startWidth = activeWin.state.width;
+	startHeight = activeWin.state.height;
 
-  document.body.style.userSelect = "none";
+	document.body.style.userSelect = "none";
 
-  window.addEventListener("mousemove", onMouseMove);
-  window.addEventListener("mouseup", handleMouseUp);
+	window.addEventListener("mousemove", onMouseMove);
+	window.addEventListener("mouseup", handleMouseUp);
 }
 
 function findDropParent(
-  clientX: number,
-  clientY: number,
-  draggedId: string,
+	clientX: number,
+	clientY: number,
+	draggedId: string,
 ): string {
-  const elements = document.elementsFromPoint(clientX, clientY);
-  const descendants = new Set(
-    manager.getDescendants(draggedId).map((child) => child.winId),
-  );
+	const elements = document.elementsFromPoint(clientX, clientY);
+	const descendants = new Set(
+		manager.getDescendants(draggedId).map((child) => child.winId),
+	);
 
-  for (const element of elements) {
-    const frame = element.closest<HTMLElement>("[data-window-id]");
-    const targetId = frame?.dataset.windowId;
+	for (const element of elements) {
+		const frame = element.closest<HTMLElement>("[data-window-id]");
+		const targetId = frame?.dataset.windowId;
 
-    if (!targetId || targetId === draggedId) continue;
-    if (targetId === ROOT_WIN_ID) continue;
-    if (descendants.has(targetId)) continue;
+		if (!targetId || targetId === draggedId) continue;
+		if (targetId === ROOT_WIN_ID) continue;
+		if (descendants.has(targetId)) continue;
 
-    return targetId;
-  }
+		return targetId;
+	}
 
-  return ROOT_WIN_ID;
+	return ROOT_WIN_ID;
 }
 
 function handleMouseUp(event: MouseEvent) {
-  const id = dragWinId;
+	const id = dragWinId;
 
-  try {
-    if (reparentDrag && id) {
-      const targetId = findDropParent(
-        event.clientX,
-        event.clientY,
-        id,
-      );
+	try {
+		if (reparentDrag && id) {
+			const targetId = findDropParent(
+				event.clientX,
+				event.clientY,
+				id,
+			);
 
-      const frame = document.querySelector<HTMLElement>(
-        `[data-window-id="${CSS.escape(id)}"]`,
-      );
+			const frame = document.querySelector<HTMLElement>(
+				`[data-window-id="${CSS.escape(id)}"]`,
+			);
 
-      const rect = frame?.getBoundingClientRect();
+			const rect = frame?.getBoundingClientRect();
 
-      if (rect) {
-        manager.reparent(id, targetId, {
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    }
-  } finally {
-    reparentDrag = false;
-    endInteraction();
-  }
+			if (rect) {
+				manager.reparent(id, targetId, {
+					left: rect.left,
+					top: rect.top,
+					width: rect.width,
+					height: rect.height,
+				});
+			}
+		}
+	} finally {
+		reparentDrag = false;
+		endInteraction();
+	}
 }
 
 function onMouseMove(event: MouseEvent) {
-  if (!dragMode || !dragWinId) return;
+	if (!dragMode || !dragWinId) return;
 
-  const activeWin = win;
-  if (!activeWin) return;
+	const activeWin = win;
+	if (!activeWin) return;
 
-  const dx = event.clientX - dragStartX;
-  const dy = event.clientY - dragStartY;
-  const boundsWidth = bounds.clientWidth;
-  const boundsHeight = bounds.clientHeight;
+	const dx = event.clientX - dragStartX;
+	const dy = event.clientY - dragStartY;
+	const boundsWidth = bounds.clientWidth;
+	const boundsHeight = bounds.clientHeight;
 
-  let nextLeft = startLeft;
-  let nextTop = startTop;
-  let nextWidth = startWidth;
-  let nextHeight = startHeight;
+	let nextLeft = startLeft;
+	let nextTop = startTop;
+	let nextWidth = startWidth;
+	let nextHeight = startHeight;
 
-  if (dragMode === "move") {
-    const rawLeft = startLeft + dx;
-    const rawTop = startTop + dy;
+	if (dragMode === "move") {
+		const rawLeft = startLeft + dx;
+		const rawTop = startTop + dy;
 
-    if (reparentDrag) {
-      // Shift + drag: fri position utanför bounds.
-      // Ingen snapping mot bounds eller andra fönster.
-      nextLeft = rawLeft;
-      nextTop = rawTop;
+		if (reparentDrag) {
+			// Shift + drag: fri position utanför bounds.
+			// Ingen snapping mot bounds eller andra fönster.
+			nextLeft = rawLeft;
+			nextTop = rawTop;
 
-      snappedLeft = null;
-      snappedTop = null;
-    } else {
-      // Vanlig drag: behåll befintlig snapping.
-      const snapX = (
-        targets: number[],
-        raw: number,
-        previous: number | null,
-      ) => snapPosition(raw, targets, previous);
+			snappedLeft = null;
+			snappedTop = null;
+		} else {
+			// Vanlig drag: behåll befintlig snapping.
+			const snapX = (
+				targets: number[],
+				raw: number,
+				previous: number | null,
+			) => snapPosition(raw, targets, previous);
 
-      const children = manager
-        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
-        .filter(
-          (other) =>
-            other.winId !== activeWin.winId &&
-            !other.state.isMinimized,
-        );
+			const children = manager
+				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+				.filter(
+					(other) =>
+						other.winId !== activeWin.winId &&
+						!other.state.isMinimized,
+				);
 
-      const xTargets = [
-        0,
-        boundsWidth - startWidth,
-        ...children.flatMap((other) => [
-          other.state.left,
-          other.state.left + other.state.width,
-          other.state.left - startWidth,
-          other.state.left + other.state.width - startWidth,
-        ]),
-      ];
+			const xTargets = [
+				0,
+				boundsWidth - startWidth,
+				...children.flatMap((other) => [
+					other.state.left,
+					other.state.left + other.state.width,
+					other.state.left - startWidth,
+					other.state.left + other.state.width - startWidth,
+				]),
+			];
 
-      const yTargets = [
-        0,
-        boundsHeight - startHeight,
-        ...children.flatMap((other) => [
-          other.state.top,
-          other.state.top + other.state.height,
-          other.state.top - startHeight,
-          other.state.top + other.state.height - startHeight,
-        ]),
-      ];
+			const yTargets = [
+				0,
+				boundsHeight - startHeight,
+				...children.flatMap((other) => [
+					other.state.top,
+					other.state.top + other.state.height,
+					other.state.top - startHeight,
+					other.state.top + other.state.height - startHeight,
+				]),
+			];
 
-      nextLeft = snapX(xTargets, rawLeft, snappedLeft);
-      nextTop = snapX(yTargets, rawTop, snappedTop);
+			nextLeft = snapX(xTargets, rawLeft, snappedLeft);
+			nextTop = snapX(yTargets, rawTop, snappedTop);
 
-      snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
-      snappedTop = nextTop !== rawTop ? nextTop : null;
-    }
-  } else {
-    // Resize: behåll befintlig logik.
-    if (dragMode.includes("right")) {
-      nextWidth = startWidth + dx;
-    }
+			snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
+			snappedTop = nextTop !== rawTop ? nextTop : null;
+		}
+	} else {
+		// Resize: behåll befintlig logik.
+		if (dragMode.includes("right")) {
+			nextWidth = startWidth + dx;
+		}
 
-    if (dragMode.includes("left")) {
-      nextWidth = startWidth - dx;
-      nextLeft = startLeft + dx;
-    }
+		if (dragMode.includes("left")) {
+			nextWidth = startWidth - dx;
+			nextLeft = startLeft + dx;
+		}
 
-    if (dragMode.includes("bottom")) {
-      nextHeight = startHeight + dy;
-    }
+		if (dragMode.includes("bottom")) {
+			nextHeight = startHeight + dy;
+		}
 
-    if (dragMode.includes("top")) {
-      nextHeight = startHeight - dy;
-      nextTop = startTop + dy;
-    }
+		if (dragMode.includes("top")) {
+			nextHeight = startHeight - dy;
+			nextTop = startTop + dy;
+		}
 
-    nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
-    nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
+		nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
+		nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
 
-    if (dragMode.includes("left")) {
-      nextLeft = startLeft + startWidth - nextWidth;
-    }
+		if (dragMode.includes("left")) {
+			nextLeft = startLeft + startWidth - nextWidth;
+		}
 
-    if (dragMode.includes("top")) {
-      nextTop = startTop + startHeight - nextHeight;
-    }
-  }
+		if (dragMode.includes("top")) {
+			nextTop = startTop + startHeight - nextHeight;
+		}
+	}
 
-  // Clamp endast vid vanlig dragning och resize.
-  // Shift + drag får röra sig fritt utanför bounds.
-  if (dragMode !== "move" || !reparentDrag) {
-    nextWidth = Math.min(nextWidth, boundsWidth);
-    nextHeight = Math.min(nextHeight, boundsHeight);
+	// Clamp endast vid vanlig dragning och resize.
+	// Shift + drag får röra sig fritt utanför bounds.
+	if (dragMode !== "move" || !reparentDrag) {
+		nextWidth = Math.min(nextWidth, boundsWidth);
+		nextHeight = Math.min(nextHeight, boundsHeight);
 
-    nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
-    nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
-  }
+		nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
+		nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
+	}
 
-  const nextRect: WindowRect = {
-    left: nextLeft,
-    top: nextTop,
-    width: nextWidth,
-    height: nextHeight,
-  };
+	const nextRect: WindowRect = {
+		left: nextLeft,
+		top: nextTop,
+		width: nextWidth,
+		height: nextHeight,
+	};
 
-  if (dragMode === "move") {
-    manager.update(activeWin.winId, nextRect);
-  } else {
-    manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-  }
+	if (dragMode === "move") {
+		manager.update(activeWin.winId, nextRect);
+	} else {
+		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
+	}
 }
 
 function onMouseMove_old(event: MouseEvent) {
-  if (!dragMode || !dragWinId) return;
+	if (!dragMode || !dragWinId) return;
 
-  // const activeWin = manager.find(dragWinId);
-  const activeWin = win;
-  if (!activeWin) return;
+	// const activeWin = manager.find(dragWinId);
+	const activeWin = win;
+	if (!activeWin) return;
 
-  const dx = event.clientX - dragStartX;
-  const dy = event.clientY - dragStartY;
-  const boundsWidth = bounds.clientWidth;
-  const boundsHeight = bounds.clientHeight;
+	const dx = event.clientX - dragStartX;
+	const dy = event.clientY - dragStartY;
+	const boundsWidth = bounds.clientWidth;
+	const boundsHeight = bounds.clientHeight;
 
-  let nextLeft = startLeft;
-  let nextTop = startTop;
-  let nextWidth = startWidth;
-  let nextHeight = startHeight;
+	let nextLeft = startLeft;
+	let nextTop = startTop;
+	let nextWidth = startWidth;
+	let nextHeight = startHeight;
 
-  if (dragMode === "move") {
-    const rawLeft = startLeft + dx;
-    const rawTop = startTop + dy;
+	if (dragMode === "move") {
+		const rawLeft = startLeft + dx;
+		const rawTop = startTop + dy;
 
-    // Använd den aktiva instansens position och storlek.
-    const snapX = (targets: number[], raw: number, previous: number | null) =>
-      snapPosition(raw, targets, previous);
+		// Använd den aktiva instansens position och storlek.
+		const snapX = (targets: number[], raw: number, previous: number | null) => snapPosition(raw, targets, previous);
 
-    const xTargets = [
-      0,
-      boundsWidth - startWidth,
-      ...manager
-        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
-        .filter(
-          (other) =>
-            other.winId !== activeWin.winId &&
-            !other.state.isMinimized,
-        )
-        .flatMap((other) => [
-          other.state.left,
-          other.state.left + other.state.width,
-          other.state.left - startWidth,
-          other.state.left + other.state.width - startWidth,
-        ]),
-    ];
+		const xTargets = [
+			0,
+			boundsWidth - startWidth,
+			...manager
+				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+				.filter(
+					(other) =>
+						other.winId !== activeWin.winId &&
+						!other.state.isMinimized,
+				)
+				.flatMap((other) => [
+					other.state.left,
+					other.state.left + other.state.width,
+					other.state.left - startWidth,
+					other.state.left + other.state.width - startWidth,
+				]),
+		];
 
-    const yTargets = [
-      0,
-      boundsHeight - startHeight,
-      ...manager
-        .getChildren(activeWin.parentId ?? ROOT_WIN_ID)
-        .filter(
-          (other) =>
-            other.winId !== activeWin.winId &&
-            !other.state.isMinimized,
-        )
-        .flatMap((other) => [
-          other.state.top,
-          other.state.top + other.state.height,
-          other.state.top - startHeight,
-          other.state.top + other.state.height - startHeight,
-        ]),
-    ];
+		const yTargets = [
+			0,
+			boundsHeight - startHeight,
+			...manager
+				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+				.filter(
+					(other) =>
+						other.winId !== activeWin.winId &&
+						!other.state.isMinimized,
+				)
+				.flatMap((other) => [
+					other.state.top,
+					other.state.top + other.state.height,
+					other.state.top - startHeight,
+					other.state.top + other.state.height - startHeight,
+				]),
+		];
 
-    nextLeft = snapX(xTargets, rawLeft, snappedLeft);
-    nextTop = snapX(yTargets, rawTop, snappedTop);
+		nextLeft = snapX(xTargets, rawLeft, snappedLeft);
+		nextTop = snapX(yTargets, rawTop, snappedTop);
 
-    snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
-    snappedTop = nextTop !== rawTop ? nextTop : null;
-  } else {
-    if (dragMode.includes("right")) nextWidth = startWidth + dx;
-    if (dragMode.includes("left")) {
-      nextWidth = startWidth - dx;
-      nextLeft = startLeft + dx;
-    }
+		snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
+		snappedTop = nextTop !== rawTop ? nextTop : null;
+	} else {
+		if (dragMode.includes("right")) nextWidth = startWidth + dx;
+		if (dragMode.includes("left")) {
+			nextWidth = startWidth - dx;
+			nextLeft = startLeft + dx;
+		}
 
-    if (dragMode.includes("bottom")) nextHeight = startHeight + dy;
-    if (dragMode.includes("top")) {
-      nextHeight = startHeight - dy;
-      nextTop = startTop + dy;
-    }
+		if (dragMode.includes("bottom")) nextHeight = startHeight + dy;
+		if (dragMode.includes("top")) {
+			nextHeight = startHeight - dy;
+			nextTop = startTop + dy;
+		}
 
-    nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
-    nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
+		nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
+		nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
 
-    if (dragMode.includes("left")) {
-      nextLeft = startLeft + startWidth - nextWidth;
-    }
+		if (dragMode.includes("left")) {
+			nextLeft = startLeft + startWidth - nextWidth;
+		}
 
-    if (dragMode.includes("top")) {
-      nextTop = startTop + startHeight - nextHeight;
-    }
-  }
+		if (dragMode.includes("top")) {
+			nextTop = startTop + startHeight - nextHeight;
+		}
+	}
 
-  nextWidth = Math.min(nextWidth, boundsWidth);
-  nextHeight = Math.min(nextHeight, boundsHeight);
-  nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
-  nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
+	nextWidth = Math.min(nextWidth, boundsWidth);
+	nextHeight = Math.min(nextHeight, boundsHeight);
+	nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
+	nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
 
-  const nextRect: WindowRect = {
-    left: nextLeft,
-    top: nextTop,
-    width: nextWidth,
-    height: nextHeight,
-  };
+	const nextRect: WindowRect = {
+		left: nextLeft,
+		top: nextTop,
+		width: nextWidth,
+		height: nextHeight,
+	};
 
-  if (dragMode === "move") {
-    manager.update(activeWin.winId, nextRect);
-  } else {
-    manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-  }
+	if (dragMode === "move") {
+		manager.update(activeWin.winId, nextRect);
+	} else {
+		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
+	}
 }
 
 function cleanupInteraction() {
-  window.removeEventListener("mousemove", onMouseMove);
-  window.removeEventListener("mouseup", endInteraction);
-  document.body.style.userSelect = "";
+	window.removeEventListener("mousemove", onMouseMove);
+	window.removeEventListener("mouseup", endInteraction);
+	document.body.style.userSelect = "";
 }
 
 function endInteraction() {
-  dragMode = null;
-  dragWinId = null;
-  snappedLeft = null;
-  snappedTop = null;
-  cleanupInteraction();
+	dragMode = null;
+	dragWinId = null;
+	snappedLeft = null;
+	snappedTop = null;
+	cleanupInteraction();
 }
 
 function interaction(node: HTMLElement, mode: InteractionMode) {
-  const handleMouseDown = (event: MouseEvent) => {
-    beginInteraction(event, mode);
-  };
+	const handleMouseDown = (event: MouseEvent) => {
+		beginInteraction(event, mode);
+	};
 
-  node.addEventListener("mousedown", handleMouseDown);
+	node.addEventListener("mousedown", handleMouseDown);
 
-  return {
-    destroy() {
-      node.removeEventListener("mousedown", handleMouseDown);
-    },
-  };
+	return {
+		destroy() {
+			node.removeEventListener("mousedown", handleMouseDown);
+		},
+	};
 }
 
 function toggleMaximize() {
-  endInteraction();
-  manager.toggleMaximize(win, bounds);
+	endInteraction();
+	manager.toggleMaximize(win, bounds);
 }
 
 function changeTransparency(event: WheelEvent) {
-  if (!event.shiftKey) return;
+	if (!event.shiftKey) return;
 
-  event.preventDefault();
-  event.stopPropagation();
+	event.preventDefault();
+	event.stopPropagation();
 
-  const delta = event.deltaY < 0 ? 0.05 : -0.05;
+	const delta = event.deltaY < 0 ? 0.05 : -0.05;
 
-  manager.update(win.winId, {
-    transparency: clamp(
-      Number((win.state.transparency + delta).toFixed(2)),
-      0.2,
-      1,
-    ),
-  });
+	manager.update(win.winId, {
+		transparency: clamp(
+			Number((win.state.transparency + delta).toFixed(2)),
+			0.2,
+			1,
+		),
+	});
 }
 
 async function minimize() {
-  if (win.winId === ROOT_WIN_ID) return;
+	if (win.winId === ROOT_WIN_ID) return;
 
-  endInteraction();
+	endInteraction();
 
-  try {
-    // Ta bilden innan fönstret döljs.
-    const canvas = await html2canvas(frameEl, {
-      backgroundColor: "#ffffff",
-      scale: 0.5,
-      logging: false,
-      useCORS: true,
+	try {
+		// Ta bilden innan fönstret döljs.
+		const canvas = await html2canvas(frameEl, {
+			backgroundColor: "#ffffff",
+			scale: 0.5,
+			logging: false,
+			useCORS: true,
 
-      // Ta inte med resize-handtagen i miniatyren.
-      ignoreElements: (element: Element) =>
-        element.classList.contains("resize-handle"),
-    });
+			// Ta inte med resize-handtagen i miniatyren.
+			ignoreElements: (element: Element) => element.classList.contains("resize-handle"),
+		});
 
-    manager.setThumbnail(
-      win.winId,
-      canvas.toDataURL("image/jpeg", 0.72),
-    );
-  } catch (error) {
-    console.warn("Kunde inte skapa fönstrets miniatyrbild:", error);
-    manager.setThumbnail(win.winId, null);
-  }
+		manager.setThumbnail(
+			win.winId,
+			canvas.toDataURL("image/jpeg", 0.72),
+		);
+	} catch (error) {
+		console.warn("Kunde inte skapa fönstrets miniatyrbild:", error);
+		manager.setThumbnail(win.winId, null);
+	}
 
-  // Minimera först när bildtagningen är färdig.
-  // manager.minimize(win.winId);
-  manager.minimize(win);
+	// Minimera först när bildtagningen är färdig.
+	// manager.minimize(win.winId);
+	manager.minimize(win);
 }
 
 function close() {
-  endInteraction();
-  manager.closeWin(win);
+	endInteraction();
+	manager.closeWin(win);
 }
-
-// Övervaka djupa ändringar i payload och strömma till backend om fönstret körs externt
-$effect(() => {
-  if (win.winId !== ROOT_WIN_ID && win.payload) {
-    // Ta en reaktiv snapshot av din payload
-    const currentPayload = $state.snapshot(win.payload);
-
-    // Vi rensar bort eventuella funktioner/callbacks på toppnivå innan vi skickar över JSON
-    const cleanPayload = Object.fromEntries(
-      Object.entries(currentPayload ?? {}).filter(([, val]) =>
-        typeof val !== "function"
-      ),
-    );
-
-    // Strömma ut ändringen via vår manager (som pratar med sin backend)
-    manager.backend.send(win.winId, cleanPayload);
-  }
-});
 </script>
 
 <div
-  bind:this={frameEl}
-  class="window-frame"
-  data-window-id={win.winId}
-  class:is-maximized={win.state.isMaximized}
-  style:left="{left}px"
-  style:top="{top}px"
-  style:width="{width}px"
-  style:height="{height}px"
-  style:z-index={win.zIndex}
-  style:opacity={transparency}
-  in:receive={{ key: win.winId }}
-  out:send={{ key: win.winId }}
-  // onmousedown={() => manager.focus(win.winId)}
-  onmousedown={() => manager.focus(win)}
-  onwheel={changeTransparency}
-  role="dialog"
-  tabindex="0"
-  aria-labelledby={titleId}
-  aria-modal="false"
+	bind:this={frameEl}
+	class="window-frame"
+	data-window-id={win.winId}
+	class:is-maximized={win.state.isMaximized}
+	style:left="{left}px"
+	style:top="{top}px"
+	style:width="{width}px"
+	style:height="{height}px"
+	style:z-index={win.zIndex}
+	style:opacity={transparency}
+	in:receive={{ key: win.winId }}
+	out:send={{ key: win.winId }}
+	// onmousedown={() => manager.focus(win.winId)}
+	onmousedown={() => manager.focus(win)}
+	onwheel={changeTransparency}
+	role="dialog"
+	tabindex="0"
+	aria-labelledby={titleId}
+	aria-modal="false"
 >
 
 
@@ -727,8 +736,8 @@ $effect(() => {
       {:else}
         <button 
           type="button" 
-          title="Frikoppla till ny webbläsarflik" 
-          onclick={() => manager.detachWindow(win, "tab")}>
+          title="Frikoppla till ny webbfönster" 
+          onclick={() => manager.detachWindow(win, "window")}>
           🗗
         </button>
       {/if}
@@ -808,12 +817,6 @@ $effect(() => {
     </footer>
   {/if}
 
-
-
-
-
-
-
   {#each resizeHandles as handle (handle)}
     <div
       class="resize-handle {handle}"
@@ -826,235 +829,235 @@ $effect(() => {
 
 <style>
 .window-frame {
-  position: absolute;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: white;
-  border-radius: 6px;
-  box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);
-  /* overflow: hidden; */
-  overflow: visible;
+	position: absolute;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	/* background: white; */
+	border-radius: 6px;
+	box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);
+	/* overflow: hidden; */
+	overflow: visible;
 }
 
 /* 🟢 NY STIL FÖR ATT FÅNGA HOVER VID SKÄRMKANTEN */
 .titlebar-hover-trigger {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px; /* Tjockleken på ytan som reagerar längst upp */
-  z-index: 9999; /* Måste ligga absolut högst upp för att inte täckas av innehållet */
-  background: transparent;
-  pointer-events: auto;
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 5px; /* Tjockleken på ytan som reagerar längst upp */
+	z-index: 9999; /* Måste ligga absolut högst upp för att inte täckas av innehållet */
+	background: transparent;
+	pointer-events: auto;
 }
 
 .titlebar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
-  background: linear-gradient(180deg, #e8f0ff, #b3d9ff);
-  border-bottom: 1px solid #140202;
-  cursor: grab;
-  user-select: none;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.8rem;
+	background: linear-gradient(180deg, #e8f0ff, #b3d9ff);
+	border-bottom: 1px solid #140202;
+	cursor: grab;
+	user-select: none;
 }
 
 .titlebar:active {
-  cursor: grabbing;
+	cursor: grabbing;
 }
 
 .titlebar strong {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 /* Behåll miniatyren kopplad till respektive knapp */
 .local-taskbar .task-item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
 }
 
 /* Dölj miniatyren som standard */
 .local-taskbar .thumbnail-popup {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(8px);
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 8px);
+	transform: translateX(-50%) translateY(8px);
 
-  width: 260px;
-  max-width: min(260px, 80vw);
-  padding: 10px;
+	width: 260px;
+	max-width: min(260px, 80vw);
+	padding: 10px;
 
-  background: #ffffff;
-  color: #222222;
-  border: 1px solid #b8c4d4;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+	background: #ffffff;
+	color: #222222;
+	border: 1px solid #b8c4d4;
+	border-radius: 8px;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
 
-  z-index: 10000;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+	z-index: 10000;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
 
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease,
-    visibility 160ms ease;
+	transition:
+		opacity 160ms ease,
+		transform 160ms ease,
+		visibility 160ms ease;
 }
 
 /* Visa miniatyren vid hover eller tangentbordsfokus */
 .local-taskbar .task-item:hover .thumbnail-popup,
 .local-taskbar .task-item:focus-within .thumbnail-popup {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
+	opacity: 1;
+	visibility: visible;
+	transform: translateX(-50%) translateY(0);
 }
 
 .local-taskbar .thumbnail-heading {
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+	margin-bottom: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
 }
 
 .local-taskbar .thumbnail-image {
-  display: block;
-  width: 100%;
-  height: 150px;
-  object-fit: contain;
-  background: #f3f4f6;
-  border-radius: 4px;
+	display: block;
+	width: 100%;
+	height: 150px;
+	object-fit: contain;
+	background: #f3f4f6;
+	border-radius: 4px;
 }
 
 .local-taskbar .thumbnail-placeholder {
-  min-height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #666666;
-  font-size: 12px;
+	min-height: 100px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #666666;
+	font-size: 12px;
 }
 
 /* Återanvänd dina snygga .task-item, .task-btn och .thumbnail-popup stilar här */
 
 .controls {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.25rem;
-  margin-left: auto;
+	display: flex;
+	flex: 0 0 auto;
+	gap: 0.25rem;
+	margin-left: auto;
 }
 
 .controls button {
-  padding: 4px 8px;
-  color: white;
-  background: #007acc;
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
+	padding: 4px 8px;
+	color: white;
+	background: #007acc;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
 }
 
 .controls button:hover {
-  background: #005fa3;
+	background: #005fa3;
 }
 
 .content {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  isolation: isolate;
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	isolation: isolate;
 }
 
 .window-frame.is-maximized .titlebar {
-  position: absolute;
-  z-index: 5;
-  top: 0;
-  left: 0;
-  right: 0;
-  box-sizing: border-box;
-  transition: transform 180ms ease, opacity 180ms ease;
+	position: absolute;
+	z-index: 5;
+	top: 0;
+	left: 0;
+	right: 0;
+	box-sizing: border-box;
+	transition: transform 180ms ease, opacity 180ms ease;
 }
 
 .window-frame.is-maximized .titlebar.is-hidden {
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
+	transform: translateY(-100%);
+	opacity: 0;
+	pointer-events: none;
 }
 
 .resize-handle {
-  position: absolute;
-  z-index: 2;
-  width: 10px;
-  height: 10px;
-  background: transparent;
+	position: absolute;
+	z-index: 2;
+	width: 10px;
+	height: 10px;
+	background: transparent;
 }
 
 .resize-handle:hover {
-  background: #8f9dfb68;
+	background: #8f9dfb68;
 }
 
 .top-left {
-  top: 0;
-  left: 0;
-  cursor: nwse-resize;
+	top: 0;
+	left: 0;
+	cursor: nwse-resize;
 }
 
 .top-right {
-  top: 0;
-  right: 0;
-  cursor: nesw-resize;
+	top: 0;
+	right: 0;
+	cursor: nesw-resize;
 }
 
 .bottom-left {
-  bottom: 0;
-  left: 0;
-  cursor: nesw-resize;
+	bottom: 0;
+	left: 0;
+	cursor: nesw-resize;
 }
 
 .bottom-right {
-  bottom: 0;
-  right: 0;
-  cursor: nwse-resize;
+	bottom: 0;
+	right: 0;
+	cursor: nwse-resize;
 }
 
 .top {
-  top: 0;
-  left: 10%;
-  width: 80%;
-  height: 4px;
-  cursor: ns-resize;
+	top: 0;
+	left: 10%;
+	width: 80%;
+	height: 4px;
+	cursor: ns-resize;
 }
 
 .bottom {
-  bottom: 0;
-  left: 10%;
-  width: 80%;
-  height: 4px;
-  cursor: ns-resize;
+	bottom: 0;
+	left: 10%;
+	width: 80%;
+	height: 4px;
+	cursor: ns-resize;
 }
 
 .left {
-  left: 0;
-  top: 10%;
-  height: 80%;
-  width: 4px;
-  cursor: ew-resize;
+	left: 0;
+	top: 10%;
+	height: 80%;
+	width: 4px;
+	cursor: ew-resize;
 }
 
 .right {
-  right: 0;
-  top: 10%;
-  height: 80%;
-  width: 4px;
-  cursor: ew-resize;
+	right: 0;
+	top: 10%;
+	height: 80%;
+	width: 4px;
+	cursor: ew-resize;
 }
 </style>

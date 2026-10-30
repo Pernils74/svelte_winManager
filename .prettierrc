@@ -1,8 +1,7 @@
 {
-    "plugins": ["prettier-plugin-svelte"],
-    "printWidth": 80,
-    "tabWidth": 2,
-    "useTabs": false,
-    "singleQuote": false
-  }
-  
+  "plugins": ["prettier-plugin-svelte"],
+  "printWidth": 180,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": false
+}

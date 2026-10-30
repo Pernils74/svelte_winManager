@@ -4,10 +4,11 @@
   "deno.enable": true,
   "deno.lint": true,
   "editor.formatOnSave": true,
+
   "editor.defaultFormatter": "denoland.vscode-deno",
+  "editor.rulers": [100, 160],
   "[svelte]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
   },
-  "svelte.plugin.svelte.format.enable": true,  
+  "svelte.plugin.svelte.format.enable": true
 }
-

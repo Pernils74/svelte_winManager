@@ -1,222 +1,128 @@
-<!-- window_B.svelte -->
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
-import Window_C from "./window_C.svelte";
 
-// 1. Export the component-specific prop definitions.
 export interface WindowBProps {
-  myNoneReactiveProp: string; // Becomes locked to what it was at the exact moment of creation
+	myNoneReactiveProp?: string;
 }
 
-// 2. Intersect the core window infrastructure props with your custom properties
-let { win, winId, parentId, myNoneReactiveProp }:
-  & WindowComponentProps
-  & WindowBProps = $props();
+let {
+	win,
+	winId,
+	parentId,
+	myNoneReactiveProp,
+}: WindowComponentProps & WindowBProps = $props();
 
 const wManager = getWindowManager();
-
-// 3. Local reactive state to be passed down as payload to Window C
-let sharedSate = $state({
-  counter: 0,
-});
-
-function openWindow_C() {
-  wManager.open(Window_C, {
-    // parentId: winId,
-    title: "🪟 Window_C",
-    width: 400,
-    height: 500,
-    // Pass the current state inside the manager's payload context instead of props
-    payload: sharedSate,
-    // payload: {
-    //   get bCounter() {
-    //     return counter;
-    //   },
-    // },
-  });
-}
-
-function reparentToRoot() {
-  wManager.reparent(win.winId, "root");
-}
-
-function handleDetach(target: "tab" | "tauri") {
-  if (win) {
-    // Anropa din API-metod för att flytta fönstret till extern flik eller Tauri
-    wManager.detachWindow(win, target);
-  }
-}
 
 let localText = $state("");
 
 $effect(() => {
-  localText = win.props.myNoneReactiveProp as string;
+	localText = (win.props.myNoneReactiveProp as string) ?? "";
 });
+
+function reparentToRoot() {
+	wManager.reparent(winId, "root");
+}
+
+function detachToTab() {
+	wManager.detachWindow(win, "tab");
+}
+
+function detachToWindow() {
+	wManager.detachWindow(win, "window");
+}
 </script>
 
 <div class="window-container">
-  <header class="meta-info">
-    <p>Parent Context: <strong>{parentId ?? 'root'}</strong></p>
-    <p>Window ID: <small>{winId}</small></p>
-  </header>
+  <h3>{win.title}</h3>
 
-  <!-- Static Snapshot Demo -->
-  <div class="demo-box">
-    <span class="box-label">Static Snapshot Received:</span>
-    <p class="snapshot-value">"{myNoneReactiveProp}"</p>
-    <p class="explanation">
-      ℹ️ <strong>Non-Reactive Notice:</strong> Fails to update if Window A input changes.
+  <p>
+    Parent: <strong>{parentId ?? "root"}</strong>
+  </p>
+  <p>
+    WinId:
+    <small>{winId}</small>
+  </p>
+  <!-- <hr /> -->
+
+  <!-- <h4>Props Demo</h4> -->
+
+  <p>
+    Original prop:
+    <code>{myNoneReactiveProp}</code>
+  </p>
+
+
+  {#if win.payload}
+    <h4>Payload Demo</h4>
+    {@const payloadText =JSON.stringify($state.snapshot(win.payload), null, 2)}
+    <pre>{payloadText}</pre>
+    <p>
+    <input
+      type="text"
+      bind:value={win.payload.text}
+      placeholder="Type text..."
+    />
     </p>
-    <p class="snapshot-value">"{localText}"</p>
-  </div>
-
-  <!-- Reactive Payload Spawning Demo -->
-  <div class="demo-box payload-box">
-    <span class="box-label">Payload Preparation (Window B State)</span>
-    <p
-      class="explanation">Current counter value: <strong>{sharedSate.counter}</strong></p>
-
-    <div class="button-group">
-      <button onclick={() => sharedSate.counter++} class="btn-increment">
-        ➕ Increment Counter
-      </button>
-      <button onclick={openWindow_C} class="btn-main">
-        🚀 Spawn Window C with Payload
-      </button>
-    </div>
-  </div>
-
-  <footer class="footer-actions">
-    <button onclick={reparentToRoot} class="btn-sub"
-      disabled={parentId === 'root'}>
-      🖥️ Detach/reparent to desktop root
+      <button onclick={() => win.payload.counter++}  >
+        ➕ Increment Payload Counter ({win.payload.counter})
     </button>
-  </footer>
-</div>
+    <hr>
+  {:else}
+    <p>
+      Updated via updateProps:
+      <code>{localText}</code>
+    </p>
+  {/if}
 
-<button
-  onclick={() => handleDetach("tab")}
-  class="btn-detach"
-  title="Öppna i ny webbläsarflik"
->
-  🖥️ Detach to a new browser tab
-  </button>
+
+
+
+  <hr />
+
+  <div class="actions">
+    <button
+      onclick={reparentToRoot}
+      disabled={parentId === "root"}
+    >
+      🖥️ Reparent To Root
+    </button>
+
+    <button onclick={detachToTab}>
+      📑 Detach To Tab
+    </button>
+
+    <button onclick={detachToWindow}>
+      🪟 Detach To Window
+    </button>
+  </div>
+</div>
 
 <style>
 .window-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  font-family: system-ui, sans-serif;
-  color: #1e293b;
+	display: flex;
+	flex-direction: column;
+	/* gap: 0.25rem; */
+	background: white;
+	padding: 1.0rem;
+	background-color: rgb(243, 245, 247);
 }
 
-.meta-info p {
-  margin: 0.25rem 0;
-  font-size: 0.85rem;
-  color: #475569;
+.actions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
 }
 
-.demo-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.payload-box {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-}
-
-.box-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #64748b;
-  letter-spacing: 0.05em;
-}
-
-.snapshot-value {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #0f172a;
-  font-family: monospace;
-  background: #e2e8f0;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  width: fit-content;
-}
-
-.explanation {
-  font-size: 0.8rem;
-  color: #64748b;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.button-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.footer-actions {
-  margin-top: auto;
+code,
+pre {
+	background: #f1f5f9;
+	padding: 0.4rem;
+	border-radius: 4px;
 }
 
 button {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-}
-
-.btn-main {
-  background: #16a34a;
-  color: white;
-}
-.btn-main:hover {
-  background: #15803d;
-}
-
-.btn-increment {
-  background: white;
-  color: #1e293b;
-  border-color: #bbf7d0;
-}
-.btn-increment:hover {
-  background: #f0fdf4;
-}
-
-.btn-sub {
-  background: white;
-  color: #334155;
-  border-color: #cbd5e1;
-}
-.btn-sub:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-.btn-sub:disabled {
-  background: #f1f5f9;
-  color: #94a3b8;
-  border-color: #e2e8f0;
-  cursor: not-allowed;
+	padding: 0.5rem;
 }
 </style>

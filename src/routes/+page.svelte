@@ -65,22 +65,22 @@ onMount(() => {
     titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
   });
 
-  wManager.open(WindowB, {
-    title: "🪟 Window B",
-    width: 500,
-    height: 600,
-    left: 650,
-    top: 300,
-  });
-  if (1 == 0) {
-    wManager.open(WindowC, {
-      title: "🪟 Window C",
-      width: 700,
-      height: 600,
-      left: 850,
-      top: 800,
-    });
-  }
+  // wManager.open(WindowB, {
+  //   title: "🪟 Window B",
+  //   width: 500,
+  //   height: 600,
+  //   left: 650,
+  //   top: 300,
+  // });
+  // if (1 == 0) {
+  //   wManager.open(WindowC, {
+  //     title: "🪟 Window C",
+  //     width: 700,
+  //     height: 600,
+  //     left: 850,
+  //     top: 800,
+  //   });
+  // }
 });
 
 const allComponents = $derived(getAllRegisteredKeys());
