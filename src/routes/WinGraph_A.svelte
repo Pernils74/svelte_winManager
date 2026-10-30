@@ -1,3 +1,5 @@
+<!-- WinGraph_A.svelte -->
+
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
@@ -6,10 +8,9 @@ import WinGraph_B from "./WinGraph_B.svelte";
 import GraphView from "./WinGraphView.svelte";
 import WinGraphDebug from "./WinGraphDebug.svelte";
 import { onDestroy } from "svelte";
-
-let { parentId }: WindowComponentProps = $props();
-
 const wManager = getWindowManager();
+
+let { win, winId, parentId }: WindowComponentProps = $props();
 
 type Point3D = {
 	x: number;
@@ -17,60 +18,67 @@ type Point3D = {
 	z: number;
 };
 
-const payload = $state({
-	points: [] as Point3D[],
+interface GraphConfig {
+	pointsPerBatch: number;
+	updateMs: number;
+}
+
+interface GraphDataPoints {
+	points: Point3D[];
+}
+
+const config = $state<GraphConfig>({
+	pointsPerBatch: 1000,
+	updateMs: 100,
 });
 
 let isRunning = $state(false);
 
-let pointsPerBatch = $state(1000);
-let updateMs = $state(100);
-
-let pointsPerSecond = $state(0);
-let addedSinceLast = 0;
+// let points: Points3D[] = [];
+let points = $state<Point3D[]>([]);
 
 function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pumpLoop() {
+async function generateDataPoints(numberOfPoints: number) {
+	const points: Point3D[] = [];
+	for (let i = 0; i < numberOfPoints; i++) {
+		points.push({
+			x: Math.random() * 100,
+			y: Math.random() * 100,
+			z: Math.random() * 100,
+		});
+	}
+	await sleep(1);
+	return points;
+}
+
+async function start() {
+	if (isRunning) return;
+	isRunning = true;
 	while (isRunning) {
-		const batch: Point3D[] = [];
-
-		for (let i = 0; i < pointsPerBatch; i++) {
-			batch.push({
-				x: Math.random() * 100,
-				y: Math.random() * 100,
-				z: Math.random() * 100,
-			});
-		}
-
-		payload.points = batch;
-		await sleep(updateMs);
+		points = await generateDataPoints(config.pointsPerBatch);
+		wManager.updateProps({ points }); // will update all wins props who have points as props
+		await sleep(config.updateMs);
 	}
 }
 
-function startPump() {
-	if (isRunning) return;
-	isRunning = true;
-	void pumpLoop();
-}
-
-function stopPump() {
+function stop() {
 	isRunning = false;
 }
 
 function openGraph() {
 	const graphWin = wManager.open(WinGraph_B, {
+		winId: "MyCustomId",
 		title: "📈 Plotly Graph",
 		width: 800,
 		height: 500,
 		left: 60,
 		top: 10,
-		payload,
+		payload: config,
 		props: {
-			pointsPerBatch,
-			updateMs,
+			points: [],
 		},
 	});
 	// wManager.detachWindow(
@@ -86,14 +94,15 @@ function openDebug() {
 		height: 300,
 		left: 30,
 		top: 10,
-
-		payload,
+		payload: config,
 		props: {
-			pointsPerBatch,
-			updateMs,
+			points: [],
 		},
 	});
 }
+
+let pointsPerSecond = $state();
+let addedSinceLast = $state();
 
 const throughputTimer = window.setInterval(() => {
 	pointsPerSecond = addedSinceLast;
@@ -101,25 +110,21 @@ const throughputTimer = window.setInterval(() => {
 }, 1000);
 
 onDestroy(() => {
-	stopPump();
+	stop();
 	clearInterval(throughputTimer);
 });
 </script>
-
 <div class="window-container">
-	<h3>Graph Producer</h3>
-
+	<h4>Data creater</h4>
 	<p>
-		Parent:
-		<strong>{parentId ?? "root"}</strong>
+	Parent:	<strong>{parentId ?? "root"}</strong>
 	</p>
-
 	<label>
 	Batch size
 	<input
 		type="number"
 		min="1"
-		bind:value={pointsPerBatch}
+		bind:value={config.pointsPerBatch}
 	/>
 	</label>
 
@@ -128,13 +133,13 @@ onDestroy(() => {
 	<input
 		type="number"
 		min="1"
-		bind:value={updateMs}
+		bind:value={config.updateMs}
 	/>
 	</label>
 
 	<div>
 	Points:
-	<strong>{payload.points.length}</strong>
+	<strong>{points.length}</strong>
 	</div>
 
 	<div>
@@ -142,19 +147,19 @@ onDestroy(() => {
 	<strong>{pointsPerSecond}</strong>
 	</div>
 
-	<div>
+	<!-- <div>
 	Theoretical:
 	<strong>
 		{Math.round(pointsPerBatch * 1000 / updateMs)}
 	</strong>
-	</div>
+	</div> -->
 
 	<div class="buttons">
-		<button onclick={startPump}>
+		<button onclick={start}>
 			▶ Start
 		</button>
 
-		<button onclick={stopPump}>
+		<button onclick={stop}>
 			⏹ Stop
 		</button>
 
@@ -169,9 +174,8 @@ onDestroy(() => {
 
 	<div class="graph-host">
 		<GraphView
-			{payload}
-			pointsPerBatch={pointsPerBatch}
-			updateMs={updateMs}
+			payload={config}
+			points={points}
 		/>
 	</div>
 </div>
@@ -187,23 +191,6 @@ onDestroy(() => {
 
 	padding: 1rem;
 	background: antiquewhite;
-}
-
-.settings {
-	display: flex;
-	gap: 1rem;
-}
-
-.settings label {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-}
-
-.stats {
-	display: flex;
-	gap: 1rem;
-	font-family: monospace;
 }
 
 .buttons {

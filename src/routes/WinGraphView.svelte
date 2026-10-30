@@ -12,14 +12,21 @@ type Point3D = {
 	z: number;
 };
 
-// interface Props extends WindowComponentProps {
+type GraphConfig = {
+	pointsPerBatch: number;
+	updateMs: number;
+};
+
+type GraphPayload = {
+	points: Point3D[];
+};
+
 interface Props extends Partial<WindowComponentProps> {
-	payload?: { points: Point3D[] };
-	pointsPerBatch?: number;
-	updateMs?: number;
+	payload?: GraphConfig;
+	points?: Point3D[];
 }
 
-let { win, payload, pointsPerBatch, updateMs }: Props = $props();
+let { win, payload, points }: Props = $props();
 
 let fps = $state(0);
 let renderMs = $state(0);
@@ -29,6 +36,8 @@ let lastTime = performance.now();
 
 let plotEl: HTMLDivElement;
 let plotlyReady = $state(false);
+
+let pointsPerBatch = $derived(points?.length);
 
 async function loadPlotly() {
 	if ((window as any).Plotly) return;
@@ -68,18 +77,13 @@ onMount(() => {
 				responsive: true,
 			},
 		);
-
 		resizeObserver = new ResizeObserver(() => {
 			Plotly.Plots.resize(plotEl);
 		});
-
 		resizeObserver.observe(plotEl);
-
 		plotlyReady = true;
 	};
-
 	void init();
-
 	return () => {
 		resizeObserver?.disconnect();
 	};
@@ -99,7 +103,7 @@ $effect(() => {
 
 	const t0 = performance.now();
 
-	const points = payload?.points ?? [];
+	const plotPoints = points ?? [];
 	(window as any).Plotly.react(
 		plotEl,
 		[
@@ -107,9 +111,9 @@ $effect(() => {
 				type: "scatter3d",
 				mode: "markers",
 
-				x: points.map((p) => p.x),
-				y: points.map((p) => p.y),
-				z: points.map((p) => p.z),
+				x: plotPoints.map((p) => p.x),
+				y: plotPoints.map((p) => p.y),
+				z: plotPoints.map((p) => p.z),
 
 				marker: {
 					size: 2,

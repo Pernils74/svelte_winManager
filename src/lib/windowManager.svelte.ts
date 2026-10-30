@@ -198,6 +198,7 @@ export interface WindowInstance<TPayload = unknown> {
 }
 
 export interface OpenWindowOptions<TPayload = unknown> {
+	winId?: WindowId;
 	title?: string;
 	parentId?: WindowId | null;
 	boundingEl?: HTMLElement | null;

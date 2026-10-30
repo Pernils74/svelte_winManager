@@ -738,7 +738,7 @@ function close() {
           type="button" 
           title="Frikoppla till ny webbfönster" 
           onclick={() => manager.detachWindow(win, "window")}>
-          🗗
+          🗗🪟
         </button>
       {/if}
  
