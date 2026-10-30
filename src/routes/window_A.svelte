@@ -13,7 +13,6 @@ const wManager = getWindowManager();
 let message = $state("Hello from A");
 
 // används för updateProps-demo
-const reactiveChildren = $state<string[]>([]);
 
 function spawnStatic() {
 	wManager.open(Window_B, {
@@ -38,26 +37,19 @@ function spawnReactive() {
 		height: 600,
 		top: 300,
 		left: 650,
-
 		props: {
 			myNoneReactiveProp: message,
 		},
 	});
-
-	reactiveChildren.push(child.winId);
 }
 
+// Demo example for the recative payload
 const myPayload = $state({
 	text: "",
 	counter: 0,
 });
 
 function spawnPayload() {
-	// const payload = $state({
-	//   text: message,
-	//   counter: 0,
-	// });
-
 	wManager.open(Window_B, {
 		// parentId: winId,
 		title: "📦 Window_B (Payload)",
@@ -71,12 +63,9 @@ function spawnPayload() {
 
 $effect(() => {
 	myPayload.text = message;
-
-	for (const id of reactiveChildren) {
-		wManager.updateProps(id, {
-			myNoneReactiveProp: message,
-		});
-	}
+	wManager.updateProps({
+		myNoneReactiveProp: message,
+	});
 });
 </script>
 

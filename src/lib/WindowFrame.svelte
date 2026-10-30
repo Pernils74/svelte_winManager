@@ -781,6 +781,7 @@ function close() {
             winId={child.winId}
             parentId={child.parentId}
             {...child.props}
+			// payload={child.payload}  // för att den inte skall skriva över någon egen child.payload
           />
         
        </WindowFrame> 

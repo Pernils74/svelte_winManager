@@ -593,21 +593,39 @@ export class WindowManager {
 		}
 	}
 
+	/**
+	 * Updates props on a window.
+	 *
+	 * If `id` is provided, only that window is updated.
+	 *
+	 * If `id` is omitted, all windows containing the specified
+	 * prop key(s) are updated.
+	 *
+	 * Example:
+	 *
+	 * 	updateProps({ text: "Hello" }, winId);
+	 *
+	 * 	updateProps({ theme: "dark" });
+	 *
+	 * For shared reactive data, use `payload` instead of props.
+	 */
 	updateProps(
-		id: WindowId,
 		props: Record<string, unknown>,
+		id?: WindowId,
 	): void {
-		const win = this.find(id);
-		if (!win) return;
-		let changed = false;
-		for (const [key, value] of Object.entries(props)) {
-			if (win.props[key] !== value) {
-				changed = true;
-				break;
+		if (id) {
+			const win = this.find(id);
+			if (!win) return;
+			Object.assign(win.props, props);
+			return;
+		}
+		for (const win of this.windows) {
+			for (const key of Object.keys(props)) {
+				if (key in win.props) {
+					win.props[key] = props[key];
+				}
 			}
 		}
-		if (!changed) return;
-		Object.assign(win.props, props);
 	}
 
 	updateAll(updates: Partial<WindowState>): void {
@@ -940,7 +958,7 @@ export class WindowManager {
 				const win = this.find(winId);
 				if (!win) return;
 				this.updatePayload(winId, state.payload);
-				this.updateProps(winId, state.props);
+				this.updateProps(state.props, winId);
 				// win.props = state.props;
 			},
 		);
