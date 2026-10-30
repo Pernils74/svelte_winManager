@@ -128,6 +128,8 @@ $effect(() => {
 	background: white;
 	padding: 1.0rem;
 	background-color: antiquewhite;
+	width: 100%;
+	height: 100%;
 }
 
 code {

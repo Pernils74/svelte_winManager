@@ -107,6 +107,8 @@ function detachToWindow() {
 	background: white;
 	padding: 1.0rem;
 	background-color: rgb(243, 245, 247);
+	width: 100%;
+	height: 100%;
 }
 
 .actions {

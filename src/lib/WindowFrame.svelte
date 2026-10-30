@@ -767,7 +767,11 @@ function close() {
   </div>
 
   <div class="content" bind:this={contentEl}>
-    {@render children()}    
+		<!-- <div class="component-host">
+			{@render children()}
+		</div> -->
+
+    {@render children()}     
     {#each manager.getChildren(win.winId) as  child (child.winId)}
       {#if  child.component && !child.state.isMinimized && !child.isDetached  }
       <WindowFrame win={child} bounds={contentEl}>
@@ -840,6 +844,31 @@ function close() {
 	box-shadow: 2px 4px 14px rgb(0 0 0 / 15%);
 	/* overflow: hidden; */
 	overflow: visible;
+}
+
+/* .component-host {
+	position: absolute;
+	inset: 0;
+}
+
+.component-host > * {
+	width: 100%;
+	height: 100%;
+} */
+
+.content {
+	position: relative;
+	/* flex: 1 1 auto; */
+	flex: 1 1 0%;
+
+	min-width: 0;
+	min-height: 0;
+	/* width: 100%;
+	height: 100%; */
+	/* overflow: auto; */
+	overflow: hidden;
+
+	isolation: isolate;
 }
 
 /* 🟢 NY STIL FÖR ATT FÅNGA HOVER VID SKÄRMKANTEN */
@@ -966,15 +995,6 @@ function close() {
 
 .controls button:hover {
 	background: #005fa3;
-}
-
-.content {
-	position: relative;
-	flex: 1 1 auto;
-	min-width: 0;
-	min-height: 0;
-	overflow: auto;
-	isolation: isolate;
 }
 
 .window-frame.is-maximized .titlebar {
