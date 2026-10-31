@@ -233,6 +233,80 @@ function overlaps(
 	return startA < endB - EPSILON && endA > startB + EPSILON;
 }
 
+// Globala register (fungerar bäst och enklast över moduler)
+if (typeof globalThis !== "undefined") {
+	if (!(globalThis as any).__callbackRegistry) (globalThis as any).__callbackRegistry = new Map();
+	if (!(globalThis as any).__replyHandlers) (globalThis as any).__replyHandlers = new Map();
+}
+
+const CALLBACK_PREFIX = "__callback_proxy_id__::";
+
+/**
+ * Förvandlar funktioner till sträng-ID:n (Körs i Huvudfönstret)
+ */
+function serializePropsWithFunctions(props: Record<string, any>): Record<string, any> {
+	const serialized: Record<string, any> = {};
+	const registry = (globalThis as any).__callbackRegistry;
+
+	for (const [key, value] of Object.entries(props)) {
+		if (typeof value === "function") {
+			// Generera unikt ID för denna specifika callback-instans
+			const id = CALLBACK_PREFIX + crypto.randomUUID();
+			registry.set(id, value);
+			serialized[key] = id;
+		} else if (value && typeof value === "object" && !Array.isArray(value)) {
+			// Rekursivt för djupa objekt om det behövs
+			serialized[key] = serializePropsWithFunctions(value);
+		} else {
+			serialized[key] = value;
+		}
+	}
+	return serialized;
+}
+
+/**
+ * Förvandlar sträng-ID:n tillbaka till exekverbara funktioner (Körs i Frikopplat fönster)
+ */
+function deserializePropsWithFunctions(
+	props: Record<string, any>,
+	winId: string,
+	manager: WindowManager,
+): Record<string, any> {
+	const deserialized: Record<string, any> = {};
+
+	for (const [key, value] of Object.entries(props)) {
+		if (typeof value === "string" && value.startsWith(CALLBACK_PREFIX)) {
+			// Skapa en proxy-funktion som skickar RPC bakåt till huvudfönstret
+			deserialized[key] = (...args: any[]) => {
+				return new Promise((resolve, reject) => {
+					const replyId = crypto.randomUUID();
+					(globalThis as any).__replyHandlers.set(replyId, { resolve, reject });
+
+					// Skicka anropet via backend till Host
+					manager.backend.send(winId, {
+						// Vi skickar en special-payload eller använder backend-direkt
+						// för enkelhetens skull postar vi via backend-metoden vi modifierade
+					} as any);
+
+					// Eftersom din backend har postBrowserMessage, kan vi trigga det enkelt:
+					(manager.backend as any).postBrowserMessage({
+						winId,
+						type: "callback:invoke",
+						callbackId: value,
+						args,
+						replyId,
+					});
+				});
+			};
+		} else if (value && typeof value === "object" && !Array.isArray(value)) {
+			deserialized[key] = deserializePropsWithFunctions(value, winId, manager);
+		} else {
+			deserialized[key] = value;
+		}
+	}
+	return deserialized;
+}
+
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
 
@@ -933,26 +1007,53 @@ export class WindowManager {
 		this.focus(win);
 	}
 
+	setupStandaloneSync(winId: WindowId): () => void {
+		// 1. Ta emot data utifrån (Externt fönster läser in)
+		const unsubscribeMessage = this.backend.onMessage(
+			winId,
+			(state) => {
+				const win = this.find(winId);
+				if (!win) return;
+
+				this.updatePayload(winId, state.payload);
+
+				// 🟢 DESERIALISERA: Gör om sträng-ID:n till funktioner om vi är i fliken
+				const processedProps = deserializePropsWithFunctions(state.props, winId, this);
+				this.updateProps(processedProps, winId);
+			},
+		);
+
+		// 2. Skicka data utåt (Huvudfönstret strömmar ut)
+		const cleanupEffect = $effect.root(() => {
+			$effect(() => {
+				const win = this.find(winId);
+				if (!win) return;
+
+				const payload = $state.snapshot(win.payload);
+
+				// 🟢 SERIALISERA: Byt ut funktioner mot Proxy-strängar innan JSON-transport
+				const rawProps = $state.snapshot(win.props);
+				const cleanProps = serializePropsWithFunctions(rawProps);
+
+				this.backend.send(winId, {
+					payload,
+					props: cleanProps,
+				});
+			});
+		});
+
+		return () => {
+			unsubscribeMessage();
+			cleanupEffect();
+		};
+	}
+
 	/**
 	 * Startar dubbelriktad payload-synk för ett specifikt frikopplat fönster.
 	 * Används både av huvudappen vid sömlös MDI-reparenting och av standalone-flikar.
 	 */
-	setupStandaloneSync(winId: WindowId): () => void {
+	setupStandaloneSync_old(winId: WindowId): () => void {
 		// 1. Lyssna inåt
-		// const unsubscribeMessage = this.backend.onMessage(
-		//   winId,
-		//   (incomingPayload) => {
-		//     this.updatePayload(winId, incomingPayload);
-		//   },
-		// );
-
-		// const unsubscribeMessage = this.backend.onMessage(
-		//   winId,
-		//   (state) => {
-		//     this.updatePayload(winId, state.payload);
-		//   },
-		// );
-
 		const unsubscribeMessage = this.backend.onMessage(
 			winId,
 			(state) => {
@@ -966,23 +1067,6 @@ export class WindowManager {
 
 		// 2. Strömma utåt reaktivt
 		const cleanupEffect = $effect.root(() => {
-			// $effect(() => {
-			//   const win = this.find(winId);
-			//   if (!win || !win.payload) return;
-
-			//   const currentPayload = $state.snapshot(win.payload);
-			//   const cleanPayload = Object.fromEntries(
-			//     Object.entries(currentPayload ?? {}).filter(([, val]) =>
-			//       typeof val !== "function"
-			//     ),
-			//   );
-			//   // this.backend.send(winId, cleanPayload);
-			//   this.backend.send(winId, {
-			//     payload: cleanPayload,
-			//     props: $state.snapshot(win.props),
-			//   });
-			// });
-
 			$effect(() => {
 				const win = this.find(winId);
 				if (!win) return;

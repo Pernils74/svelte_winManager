@@ -65,16 +65,35 @@ type MessageCallback = (state: DetachedWindowState) => void;
 //     type: "window:close";
 //   };
 
+// type BrowserMessage =
+// 	| {
+// 		winId: string;
+// 		// type: "payload:update" | "payload:init";
+// 		type: "state:update";
+// 		state: DetachedWindowState;
+// 	}
+// 	| {
+// 		winId: string;
+// 		type: "window:close";
+// 	};
+
+// Lägg till i BrowserMessage-typen i src/lib/windowBackend.ts
 type BrowserMessage =
+	| { winId: string; type: "state:update"; state: DetachedWindowState }
+	| { winId: string; type: "window:close" }
 	| {
 		winId: string;
-		// type: "payload:update" | "payload:init";
-		type: "state:update";
-		state: DetachedWindowState;
+		type: "callback:invoke";
+		callbackId: string;
+		args: any[];
+		replyId?: string; // För asynkron returdata (Promises)
 	}
 	| {
 		winId: string;
-		type: "window:close";
+		type: "callback:reply";
+		replyId: string;
+		value?: any;
+		error?: string;
 	};
 
 const CHANNEL_NAME = "svelte_winmanager_channel";
@@ -447,6 +466,48 @@ export class WindowBackendManager implements WindowBackend {
 		}
 		if (message.type === "state:update") { //|| message.type === "payload:init") {
 			this.notifyListeners(message.winId, message.state);
+		}
+
+		// Inuti handleBrowserMessage(message: BrowserMessage)
+		if (message.type === "callback:invoke") {
+			// Om vi är i huvudappen (Host context)
+			const registry = (globalThis as any).__callbackRegistry;
+			if (registry && registry.has(message.callbackId)) {
+				const fn = registry.get(message.callbackId);
+				Promise.resolve()
+					.then(() => fn(...message.args))
+					.then((result) => {
+						if (message.replyId) {
+							this.postBrowserMessage({
+								winId: message.winId,
+								type: "callback:reply",
+								replyId: message.replyId,
+								value: result,
+							});
+						}
+					})
+					.catch((err) => {
+						if (message.replyId) {
+							this.postBrowserMessage({
+								winId: message.winId,
+								type: "callback:reply",
+								replyId: message.replyId,
+								error: err.message || String(err),
+							});
+						}
+					});
+			}
+			return;
+		}
+
+		if (message.type === "callback:reply") {
+			const handler = (globalThis as any).__replyHandlers?.get(message.replyId);
+			if (handler) {
+				if (message.error) handler.reject(new Error(message.error));
+				else handler.resolve(message.value);
+				(globalThis as any).__replyHandlers.delete(message.replyId);
+			}
+			return;
 		}
 	}
 
