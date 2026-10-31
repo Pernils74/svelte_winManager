@@ -32,16 +32,16 @@ interface GraphConfig {
 	updateMs: number;
 }
 
-interface Props extends WindowComponentProps {
-	win: WindowInstance;
+interface Props extends WindowComponentProps<GraphConfig> {
+	win: WindowInstance<GraphConfig>;
 	payload: GraphConfig;
 	points: Point3D[];
 }
 
-let { win, payload, points }: Props = $props();
+let { win, winId, parentId, payload, points }: Props = $props();
 
 // let config = $derived(payload);
-let config = $derived(win.payload);
+let config: GraphConfig = $derived(win.payload);
 
 // PID-parametrar
 const KP = 0.35;
@@ -153,6 +153,9 @@ function onRenderMs(ms: number) {
 <div class="container">
 	<div class="controller">
 		<div>
+
+			
+
 				Target:
 				<strong>{config.updateMs} ms</strong>
 			</div>

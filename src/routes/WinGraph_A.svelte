@@ -103,7 +103,7 @@ function openDebug() {
 }
 </script>
 <div class="window-container">
-	<h4>Data creater</h4>
+	<h4>📡 Live Data Stream</h4>
 	<p>
 	Parent:	<strong>{parentId ?? "root"}</strong>
 	</p>
