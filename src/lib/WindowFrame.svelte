@@ -468,9 +468,11 @@ function onMouseMove(event: MouseEvent) {
 	};
 
 	if (dragMode === "move") {
-		manager.update(activeWin.winId, nextRect);
+		// manager.update(activeWin.winId, nextRect);
+		manager.update(activeWin.winId, { ...nextRect, transparency: 0.65 });
 	} else {
 		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
+		manager.update(activeWin.winId, { transparency: 0.85 });
 	}
 }
 
