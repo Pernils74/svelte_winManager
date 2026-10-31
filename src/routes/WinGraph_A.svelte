@@ -72,6 +72,7 @@ function openGraph() {
 	const graphWin = wManager.open(WinGraph_B, {
 		winId: "MyCustomId",
 		title: "📈 Plotly Graph",
+		tileOffset: 40,
 		width: 800,
 		height: 500,
 		left: 60,
@@ -100,19 +101,6 @@ function openDebug() {
 		},
 	});
 }
-
-let pointsPerSecond = $state();
-let addedSinceLast = $state();
-
-const throughputTimer = window.setInterval(() => {
-	pointsPerSecond = addedSinceLast;
-	addedSinceLast = 0;
-}, 1000);
-
-onDestroy(() => {
-	stop();
-	clearInterval(throughputTimer);
-});
 </script>
 <div class="window-container">
 	<h4>Data creater</h4>
@@ -126,6 +114,8 @@ onDestroy(() => {
 		min="1"
 		bind:value={config.pointsPerBatch}
 	/>
+	Points generated: <strong>{points.length}</strong>
+
 	</label>
 
 	<label>
@@ -137,22 +127,7 @@ onDestroy(() => {
 	/>
 	</label>
 
-	<div>
-	Points:
-	<strong>{points.length}</strong>
-	</div>
-
-	<div>
-	Points/s:
-	<strong>{pointsPerSecond}</strong>
-	</div>
-
-	<!-- <div>
-	Theoretical:
-	<strong>
-		{Math.round(pointsPerBatch * 1000 / updateMs)}
-	</strong>
-	</div> -->
+	<div></div>
 
 	<div class="buttons">
 		<button onclick={start}>

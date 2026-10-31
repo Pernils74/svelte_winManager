@@ -85,6 +85,7 @@ let startLeft = 0;
 let startTop = 0;
 let startWidth = 0;
 let startHeight = 0;
+let startTransparency = 1; // 🌟 for saving transparencey width mouse move
 
 let snappedLeft: number | null = null;
 let snappedTop: number | null = null;
@@ -281,6 +282,7 @@ function beginInteraction(
 	startTop = activeWin.state.top;
 	startWidth = activeWin.state.width;
 	startHeight = activeWin.state.height;
+	startTransparency = activeWin.state.transparency;
 
 	document.body.style.userSelect = "none";
 
@@ -472,115 +474,6 @@ function onMouseMove(event: MouseEvent) {
 	}
 }
 
-function onMouseMove_old(event: MouseEvent) {
-	if (!dragMode || !dragWinId) return;
-
-	// const activeWin = manager.find(dragWinId);
-	const activeWin = win;
-	if (!activeWin) return;
-
-	const dx = event.clientX - dragStartX;
-	const dy = event.clientY - dragStartY;
-	const boundsWidth = bounds.clientWidth;
-	const boundsHeight = bounds.clientHeight;
-
-	let nextLeft = startLeft;
-	let nextTop = startTop;
-	let nextWidth = startWidth;
-	let nextHeight = startHeight;
-
-	if (dragMode === "move") {
-		const rawLeft = startLeft + dx;
-		const rawTop = startTop + dy;
-
-		// Använd den aktiva instansens position och storlek.
-		const snapX = (targets: number[], raw: number, previous: number | null) => snapPosition(raw, targets, previous);
-
-		const xTargets = [
-			0,
-			boundsWidth - startWidth,
-			...manager
-				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
-				.filter(
-					(other) =>
-						other.winId !== activeWin.winId &&
-						!other.state.isMinimized,
-				)
-				.flatMap((other) => [
-					other.state.left,
-					other.state.left + other.state.width,
-					other.state.left - startWidth,
-					other.state.left + other.state.width - startWidth,
-				]),
-		];
-
-		const yTargets = [
-			0,
-			boundsHeight - startHeight,
-			...manager
-				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
-				.filter(
-					(other) =>
-						other.winId !== activeWin.winId &&
-						!other.state.isMinimized,
-				)
-				.flatMap((other) => [
-					other.state.top,
-					other.state.top + other.state.height,
-					other.state.top - startHeight,
-					other.state.top + other.state.height - startHeight,
-				]),
-		];
-
-		nextLeft = snapX(xTargets, rawLeft, snappedLeft);
-		nextTop = snapX(yTargets, rawTop, snappedTop);
-
-		snappedLeft = nextLeft !== rawLeft ? nextLeft : null;
-		snappedTop = nextTop !== rawTop ? nextTop : null;
-	} else {
-		if (dragMode.includes("right")) nextWidth = startWidth + dx;
-		if (dragMode.includes("left")) {
-			nextWidth = startWidth - dx;
-			nextLeft = startLeft + dx;
-		}
-
-		if (dragMode.includes("bottom")) nextHeight = startHeight + dy;
-		if (dragMode.includes("top")) {
-			nextHeight = startHeight - dy;
-			nextTop = startTop + dy;
-		}
-
-		nextWidth = clamp(nextWidth, MIN_WIDTH, boundsWidth);
-		nextHeight = clamp(nextHeight, MIN_HEIGHT, boundsHeight);
-
-		if (dragMode.includes("left")) {
-			nextLeft = startLeft + startWidth - nextWidth;
-		}
-
-		if (dragMode.includes("top")) {
-			nextTop = startTop + startHeight - nextHeight;
-		}
-	}
-
-	nextWidth = Math.min(nextWidth, boundsWidth);
-	nextHeight = Math.min(nextHeight, boundsHeight);
-	nextLeft = clamp(nextLeft, 0, boundsWidth - nextWidth);
-	nextTop = clamp(nextTop, 0, boundsHeight - nextHeight);
-
-	const nextRect: WindowRect = {
-		left: nextLeft,
-		top: nextTop,
-		width: nextWidth,
-		height: nextHeight,
-	};
-
-	if (dragMode === "move") {
-		manager.update(activeWin.winId, nextRect);
-	} else {
-		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-	}
-}
-
 function cleanupInteraction() {
 	window.removeEventListener("mousemove", onMouseMove);
 	window.removeEventListener("mouseup", endInteraction);
@@ -588,6 +481,10 @@ function cleanupInteraction() {
 }
 
 function endInteraction() {
+	// 🌟 ÅTERSTÄLL TRANSPARENSEN HÄR:
+	if (dragWinId) {
+		manager.update(dragWinId, { transparency: startTransparency });
+	}
 	dragMode = null;
 	dragWinId = null;
 	snappedLeft = null;
@@ -780,6 +677,7 @@ function close() {
             win= {child}
             winId={child.winId}
             parentId={child.parentId}
+			// payload={child.payload}  
             {...child.props}
 			// payload={child.payload}  // för att den inte skall skriva över någon egen child.payload
           />

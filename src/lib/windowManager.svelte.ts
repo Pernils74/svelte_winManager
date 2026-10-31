@@ -233,35 +233,64 @@ function overlaps(
 	return startA < endB - EPSILON && endA > startB + EPSILON;
 }
 
-// Globala register (fungerar bäst och enklast över moduler)
+// Uppdatera globala register (längst upp i windowManager.svelte.ts)
 if (typeof globalThis !== "undefined") {
+	// Sparar nu: callbackId -> fungerande JavaScript-funktion
 	if (!(globalThis as any).__callbackRegistry) (globalThis as any).__callbackRegistry = new Map();
+	// Sparar nu: winId -> Set med tillhörande callbackId:n (för enkel städning)
+	if (!(globalThis as any).__windowCallbackMapping) (globalThis as any).__windowCallbackMapping = new Map();
 	if (!(globalThis as any).__replyHandlers) (globalThis as any).__replyHandlers = new Map();
 }
 
 const CALLBACK_PREFIX = "__callback_proxy_id__::";
 
 /**
- * Förvandlar funktioner till sträng-ID:n (Körs i Huvudfönstret)
+ * Förvandlar funktioner till sträng-ID:n och mappar dem till fönstrets ID
  */
-function serializePropsWithFunctions(props: Record<string, any>): Record<string, any> {
+function serializePropsWithFunctions(props: Record<string, any>, winId: string): Record<string, any> {
 	const serialized: Record<string, any> = {};
 	const registry = (globalThis as any).__callbackRegistry;
+	const mapping = (globalThis as any).__windowCallbackMapping;
+
+	// Säkerställ att fönstret har en mängd (Set) i mappningen
+	if (!mapping.has(winId)) {
+		mapping.set(winId, new Set<string>());
+	}
+	const windowCallbacks = mapping.get(winId);
 
 	for (const [key, value] of Object.entries(props)) {
 		if (typeof value === "function") {
-			// Generera unikt ID för denna specifika callback-instans
 			const id = CALLBACK_PREFIX + crypto.randomUUID();
+
+			// Spara funktionen och koppla den till fönstret för framtida städning
 			registry.set(id, value);
+			windowCallbacks.add(id);
+
 			serialized[key] = id;
 		} else if (value && typeof value === "object" && !Array.isArray(value)) {
-			// Rekursivt för djupa objekt om det behövs
-			serialized[key] = serializePropsWithFunctions(value);
+			serialized[key] = serializePropsWithFunctions(value, winId);
 		} else {
 			serialized[key] = value;
 		}
 	}
 	return serialized;
+}
+
+/**
+ * Funktion för att städa bort alla callbacks kopplade till ett specifikt fönster
+ */
+export function cleanupWindowCallbacks(winId: string): void {
+	const registry = (globalThis as any).__callbackRegistry;
+	const mapping = (globalThis as any).__windowCallbackMapping;
+
+	if (mapping.has(winId)) {
+		const callbackIds = mapping.get(winId);
+		for (const id of callbackIds) {
+			registry.delete(id); // Ta bort själva funktionsreferensen så GC kan rensa den!
+		}
+		mapping.delete(winId); // Ta bort fönstret ur mappningen
+		console.log(`[CallbackRegistry] Ransade alla callbacks för fönster: ${winId}`);
+	}
 }
 
 /**
@@ -1007,8 +1036,8 @@ export class WindowManager {
 		this.focus(win);
 	}
 
+	// Inuti setupStandaloneSync(winId: WindowId) i windowManager.svelte.ts
 	setupStandaloneSync(winId: WindowId): () => void {
-		// 1. Ta emot data utifrån (Externt fönster läser in)
 		const unsubscribeMessage = this.backend.onMessage(
 			winId,
 			(state) => {
@@ -1016,24 +1045,21 @@ export class WindowManager {
 				if (!win) return;
 
 				this.updatePayload(winId, state.payload);
-
-				// 🟢 DESERIALISERA: Gör om sträng-ID:n till funktioner om vi är i fliken
 				const processedProps = deserializePropsWithFunctions(state.props, winId, this);
 				this.updateProps(processedProps, winId);
 			},
 		);
 
-		// 2. Skicka data utåt (Huvudfönstret strömmar ut)
 		const cleanupEffect = $effect.root(() => {
 			$effect(() => {
 				const win = this.find(winId);
 				if (!win) return;
 
 				const payload = $state.snapshot(win.payload);
-
-				// 🟢 SERIALISERA: Byt ut funktioner mot Proxy-strängar innan JSON-transport
 				const rawProps = $state.snapshot(win.props);
-				const cleanProps = serializePropsWithFunctions(rawProps);
+
+				// 🟢 SKICKA MED winId HÄR
+				const cleanProps = serializePropsWithFunctions(rawProps, winId);
 
 				this.backend.send(winId, {
 					payload,
@@ -1045,6 +1071,8 @@ export class WindowManager {
 		return () => {
 			unsubscribeMessage();
 			cleanupEffect();
+			// 🟢 STÄDA BORT CALLBACKS NÄR SYNCEN UPPHÖR (FÖNSTRET STÄNGS/KOPPLAS IFRÅN)
+			cleanupWindowCallbacks(winId);
 		};
 	}
 
@@ -1052,40 +1080,6 @@ export class WindowManager {
 	 * Startar dubbelriktad payload-synk för ett specifikt frikopplat fönster.
 	 * Används både av huvudappen vid sömlös MDI-reparenting och av standalone-flikar.
 	 */
-	setupStandaloneSync_old(winId: WindowId): () => void {
-		// 1. Lyssna inåt
-		const unsubscribeMessage = this.backend.onMessage(
-			winId,
-			(state) => {
-				const win = this.find(winId);
-				if (!win) return;
-				this.updatePayload(winId, state.payload);
-				this.updateProps(state.props, winId);
-				// win.props = state.props;
-			},
-		);
-
-		// 2. Strömma utåt reaktivt
-		const cleanupEffect = $effect.root(() => {
-			$effect(() => {
-				const win = this.find(winId);
-				if (!win) return;
-
-				const payload = $state.snapshot(win.payload);
-				const props = $state.snapshot(win.props);
-
-				this.backend.send(winId, {
-					payload,
-					props,
-				});
-			});
-		});
-
-		return () => {
-			unsubscribeMessage();
-			cleanupEffect();
-		};
-	}
 
 	async detachWindow(
 		win: WindowInstance,
@@ -1181,6 +1175,14 @@ export class WindowManager {
 
 		// Filtrera bort alla dessa fönster från den reaktiva arrayen i en enda stöt
 		this.windows = this.windows.filter((w) => !ids.has(w.winId));
+
+		// 🟢 Kör städningen ifall fönstret stängdes inifrån MDI-miljön
+		cleanupWindowCallbacks(win.winId);
+
+		// Skicka signal till backend om det var frikopplat
+		if (win.isDetached) {
+			this.backend.close(win.winId);
+		}
 	}
 
 	setThumbnail(id: WindowId, thumbnail: string | null): void {

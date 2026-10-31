@@ -1,6 +1,13 @@
 <!-- WinGraph_B.svelte -->
 <!--
 
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts
+
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
+
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraph_A.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraph_B.svelte
@@ -33,7 +40,8 @@ interface Props extends WindowComponentProps {
 
 let { win, payload, points }: Props = $props();
 
-let config = $derived(payload);
+// let config = $derived(payload);
+let config = $derived(win.payload);
 
 // PID-parametrar
 const KP = 0.35;
