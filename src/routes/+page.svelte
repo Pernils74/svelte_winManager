@@ -1,5 +1,3 @@
-
-
 <!--
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
@@ -8,6 +6,17 @@ https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.sv
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
+
+
+
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/WindowFrame.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/WindowHost.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/windowManager.svelte.ts
+
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/windowRegistry.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/windowBackend.ts
+
+
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_C.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_B.svelte
@@ -44,6 +53,9 @@ import WindowC from "./WinGraph_A.svelte";
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
+import mouseCoords from "./MouseCords.svelte";
+import MouseCords from "./MouseCords.svelte";
+
 const wManager = initializeWindowManager();
 // registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
 
@@ -64,13 +76,13 @@ onMount(() => {
 		titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
-	wManager.open(WinGraphA, {
-		title: "🪟 Window graph A",
-		width: 600,
-		height: 700,
-		left: 650,
-		top: 300,
-	});
+	// wManager.open(WinGraphA, {
+	// 	title: "🪟 Window graph A",
+	// 	width: 600,
+	// 	height: 700,
+	// 	left: 650,
+	// 	top: 300,
+	// });
 
 	// if (1 == 0) {
 	//   wManager.open(WindowC, {
@@ -89,9 +101,9 @@ $effect(() => {
 });
 </script>
 
-WindowHost.topbarContent ="hjhkhkjh"
+<MouseCords></MouseCords>
 <WindowHost>
-  {#snippet children()}
+  {#snippet desktopContent()}
     <div class="welcome-container">
       <h1>Welcome to Svelte Window Manager</h1>
       <p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the official documentation.</p>

@@ -1,5 +1,43 @@
+<!--
+WindowManager
+    └── State / API / Hierarchy
 
- <!-- WindowHost.svelte -->
+WindowHost
+    ├── Workspace
+    │   └── renderWindow(win)
+    │       └── WindowFrame
+    │           ├── Titlebar
+    │           ├── Content
+    │           │   ├── WindowComponent
+    │           │   └── Child Windows
+    │           └── Resize Handles
+    │
+    ├── Taskbar
+    └── Detached Windows
+
+WindowBackend
+    ├── Browser Tab
+    ├── Browser Window
+    └── Tauri -->
+
+<!-- Workspace (root bounds)
+│
+├── Window A
+│   └── Content A (bounds A)
+│       ├── Window A1
+│       │   └── Content A1 (bounds A1)
+│       │       └── Window A1a
+│       │
+│       └── Window A2
+│
+└── Window B
+	└── Content B (bounds B)
+		└── Window B1 -->
+
+<!-- https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/WindowHost.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/%2Bpage.svelte -->
+
+<!-- WindowHost.svelte -->
 <script lang="ts">
 import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
@@ -9,35 +47,23 @@ import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 interface Props {
-	children?: Snippet;
-	topbarContent?: Snippet;
+	desktopContent?: Snippet; // 🌟 Desktop content in root window
+	topbarContent?: Snippet; // 🌟 Topbar content in root window
 }
-
-let { children, topbarContent }: Props = $props();
+let { desktopContent, topbarContent }: Props = $props();
 
 const wManager = getWindowManager();
 
-// URL-parametrar för ett fristående fönster.
-let standaloneWinId = $derived(
-	page.url.searchParams.get("winId"),
-);
+// Reading of URL-parametrar for standalone windows (win.isDetached=true)
+let standaloneWinId = $derived(page.url.searchParams.get("winId"));
+let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
+let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
 
-let standaloneComponentKey = $derived(
-	page.url.searchParams.get("componentKey"),
-);
-
-let standaloneTitle = $derived(
-	page.url.searchParams.get("title") ?? "Fristående",
-);
-
-let isStandalone = $derived(
-	!!(standaloneWinId && standaloneComponentKey),
-);
+let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
 
 // Komponenten laddas asynkront från windowRegistry.
-let standaloneComponent = $state<Component<any> | null>(null);
+
 let standaloneLoading = $state(false);
-let standaloneError = $state<string | null>(null);
 
 let contentEl = $state<HTMLElement | undefined>(undefined);
 
@@ -50,10 +76,6 @@ let minimizedWindows = $derived(
 			win.state.isMinimized,
 	),
 );
-
-// let rootWindows = $derived(
-//   wManager.getChildren(ROOT_WIN_ID),
-// );
 
 let rootWindows = $derived(
 	wManager.getChildren(ROOT_WIN_ID).filter(
@@ -68,8 +90,6 @@ $effect(() => {
 		!standaloneWinId ||
 		!standaloneComponentKey
 	) {
-		standaloneComponent = null;
-		standaloneError = null;
 		standaloneLoading = false;
 		return;
 	}
@@ -81,8 +101,6 @@ $effect(() => {
 	let cancelled = false;
 	let unsubscribe: (() => void) | undefined;
 
-	standaloneComponent = null;
-	standaloneError = null;
 	standaloneLoading = true;
 
 	async function initializeStandaloneWindow() {
@@ -90,7 +108,6 @@ $effect(() => {
 			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
 			const component = await getComponentByKey(componentKey);
 			if (cancelled) return;
-			standaloneComponent = component;
 
 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
 			let winInstance = wManager.find(targetWinId);
@@ -142,8 +159,6 @@ $effect(() => {
 				`[WindowHost] Kunde inte initiera "${componentKey}"`,
 				error,
 			);
-
-			standaloneError = error instanceof Error ? error.message : "Okänt fel vid laddning av fönsterkomponenten.";
 		} finally {
 			if (!cancelled) {
 				standaloneLoading = false;
@@ -159,10 +174,31 @@ $effect(() => {
 	};
 });
 
+// onMount(() => {
+// 	// If start of root window
+// 	if (!contentEl) return;
+// 	const updateBounds = () => {
+// 		if (!contentEl) return;
+// 		wManager.setRootBounds(
+// 			contentEl.clientWidth,
+// 			contentEl.clientHeight,
+// 		);
+// 	};
+
+// 	updateBounds();
+// 	const observer = new ResizeObserver(updateBounds);
+// 	observer.observe(contentEl);
+// 	return () => observer.disconnect();
+// });
+
 onMount(() => {
 	if (!contentEl) return;
+
+	wManager.setBoundingEl(ROOT_WIN_ID, contentEl);
+
 	const updateBounds = () => {
 		if (!contentEl) return;
+
 		wManager.setRootBounds(
 			contentEl.clientWidth,
 			contentEl.clientHeight,
@@ -170,198 +206,125 @@ onMount(() => {
 	};
 
 	updateBounds();
+
 	const observer = new ResizeObserver(updateBounds);
 	observer.observe(contentEl);
-	return () => observer.disconnect();
+
+	return () => {
+		observer.disconnect();
+		wManager.setBoundingEl(ROOT_WIN_ID, null);
+	};
 });
 
-// debug effect
-$effect(() => {
-	console.log(
-		"rootWindows",
-		rootWindows.map((w) => ({
-			title: w.title,
-			detached: w.isDetached,
-		})),
-	);
-});
+// Hämta ALLA aktiva fönster i ett platt format (både föräldrar och barn)
+// Vi ser till att activeWindows vet om vi är i standalone eller workspace
+let activeWindows = $derived(
+	wManager.windows.filter((win) => {
+		if (win.winId === ROOT_WIN_ID || win.state.isMinimized) return false;
+
+		// We are inside a standalone tab/window/tauri, We just want to render this actual window
+		if (isStandalone) {
+			return win.winId === standaloneWinId;
+		}
+		// Else render all windows that is not detached (regular mdi windows)
+		return !win.isDetached;
+	}),
+);
 </script>
 
+<!-- Vi sätter en CSS-klass på layouten om vi är standalone så vi kan dölja topbar/taskbar via CSS eller villkor -->
+<div class="layout" class:standalone-host={isStandalone}>
+  
+	{#if !isStandalone}
+	  <header class="topbar">
+		{#if topbarContent}{@render topbarContent()}{/if}
+		<span>Current open windows: {winCount}</span>
+	  </header>
+	{/if}
+  
+	<!-- Om vi är standalone blir main.workspace 100vw/100vh automatiskt -->
+	<main class="workspace" bind:this={contentEl}>
+	  {#if contentEl}
+		{#if standaloneLoading}
+		  <div class="loading">Laddar fristående komponent...</div>
+		{:else}
+			<!-- 1. Fönstren loopas ut först -->
+		  {#each activeWindows as win (win.winId)}
+			{#if win.component}
+			  {@const WindowComponent = win.component}
+    			<!-- 1. Hitta exakt vilket globalt index detta fönster har i din riktiga array -->
+			  {@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
+	
+			  <!-- 🌟 SMART BOUNDS-HANTERING -->
+			  {@const parentInstance = wManager.find(win.parentId)}
+			  <!-- Om vi är standalone ska fönstret fylla hela skärmen (contentEl), 
+				   annars begränsas barnet till sin förälder -->
+			  {@const parentBounds = isStandalone ? contentEl : (parentInstance?.boundingEl ?? contentEl)}
+  
+			  <WindowFrame {win} bounds={parentBounds}>
+				<WindowComponent
+				  bind:win={wManager.windows[globalIdx]}
+				  winId={win.winId}
+				  parentId={win.parentId}
+				  {...win.props}
+				/>
+			  </WindowFrame>
+			{/if}
 
-
-
-
-{#if isStandalone}
-  <div class="standalone-container">
-    {#if standaloneLoading}
-      <div class="loading">
-        Laddar fristående komponent...
-      </div>
-    {:else if standaloneError}
-      <div class="loading error">
-        <h2>Fönstret kunde inte laddas</h2>
-        <p>{standaloneError}</p>
-        <p>Komponentnyckel: {standaloneComponentKey}</p>
-      </div>
-
-    <!-- {:else if standaloneComponent && standaloneWinId}
-      {@const winInstance = wManager.find(standaloneWinId)}
-      {#if winInstance}
-        {@const ComponentToRender = standaloneComponent}
-        <ComponentToRender
-          win={winInstance}
-          winId={winInstance.winId}
-          parentId={winInstance.parentId}
-          payload={winInstance.payload}
-          {...winInstance.props}
-        />
-      {:else} -->
-
-<!-- Inuti WindowHost.svelte (Högst upp för fristående flikar/tauri) -->
-
-{:else if standaloneComponent && standaloneWinId}
-  {@const winInstance = wManager.find(standaloneWinId)}
-  {#if winInstance}
-    {@const ComponentToRender = standaloneComponent}
-    {@const standaloneIndex = wManager.windows.findIndex(w => w.winId === standaloneWinId)}
-    <ComponentToRender
-      bind:win={wManager.windows[standaloneIndex]}
-      winId={winInstance.winId}
-      parentId={winInstance.parentId}
-      // payload={winInstance.payload}
-      {...winInstance.props}
-    />
-  {:else}
-
-
-  <!-- ... -->
-
-
-      <div class="loading">
-          Fönsterinstansen kunde inte hittas.
-        </div>
-      {/if}
-    {:else}
-      <div class="loading">
-        Komponenten kunde inte laddas.
-      </div>
-    {/if}
+		  {/each}  <!--for ..activeWindows as win (win.winId)} -->
+			  <!-- If desktopContent -->
+		  {#if !isStandalone && desktopContent}
+			  {@render desktopContent()}
+		  {/if}
+		{/if}
+	  {/if}
+	</main> <!-- 💡 Closing of main tag -->
+  
+	{#if !isStandalone && minimizedWindows.length > 0}
+	  <footer class="taskbar">
+		<span class="taskbar-label">Minimerade fönster</span>
+  
+		{#each minimizedWindows as win (win.winId)}
+		  <div class="task-item">
+			<button
+			  type="button"
+			  class="task-btn"
+			  aria-label={`Återställ ${win.title}`}
+			  onclick={() => wManager.restore(win)}
+			>
+			  <span class="task-icon" aria-hidden="true">◫</span>
+			  <span class="task-title">{win.title}</span>
+			</button>
+  
+			<div class="thumbnail-popup" aria-hidden="true">
+			  <div class="thumbnail-heading">{win.title}</div>
+  
+			  {#if win.thumbnail}
+				<img
+				  class="thumbnail-image"
+				  src={win.thumbnail}
+				  alt=""
+				/>
+			  {:else}
+				<div class="thumbnail-placeholder">
+				  Förhandsvisning saknas
+				</div>
+				{/if}	
+			</div>
+		  </div>
+		{/each}
+	  </footer>
+	{/if}
   </div>
-{:else}
-  <div class="layout">
-    <header class="topbar">
-      {#if topbarContent}
-        {@render topbarContent()}
-      {/if}
-
-      <span>Current open windows: {winCount}</span>
-    </header>
-
-
-
-
-
-
-
-    <main class="workspace" bind:this={contentEl}>
-      {#if contentEl}
-
-        <!-- {#each rootWindows as win (win.winId)}
-          {#if !win.state.isMinimized}
-            <WindowFrame {win} bounds={contentEl}>
-              {#if win.component}
-                {@const WindowComponent = win.component}
-
-                <WindowComponent
-                  win={win}
-                  winId={win.winId}
-                  parentId={win.parentId}
-                  {...win.props}
-                />
-              {/if}
-            </WindowFrame>
-          {/if}
-        {/each} -->
-
-<!-- Inuti WindowHost.svelte (Längre ner för skrivbordsfönster) -->
-
-{#each rootWindows as win (win.winId)}
-  {#if !win.state.isMinimized}
-    <WindowFrame {win} bounds={contentEl}>
-      {#if win.component}
-        {@const WindowComponent = win.component}
-        {@const hostIndex = wManager.windows.findIndex(w => w.winId === win.winId)}
-        <WindowComponent
-          bind:win={wManager.windows[hostIndex]}
-          winId={win.winId}
-          parentId={win.parentId}
-          {...win.props}
-        />
-      {/if}
-    </WindowFrame>
-  {/if}
-{/each}
-
-
-
-
-      {/if}
-
-      {#if children}
-        {@render children()}
-      {/if}
-    </main>
-
-
-
-
-
-    {#if minimizedWindows.length > 0}
-      <footer class="taskbar">
-        <span class="taskbar-label">Minimerade fönster</span>
-
-        {#each minimizedWindows as win (win.winId)}
-          <div class="task-item">
-            <button
-              type="button"
-              class="task-btn"
-              aria-label={`Återställ ${win.title}`}
-              onclick={() => wManager.restore(win)}
-            >
-              <span class="task-icon" aria-hidden="true">◫</span>
-              <span class="task-title">{win.title}</span>
-            </button>
-
-            <div class="thumbnail-popup" aria-hidden="true">
-              <div class="thumbnail-heading">{win.title}</div>
-
-              {#if win.thumbnail}
-                <img
-                  class="thumbnail-image"
-                  src={win.thumbnail}
-                  alt=""
-                />
-              {:else}
-                <div class="thumbnail-placeholder">
-                  Förhandsvisning saknas
-                </div>
-              {/if}
-            </div>
-          </div>
-        {/each}
-      </footer>
-    {/if}
-  </div>
-{/if}
 
 <style>
-.standalone-container {
+/* Snabba CSS-justeringar för att städa upp standalone-läget */
+.standalone-host .workspace {
 	position: absolute;
 	inset: 0;
 	width: 100vw;
 	height: 100vh;
 	background: #1e1e1e;
-	overflow: auto;
 }
 
 .loading {
@@ -374,10 +337,6 @@ $effect(() => {
 	box-sizing: border-box;
 	font-family: sans-serif;
 	text-align: center;
-}
-
-.error {
-	color: #ffb4b4;
 }
 
 .layout {

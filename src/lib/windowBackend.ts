@@ -522,9 +522,7 @@ export class WindowBackendManager implements WindowBackend {
 
 		// Säkra importen genom att gömma strängen för byggverktyget
 		const webviewWindowPath = "@tauri-apps/api/webviewWindow";
-		const { WebviewWindow } = await /* @vite-ignore */ import(
-			webviewWindowPath
-		);
+		const { WebviewWindow } = await import(/* @vite-ignore */ webviewWindowPath);
 
 		const params = new URLSearchParams({
 			winId,

@@ -528,6 +528,526 @@ export class WindowManager {
 		id: WindowId,
 		newParentId: WindowId,
 		screenRect?: {
+			left: number;
+			top: number;
+			width: number;
+			height: number;
+		},
+	): boolean {
+		const DEBUG = true;
+		const TAG = `[REPARENT ${id} → ${newParentId}]`;
+
+		const log = (...args: unknown[]) => {
+			if (DEBUG) console.log(TAG, ...args);
+		};
+
+		const group = (label: string) => {
+			if (DEBUG) console.group(`${TAG} ${label}`);
+		};
+
+		const endGroup = () => {
+			if (DEBUG) console.groupEnd();
+		};
+
+		const round = (n: number) => Number.isFinite(n) ? Number(n.toFixed(2)) : n;
+
+		group("START");
+
+		log("ARGUMENTS", {
+			id,
+			newParentId,
+			screenRect,
+		});
+
+		// --------------------------------------------------
+		// 1. Find windows
+		// --------------------------------------------------
+
+		const win = this.find(id);
+		const newParent = this.find(newParentId);
+
+		if (!win) {
+			log("ERROR: Window not found");
+			endGroup();
+			return false;
+		}
+
+		if (id === ROOT_WIN_ID) {
+			log("ERROR: Cannot reparent root window");
+			endGroup();
+			return false;
+		}
+
+		if (!newParent) {
+			log("ERROR: New parent not found");
+			endGroup();
+			return false;
+		}
+
+		// --------------------------------------------------
+		// 2. Prevent cyclic relationships
+		// --------------------------------------------------
+
+		if (
+			id === newParentId ||
+			this.getDescendants(id).some(
+				(child) => child.winId === newParentId,
+			)
+		) {
+			log("ERROR: Cyclic relationship");
+			endGroup();
+			return false;
+		}
+
+		log("CYCLE VALIDATION OK");
+
+		// --------------------------------------------------
+		// 3. Validate screenRect and parent bounds
+		// --------------------------------------------------
+
+		const parentBounds = newParent.boundingEl;
+
+		if (!parentBounds || !screenRect) {
+			log("ERROR: Missing parent bounds or screenRect", {
+				parentBounds,
+				screenRect,
+			});
+
+			endGroup();
+			return false;
+		}
+
+		const parentRect = parentBounds.getBoundingClientRect();
+
+		const parentWidth = parentBounds.clientWidth;
+		const parentHeight = parentBounds.clientHeight;
+
+		if (
+			parentWidth <= 0 ||
+			parentHeight <= 0 ||
+			parentBounds.offsetWidth <= 0 ||
+			parentBounds.offsetHeight <= 0
+		) {
+			log("ERROR: Invalid parent dimensions");
+			endGroup();
+			return false;
+		}
+
+		// --------------------------------------------------
+		// 4. Calculate parent CSS scale
+		// --------------------------------------------------
+
+		const scaleX = parentRect.width / parentBounds.offsetWidth;
+		const scaleY = parentRect.height / parentBounds.offsetHeight;
+
+		if (scaleX <= 0 || scaleY <= 0) {
+			log("ERROR: Invalid CSS scale", {
+				scaleX,
+				scaleY,
+			});
+
+			endGroup();
+			return false;
+		}
+
+		log("PARENT GEOMETRY", {
+			screenRect: {
+				left: round(parentRect.left),
+				top: round(parentRect.top),
+				width: round(parentRect.width),
+				height: round(parentRect.height),
+			},
+
+			client: {
+				width: parentWidth,
+				height: parentHeight,
+				left: parentBounds.clientLeft,
+				top: parentBounds.clientTop,
+			},
+
+			offset: {
+				width: parentBounds.offsetWidth,
+				height: parentBounds.offsetHeight,
+			},
+
+			scroll: {
+				left: parentBounds.scrollLeft,
+				top: parentBounds.scrollTop,
+			},
+
+			scale: {
+				x: round(scaleX, 4),
+				y: round(scaleY, 4),
+			},
+		});
+
+		// --------------------------------------------------
+		// 5. Screen coordinates -> parent local coordinates
+		// --------------------------------------------------
+
+		const screenLeft = screenRect.left;
+		const screenTop = screenRect.top;
+
+		let left = (screenLeft - parentRect.left) / scaleX -
+			parentBounds.clientLeft +
+			parentBounds.scrollLeft;
+
+		let top = (screenTop - parentRect.top) / scaleY -
+			parentBounds.clientTop +
+			parentBounds.scrollTop;
+
+		log("COORDINATE CONVERSION", {
+			screenLeft,
+			screenTop,
+
+			parentScreenLeft: round(parentRect.left),
+			parentScreenTop: round(parentRect.top),
+
+			scaleX: round(scaleX, 4),
+			scaleY: round(scaleY, 4),
+
+			clientLeft: parentBounds.clientLeft,
+			clientTop: parentBounds.clientTop,
+
+			scrollLeft: parentBounds.scrollLeft,
+			scrollTop: parentBounds.scrollTop,
+
+			localLeft: round(left),
+			localTop: round(top),
+		});
+
+		// --------------------------------------------------
+		// 6. Convert screen dimensions -> local dimensions
+		// --------------------------------------------------
+
+		const originalWidth = screenRect.width / scaleX;
+		const originalHeight = screenRect.height / scaleY;
+
+		log("ORIGINAL DIMENSIONS", {
+			screenWidth: screenRect.width,
+			screenHeight: screenRect.height,
+
+			localWidth: round(originalWidth),
+			localHeight: round(originalHeight),
+
+			stateWidth: win.state.width,
+			stateHeight: win.state.height,
+		});
+
+		if (originalWidth <= 0 || originalHeight <= 0) {
+			log("ERROR: Invalid window dimensions");
+			endGroup();
+			return false;
+		}
+
+		// --------------------------------------------------
+		// 7. Available space
+		// --------------------------------------------------
+
+		const availableWidth = Math.max(
+			1,
+			parentWidth - left,
+		);
+
+		const availableHeight = Math.max(
+			1,
+			parentHeight - top,
+		);
+
+		log("AVAILABLE SPACE", {
+			parentWidth,
+			parentHeight,
+
+			left: round(left),
+			top: round(top),
+
+			availableWidth: round(availableWidth),
+			availableHeight: round(availableHeight),
+		});
+
+		// --------------------------------------------------
+		// 8. Calculate proportional scale
+		// --------------------------------------------------
+
+		const widthScale = availableWidth / originalWidth;
+		const heightScale = availableHeight / originalHeight;
+
+		const scale = Math.min(
+			1,
+			widthScale,
+			heightScale,
+		);
+
+		const width = originalWidth * scale;
+		const height = originalHeight * scale;
+
+		log("SCALING", {
+			widthScale: round(widthScale, 4),
+			heightScale: round(heightScale, 4),
+
+			selectedScale: round(scale, 4),
+
+			originalWidth: round(originalWidth),
+			originalHeight: round(originalHeight),
+
+			finalWidth: round(width),
+			finalHeight: round(height),
+		});
+
+		// --------------------------------------------------
+		// 9. Clamp position inside parent
+		// --------------------------------------------------
+
+		const beforeClamp = {
+			left,
+			top,
+		};
+
+		left = Math.max(
+			0,
+			Math.min(left, parentWidth - width),
+		);
+
+		top = Math.max(
+			0,
+			Math.min(top, parentHeight - height),
+		);
+
+		log("POSITION CLAMP", {
+			before: {
+				left: round(beforeClamp.left),
+				top: round(beforeClamp.top),
+			},
+
+			after: {
+				left: round(left),
+				top: round(top),
+			},
+
+			changed: beforeClamp.left !== left ||
+				beforeClamp.top !== top,
+		});
+
+		// --------------------------------------------------
+		// 9.5. Parent local -> workspace local
+		// --------------------------------------------------
+
+		const workspace = parentBounds.closest(
+			".workspace",
+		) as HTMLElement | null;
+
+		if (!workspace) {
+			log("ERROR: Workspace not found");
+			endGroup();
+			return false;
+		}
+
+		const workspaceRect = workspace.getBoundingClientRect();
+
+		const workspaceScaleX = workspaceRect.width / workspace.offsetWidth;
+
+		const workspaceScaleY = workspaceRect.height / workspace.offsetHeight;
+
+		// Parent-local -> screen coordinates
+		const finalScreenLeft = parentRect.left +
+			(left + parentBounds.clientLeft - parentBounds.scrollLeft) *
+				scaleX;
+
+		const finalScreenTop = parentRect.top +
+			(top + parentBounds.clientTop - parentBounds.scrollTop) *
+				scaleY;
+
+		// Screen coordinates -> workspace-local
+		const workspaceLeft = (finalScreenLeft - workspaceRect.left) / workspaceScaleX -
+			workspace.clientLeft +
+			workspace.scrollLeft;
+
+		const workspaceTop = (finalScreenTop - workspaceRect.top) / workspaceScaleY -
+			workspace.clientTop +
+			workspace.scrollTop;
+
+		log("WORKSPACE COORDINATE CONVERSION", {
+			parentLocal: {
+				left: round(left),
+				top: round(top),
+			},
+
+			finalScreen: {
+				left: round(finalScreenLeft),
+				top: round(finalScreenTop),
+			},
+
+			workspace: {
+				left: round(workspaceLeft),
+				top: round(workspaceTop),
+			},
+
+			workspaceScaleX,
+			workspaceScaleY,
+		});
+
+		// --------------------------------------------------
+		// 10. Final geometry
+		// --------------------------------------------------
+
+		const finalGeometry = {
+			left: workspaceLeft,
+			top: workspaceTop,
+			width,
+			height,
+		};
+
+		log("FINAL GEOMETRY", {
+			parentLocal: {
+				left: round(left),
+				top: round(top),
+			},
+
+			workspaceLocal: {
+				left: round(workspaceLeft),
+				top: round(workspaceTop),
+			},
+
+			width: round(width),
+			height: round(height),
+		});
+
+		// --------------------------------------------------
+		// 11. Update window
+		// --------------------------------------------------
+
+		log("STATE BEFORE", {
+			parentId: win.parentId,
+			state: { ...win.state },
+		});
+
+		win.parentId = newParentId;
+		win.boundingEl = null;
+
+		Object.assign(win.state, {
+			left,
+			top,
+			width,
+			height,
+			isMaximized: false,
+		});
+
+		win.docking = {};
+		win.storedState = null;
+
+		log("STATE AFTER", {
+			parentId: win.parentId,
+			state: { ...win.state },
+		});
+
+		// --------------------------------------------------
+		// 12. Focus
+		// --------------------------------------------------
+
+		this.focus(win);
+
+		log("REPARENT COMPLETE");
+		log("RESULT", finalGeometry);
+
+		endGroup();
+
+		return true;
+	}
+
+	reparent_new(
+		id: WindowId,
+		newParentId: WindowId,
+		screenRect?: {
+			left: number;
+			top: number;
+			width: number;
+			height: number;
+		},
+	): boolean {
+		const win = this.find(id);
+		const newParent = this.find(newParentId);
+
+		if (!win || id === ROOT_WIN_ID || !newParent) return false;
+
+		// Förhindra cykliska relationer.
+		if (
+			id === newParentId ||
+			this.getDescendants(id).some((child) => child.winId === newParentId)
+		) {
+			return false;
+		}
+
+		const parentBounds = newParent.boundingEl;
+
+		if (!parentBounds || !screenRect) {
+			console.warn("[reparent] Missing parent bounds or screenRect");
+			return false;
+		}
+
+		const parentRect = parentBounds.getBoundingClientRect();
+
+		const parentWidth = parentBounds.clientWidth;
+		const parentHeight = parentBounds.clientHeight;
+
+		if (parentWidth <= 0 || parentHeight <= 0) return false;
+
+		// 1. Konvertera skärmposition till nya parentens koordinatsystem.
+		let left = screenRect.left -
+			parentRect.left -
+			parentBounds.clientLeft +
+			parentBounds.scrollLeft;
+
+		let top = screenRect.top -
+			parentRect.top -
+			parentBounds.clientTop +
+			parentBounds.scrollTop;
+
+		// 2. Ursprunglig storlek.
+		const originalWidth = screenRect.width;
+		const originalHeight = screenRect.height;
+
+		// 3. Hur mycket utrymme finns kvar från släppositionen?
+		const availableWidth = Math.max(1, parentWidth - left);
+		const availableHeight = Math.max(1, parentHeight - top);
+
+		// 4. Skala proportionellt endast om det behövs.
+		const scale = Math.min(
+			1,
+			availableWidth / originalWidth,
+			availableHeight / originalHeight,
+		);
+
+		const width = originalWidth * scale;
+		const height = originalHeight * scale;
+
+		// 5. Om fönstret hamnar utanför parenten, korrigera positionen.
+		left = Math.max(0, Math.min(left, parentWidth - width));
+		top = Math.max(0, Math.min(top, parentHeight - height));
+
+		// 6. Uppdatera fönstret.
+		win.parentId = newParentId;
+		win.boundingEl = null;
+
+		Object.assign(win.state, {
+			left,
+			top,
+			width,
+			height,
+			isMaximized: false,
+		});
+
+		win.docking = {};
+		win.storedState = null;
+
+		this.focus(win);
+
+		return true;
+	}
+
+	reparent_old(
+		id: WindowId,
+		newParentId: WindowId,
+		screenRect?: {
 			left?: number;
 			top?: number;
 			width?: number;
@@ -536,122 +1056,81 @@ export class WindowManager {
 	): boolean {
 		const win = this.find(id);
 		const newParent = this.find(newParentId);
+		const rootWin = this.find(ROOT_WIN_ID);
 
-		if (!win || !newParent || id === ROOT_WIN_ID) {
-			return false;
-		}
+		if (!win || id === ROOT_WIN_ID) return false;
+		if (newParentId !== ROOT_WIN_ID && !newParent) return false;
 
-		// Förhindra att ett fönster blir sin egen förälder
-		// eller flyttas in i ett av sina egna barn.
+		// Förhindra cykliska relationer.
 		if (
 			id === newParentId ||
-			this.getDescendants(id).some(
-				(child) => child.winId === newParentId,
-			)
+			this.getDescendants(id).some((child) => child.winId === newParentId)
 		) {
 			return false;
 		}
 
-		// Hämta den gamla förälderns koordinatsystem.
-		const oldParentElement = win.boundingEl;
-		const oldParentRect = oldParentElement?.getBoundingClientRect();
+		let nextLeft = win.state.left;
+		let nextTop = win.state.top;
+		let nextWidth = win.state.width;
+		let nextHeight = win.state.height;
 
-		// Hämta den nya förälderns koordinatsystem.
-		const parentElement = newParentId === ROOT_WIN_ID ? null : newParent.boundingEl;
+		if (screenRect) {
+			const targetLeft = screenRect.left ?? win.state.left;
+			const targetTop = screenRect.top ?? win.state.top;
+			nextWidth = screenRect.width ?? win.state.width;
+			nextHeight = screenRect.height ?? win.state.height;
 
-		const parentRect = parentElement?.getBoundingClientRect();
+			if (newParentId !== ROOT_WIN_ID && newParent?.boundingEl) {
+				// 🌟 DROP INUTI ETT ANNAT FÖNSTER:
+				const parentRect = newParent.boundingEl.getBoundingClientRect();
+				const pWidth = newParent.state.width;
+				const pHeight = newParent.state.height;
 
-		// Beräkna storleken på den gamla förälderns yta.
-		const oldParentWidth = oldParentRect?.width ??
-			this.find(win.parentId)?.state.width ??
-			0;
+				// 1. Konvertera skärmkoordinaten till förälderns LOKALA koordinatsystem
+				nextLeft = targetLeft - parentRect.left;
+				nextTop = targetTop - parentRect.top;
 
-		const oldParentHeight = oldParentRect?.height ??
-			this.find(win.parentId)?.state.height ??
-			0;
+				// 2. Säkra att fönstret inte startar utanför förälderns övre eller vänstra kant
+				nextLeft = Math.max(0, nextLeft);
+				nextTop = Math.max(0, nextTop);
 
-		// Beräkna storleken på den nya förälderns yta.
-		const newParentWidth = parentRect?.width ??
-			newParent.state.width ??
-			0;
-
-		const newParentHeight = parentRect?.height ??
-			newParent.state.height ??
-			0;
-
-		// Fönstrets nuvarande position i skärmkoordinater.
-		const currentAbsoluteLeft = (oldParentRect?.left ?? 0) + win.state.left;
-
-		const currentAbsoluteTop = (oldParentRect?.top ?? 0) + win.state.top;
-
-		// Använd skärmpositionen från dragningen om den finns.
-		const targetScreenLeft = screenRect?.left ?? currentAbsoluteLeft;
-
-		const targetScreenTop = screenRect?.top ?? currentAbsoluteTop;
-
-		// Använd angiven storlek om den skickats med.
-		const sourceWidth = screenRect?.width ?? win.state.width;
-
-		const sourceHeight = screenRect?.height ?? win.state.height;
-
-		// Konvertera skärmpositionen till den gamla
-		// förälderns lokala koordinater.
-		const oldLocalLeft = targetScreenLeft - (oldParentRect?.left ?? 0);
-
-		const oldLocalTop = targetScreenTop - (oldParentRect?.top ?? 0);
-
-		// Skala positionen proportionellt mellan föräldrarna.
-		const scaleX = oldParentWidth > 0 && newParentWidth > 0 ? newParentWidth / oldParentWidth : 1;
-
-		const scaleY = oldParentHeight > 0 && newParentHeight > 0 ? newParentHeight / oldParentHeight : 1;
-
-		let left = oldLocalLeft * scaleX;
-		let top = oldLocalTop * scaleY;
-
-		// Skala även fönstrets storlek.
-		let width = sourceWidth * scaleX;
-		let height = sourceHeight * scaleY;
-
-		// Begränsa storleken till den nya förälderns yta.
-		if (newParentWidth > 0) {
-			width = Math.min(width, newParentWidth);
+				// 3. Justera storleken (Klipp bredden/höjden efter förälderns resterande yta!)
+				// Istället för att krympa fönstret proportionellt, klipper vi det precis vid förälderns kant
+				nextWidth = Math.min(nextWidth, pWidth - nextLeft);
+				nextHeight = Math.min(nextHeight, pHeight - nextTop);
+			} else {
+				// 🌟 DROP TILLBAKA PÅ SKRIVBORDSROTEN (ROOT):
+				// Vi använder inte längre document.querySelector!
+				// Vi har frameEl i WindowFrame som mäter mot skärmen, så om vi släpper på roten
+				// behöver vi bara konvertera skärmkoordinaten relativt programmets start-koordinat på skärmen.
+				if (rootWin && newParent?.boundingEl) {
+					// Om din vy skickar med en fungerande referens för roots bounds
+					const rootRect = newParent.boundingEl.getBoundingClientRect();
+					nextLeft = targetLeft - rootRect.left;
+					nextTop = targetTop - rootRect.top;
+				} else {
+					// Fallback om rotens DOM saknas (t.ex. vid boot/synk)
+					nextLeft = targetLeft;
+					nextTop = targetTop;
+				}
+			}
 		}
 
-		if (newParentHeight > 0) {
-			height = Math.min(height, newParentHeight);
-		}
-
-		// Begränsa positionen så att hela fönstret ryms.
-		if (newParentWidth > 0) {
-			left = Math.max(
-				0,
-				Math.min(left, newParentWidth - width),
-			);
-		} else {
-			left = Math.max(0, left);
-		}
-
-		if (newParentHeight > 0) {
-			top = Math.max(
-				0,
-				Math.min(top, newParentHeight - height),
-			);
-		} else {
-			top = Math.max(0, top);
-		}
-
-		// Uppdatera föräldrarelationen.
+		// Uppdatera relation och geometri.
 		win.parentId = newParentId;
-		win.boundingEl = parentElement;
+		win.boundingEl = null;
 
-		// Uppdatera position och storlek.
-		win.state.left = left;
-		win.state.top = top;
-		win.state.width = width;
-		win.state.height = height;
+		Object.assign(win.state, {
+			left: nextLeft,
+			top: nextTop,
+			width: nextWidth,
+			height: nextHeight,
+			isMaximized: false, // Starta omaximerat så den lokala geometrin gäller
+		});
 
-		// Fokusera det flyttade fönstret.
-		// this.focus(id);
+		win.docking = {};
+		win.storedState = null;
+
 		this.focus(win);
 
 		return true;
@@ -1164,6 +1643,21 @@ export class WindowManager {
 		}
 	}
 
+	// closeWin(win: WindowInstance): void {
+	// 	if (!win || win.winId === ROOT_WIN_ID) return;
+
+	// 	// 🌟 1. Rensa bort alla lagrade funktions-callbacks för detta fönster
+	// 	cleanupWindowCallbacks(win.winId);
+
+	// 	// 2. Om fönstret är frikopplat (tab/tauri), säg till backend att stänga det fysiska fönstret
+	// 	if (win.isDetached) {
+	// 		this.backend.close(win.winId);
+	// 	}
+
+	// 	// 3. Ta bort fönstret från din reaktiva array
+	// 	this.windows = this.windows.filter((w) => w.winId !== win.winId);
+	// }
+
 	closeWin(win: WindowInstance): void {
 		if (!win || win.winId === ROOT_WIN_ID) return;
 
@@ -1182,6 +1676,14 @@ export class WindowManager {
 		// Skicka signal till backend om det var frikopplat
 		if (win.isDetached) {
 			this.backend.close(win.winId);
+		}
+	}
+
+	// windowManager.svelte.ts
+	setBoundingEl(id: WindowId, el: HTMLElement | null): void {
+		const win = this.find(id);
+		if (win && win.boundingEl !== el) {
+			win.boundingEl = el;
 		}
 	}
 

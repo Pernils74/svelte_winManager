@@ -31,7 +31,7 @@
 //  └─ layout
 
 import { onDestroy, onMount, type Snippet } from "svelte";
-import WindowFrame from "./WindowFrame.svelte";
+
 // Längst upp bland dina övriga importer:
 import { receive, send } from "./windowTransitions";
 import html2canvas from "html2canvas";
@@ -55,7 +55,7 @@ interface Props {
 	children: Snippet;
 }
 
-let { win, bounds, children }: Props = $props();
+let { win = $bindable(), bounds, children }: Props = $props();
 
 const manager = getWindowManager();
 
@@ -72,10 +72,6 @@ let titleId = $derived(`win-title-${win.winId}`);
 
 let titlebarVisible = $state(true);
 let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
-
-let localMinimized = $derived(
-	manager.windows.filter((w) => w.parentId === win.winId && w.state.isMinimized),
-);
 
 let dragMode: InteractionMode | null = null;
 let dragWinId: string | null = null;
@@ -296,6 +292,8 @@ function findDropParent(
 	draggedId: string,
 ): string {
 	const elements = document.elementsFromPoint(clientX, clientY);
+
+	// Hämta alla barn/underfönster till det dragna fönstret (de är ogiltiga mål)
 	const descendants = new Set(
 		manager.getDescendants(draggedId).map((child) => child.winId),
 	);
@@ -304,17 +302,63 @@ function findDropParent(
 		const frame = element.closest<HTMLElement>("[data-window-id]");
 		const targetId = frame?.dataset.windowId;
 
-		if (!targetId || targetId === draggedId) continue;
+		// 1. Om elementet inte tillhör något fönster, hoppa över
+		if (!targetId) continue;
+
+		// 2. Om fönstret vi hittade är det egna dragna fönstret, hoppa över
+		if (targetId === draggedId) continue;
+
+		// 3. Om fönstret är Root Workspace, hoppa över (vi vill hitta specifika fönster först)
 		if (targetId === ROOT_WIN_ID) continue;
+
+		// 4. Om fönstret är ett barn till fönstret vi drar, hoppa över (förhindra cykliska träd)
 		if (descendants.has(targetId)) continue;
 
+		// Eftersom elementsFromPoint är sorterad efter visuellt lager (z-index),
+		// så är det FÖRSTA fönstret vi träffar här garanterat det som ligger överst!
 		return targetId;
 	}
 
+	// Om vi letade igenom alla element och bara hittade bakgrunden/wallpaper,
+	// så släpper vi fönstret på skrivbordsroten.
 	return ROOT_WIN_ID;
 }
 
+// WindowFrame.svelte -> handleMouseUp
+
 function handleMouseUp(event: MouseEvent) {
+	const id = dragWinId;
+
+	try {
+		if (reparentDrag && id) {
+			// 1. Hitta vilket fönster (eller root) som ligger under muspekaren [1.10]
+			const targetId = findDropParent(
+				event.clientX,
+				event.clientY,
+				id,
+			);
+
+			// 2. Hämta fönstrets exakta position på skärmen precis när vi släpper musen [1.10]
+			const rect = frameEl?.getBoundingClientRect();
+
+			if (rect) {
+				// 3. Vi skickar ALLTID med skärmkoordinaterna!
+				// Managern tar hand om att räkna om dem rätt oavsett drop-mål.
+				manager.reparent(id, targetId, {
+					left: rect.left,
+					top: rect.top,
+					width: rect.width,
+					height: rect.height,
+				});
+			}
+		}
+	} finally {
+		reparentDrag = false;
+		endInteraction(); // [1.10]
+	}
+}
+
+function handleMouseUp_old(event: MouseEvent) {
 	const id = dragWinId;
 
 	try {
@@ -478,7 +522,7 @@ function onMouseMove(event: MouseEvent) {
 
 function cleanupInteraction() {
 	window.removeEventListener("mousemove", onMouseMove);
-	window.removeEventListener("mouseup", endInteraction);
+	window.removeEventListener("mouseup", handleMouseUp);
 	document.body.style.userSelect = "";
 }
 
@@ -565,6 +609,36 @@ function close() {
 	endInteraction();
 	manager.closeWin(win);
 }
+
+// Spara fönstrets lokala innehållsyta till managern så dess barn kan hitta den!
+$effect(() => {
+	if (contentEl) {
+		manager.setBoundingEl(win.winId, contentEl);
+	}
+});
+
+$effect(() => {
+	if (!frameEl || !win) return;
+
+	const style = getComputedStyle(frameEl);
+	const offsetParent = frameEl.offsetParent;
+
+	console.log("[WINDOW POSITIONING]", {
+		winId: win.winId,
+		parentId: win.parentId,
+
+		position: style.position,
+
+		offsetParent: offsetParent?.className,
+
+		boundingEl: win.boundingEl?.className,
+
+		frameRect: frameEl.getBoundingClientRect(),
+
+		offsetLeft: frameEl.offsetLeft,
+		offsetTop: frameEl.offsetTop,
+	});
+});
 </script>
 
 <div
@@ -665,32 +739,13 @@ function close() {
     {/if}
   </div>
 
+
+
   <div class="content" bind:this={contentEl}>
-		<!-- <div class="component-host">
-			{@render children()}
-		</div> -->
-
-    <!-- {@render children()}     
-    {#each manager.getChildren(win.winId) as  child (child.winId)}
-      {#if  child.component && !child.state.isMinimized && !child.isDetached  }
-      <WindowFrame win={child} bounds={contentEl}>
-        {@const ChildComponent = child.component}
-          <ChildComponent
-            win= {child}
-            winId={child.winId}
-            parentId={child.parentId}
-			// payload={child.payload}  
-            {...child.props}
-			// payload={child.payload}  // för att den inte skall skriva över någon egen child.payload
-          />
-        
-       </WindowFrame> 
-      {/if}
-    {/each} -->
-
 
 	{@render children()}     
-	{#each manager.getChildren(win.winId) as child (child.winId)}
+</div>
+	<!-- {#each manager.getChildren(win.winId) as child (child.winId)}
 	  {#if child.component && !child.state.isMinimized && !child.isDetached}
 		
 		<WindowFrame win={child} bounds={contentEl}>
@@ -708,14 +763,7 @@ function close() {
 	
 	  {/if}
 	{/each}
-	
-	
-	
-
-
-
-
-  </div>
+  </div> -->
 
 
 
