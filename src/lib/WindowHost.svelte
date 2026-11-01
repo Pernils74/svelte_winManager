@@ -174,11 +174,31 @@ $effect(() => {
 	};
 });
 
+// onMount(() => {
+// 	// If start of root window
+// 	if (!contentEl) return;
+// 	const updateBounds = () => {
+// 		if (!contentEl) return;
+// 		wManager.setRootBounds(
+// 			contentEl.clientWidth,
+// 			contentEl.clientHeight,
+// 		);
+// 	};
+
+// 	updateBounds();
+// 	const observer = new ResizeObserver(updateBounds);
+// 	observer.observe(contentEl);
+// 	return () => observer.disconnect();
+// });
+
 onMount(() => {
-	// If start of root window
 	if (!contentEl) return;
+
+	wManager.setBoundingEl(ROOT_WIN_ID, contentEl);
+
 	const updateBounds = () => {
 		if (!contentEl) return;
+
 		wManager.setRootBounds(
 			contentEl.clientWidth,
 			contentEl.clientHeight,
@@ -186,9 +206,14 @@ onMount(() => {
 	};
 
 	updateBounds();
+
 	const observer = new ResizeObserver(updateBounds);
 	observer.observe(contentEl);
-	return () => observer.disconnect();
+
+	return () => {
+		observer.disconnect();
+		wManager.setBoundingEl(ROOT_WIN_ID, null);
+	};
 });
 
 // Hämta ALLA aktiva fönster i ett platt format (både föräldrar och barn)

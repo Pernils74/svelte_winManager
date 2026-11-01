@@ -616,6 +616,29 @@ $effect(() => {
 		manager.setBoundingEl(win.winId, contentEl);
 	}
 });
+
+$effect(() => {
+	if (!frameEl || !win) return;
+
+	const style = getComputedStyle(frameEl);
+	const offsetParent = frameEl.offsetParent;
+
+	console.log("[WINDOW POSITIONING]", {
+		winId: win.winId,
+		parentId: win.parentId,
+
+		position: style.position,
+
+		offsetParent: offsetParent?.className,
+
+		boundingEl: win.boundingEl?.className,
+
+		frameRect: frameEl.getBoundingClientRect(),
+
+		offsetLeft: frameEl.offsetLeft,
+		offsetTop: frameEl.offsetTop,
+	});
+});
 </script>
 
 <div
@@ -719,7 +742,6 @@ $effect(() => {
 
 
   <div class="content" bind:this={contentEl}>
-
 
 	{@render children()}     
 </div>
