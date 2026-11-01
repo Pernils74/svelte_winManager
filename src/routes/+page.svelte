@@ -53,6 +53,9 @@ import WindowC from "./WinGraph_A.svelte";
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
+import mouseCoords from "./MouseCords.svelte";
+import MouseCords from "./MouseCords.svelte";
+
 const wManager = initializeWindowManager();
 // registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
 
@@ -98,6 +101,7 @@ $effect(() => {
 });
 </script>
 
+<MouseCords></MouseCords>
 <WindowHost>
   {#snippet desktopContent()}
     <div class="welcome-container">

@@ -31,7 +31,7 @@
 //  └─ layout
 
 import { onDestroy, onMount, type Snippet } from "svelte";
-import WindowFrame from "./WindowFrame.svelte";
+
 // Längst upp bland dina övriga importer:
 import { receive, send } from "./windowTransitions";
 import html2canvas from "html2canvas";
@@ -55,7 +55,7 @@ interface Props {
 	children: Snippet;
 }
 
-let { win, bounds, children }: Props = $props();
+let { win = $bindable(), bounds, children }: Props = $props();
 
 const manager = getWindowManager();
 
@@ -72,10 +72,6 @@ let titleId = $derived(`win-title-${win.winId}`);
 
 let titlebarVisible = $state(true);
 let hideTitlebarTimeout: ReturnType<typeof setTimeout> | undefined;
-
-let localMinimized = $derived(
-	manager.windows.filter((w) => w.parentId === win.winId && w.state.isMinimized),
-);
 
 let dragMode: InteractionMode | null = null;
 let dragWinId: string | null = null;
@@ -291,6 +287,44 @@ function beginInteraction(
 }
 
 function findDropParent(
+	clientX: number,
+	clientY: number,
+	draggedId: string,
+): string {
+	const elements = document.elementsFromPoint(clientX, clientY);
+
+	// Hämta alla barn/underfönster till det dragna fönstret (de är ogiltiga mål)
+	const descendants = new Set(
+		manager.getDescendants(draggedId).map((child) => child.winId),
+	);
+
+	for (const element of elements) {
+		const frame = element.closest<HTMLElement>("[data-window-id]");
+		const targetId = frame?.dataset.windowId;
+
+		// 1. Om elementet inte tillhör något fönster, hoppa över
+		if (!targetId) continue;
+
+		// 2. Om fönstret vi hittade är det egna dragna fönstret, hoppa över
+		if (targetId === draggedId) continue;
+
+		// 3. Om fönstret är Root Workspace, hoppa över (vi vill hitta specifika fönster först)
+		if (targetId === ROOT_WIN_ID) continue;
+
+		// 4. Om fönstret är ett barn till fönstret vi drar, hoppa över (förhindra cykliska träd)
+		if (descendants.has(targetId)) continue;
+
+		// Eftersom elementsFromPoint är sorterad efter visuellt lager (z-index),
+		// så är det FÖRSTA fönstret vi träffar här garanterat det som ligger överst!
+		return targetId;
+	}
+
+	// Om vi letade igenom alla element och bara hittade bakgrunden/wallpaper,
+	// så släpper vi fönstret på skrivbordsroten.
+	return ROOT_WIN_ID;
+}
+
+function findDropParent_old(
 	clientX: number,
 	clientY: number,
 	draggedId: string,

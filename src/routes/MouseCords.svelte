@@ -1,137 +1,140 @@
+
+<!-- https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/MouseCords.svelte -->
+<!-- MouseCords.svelte -->
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 
 let mouseX = $state(0);
 let mouseY = $state(0);
 let showPopup = $state(true);
-
+let elType = $state("");
 let hoveredClass = $state("");
 let position = $state("");
-let elType = $state("");
-
-let hoverId = $state("");
-let rect: DOMRect | null = $state(null);
-let boundRect: DOMRect | null = $state(null);
-let contRect: DOMRect | null = $state(null);
-let boxRect: DOMRect | null = $state(null);
-
-let overBox = $state<HTMLElement | null>(null);
-let overContent = $state<HTMLElement | null>(null);
-let overBounding = $state<HTMLElement | null>(null);
 
 let winid = $state("");
+let parentId = $state("");
+let zIndex = $state(0);
+
+let rect = $state<DOMRect | null>(null);
+let isInsideFrame = $state(false);
+let isInsideContent = $state(false);
 
 const wManager = getWindowManager();
 
 function onMouseOver(event: MouseEvent) {
-  const target = event.target as HTMLElement;
+	const target = event.target as HTMLElement;
+	if (!target) return;
 
-  // Basinfo om exakt det element man hovrar
-  elType = target.tagName;
-  hoveredClass = target.className.toString();
-  position = window.getComputedStyle(target).position;
-  hoverId = target.id ?? "";
-  rect = target.getBoundingClientRect();
+	// Basinfo om det råa HTML-elementet under muspekaren
+	elType = target.tagName;
+	hoveredClass = target.className?.toString() ?? "";
+	position = window.getComputedStyle(target).position;
+	rect = target.getBoundingClientRect();
 
-  // Leta upp närmaste box/content/bounding
-  const box = target.closest(".draggable-box") as HTMLElement | null;
-  const content = target.closest(".draggable-content") as HTMLElement | null;
-  const bounding = target.closest(".boundingEl") as HTMLElement | null;
+	// 🌟 Leta upp närmaste fönsterram och dess content-yta baserat på nya refactoringen
+	const frame = target.closest(".window-frame") as HTMLElement | null;
+	const content = target.closest(".content") as HTMLElement | null;
 
-  // Ta bort gamla highlights
-  document.querySelectorAll(".draggable-box, .draggable-content, .boundingEl")
-    .forEach((el) => el.classList.remove("highlight"));
+	// Ta bort gamla debug-highlights
+	document.querySelectorAll(".window-frame, .content")
+		.forEach((el) => el.classList.remove("debug-highlight-frame", "debug-highlight-content"));
 
-  overBox = box;
-  overContent = content;
-  overBounding = bounding;
+	isInsideFrame = !!frame;
+	isInsideContent = !!content;
 
-  if (box) {
-    box.classList.add("highlight");
+	if (frame) {
+		frame.classList.add("debug-highlight-frame");
 
-    const winidAttr = box.getAttribute("data-winid");
-    if (winidAttr) {
-      winid = winidAttr;
-      const win = wManager.find(winid);
-      if (win) {
-        boundRect = win.boundingEl?.getBoundingClientRect() ?? null;
-        contRect = win.contentEl?.getBoundingClientRect() ?? null;
-        boxRect = win.boxEl?.getBoundingClientRect() ?? null;
-      }
-    }
-  }
+		// Hämta det unika fönster-ID:t från data-attributet
+		const winidAttr = frame.getAttribute("data-window-id");
+		if (winidAttr) {
+			winid = winidAttr;
 
-  if (content) content.classList.add("highlight");
-  if (bounding) bounding.classList.add("highlight");
+			// Slå upp det reaktiva fönsterobjektet i din manager för mer djupgående debug-data
+			const win = wManager.find(winid);
+			if (win) {
+				parentId = win.parentId ?? "root";
+				zIndex = win.zIndex;
+			}
+		}
+	} else {
+		winid = "";
+		parentId = "";
+		zIndex = 0;
+	}
+
+	if (content) {
+		content.classList.add("debug-highlight-content");
+	}
 }
 </script>
 
-<!-- ✅ Track mouse coordinates -->
 <svelte:window
-  on:mousemove={(e) => {
+	onmousemove={(e) => {
     mouseX = e.clientX;
     mouseY = e.clientY;
   }}
-  on:mouseover={onMouseOver}
+	onmouseover={onMouseOver}
 />
 
 {#if showPopup}
   <div
-  style="
+	style="
       position: fixed;
-      top: {mouseY + 10}px;
-      left: {mouseX + 10}px;
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.85rem;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      top: {mouseY + 15}px;
+      left: {mouseX + 15}px;
+      background: rgba(30, 41, 59, 0.95);
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       pointer-events: none;
-      z-index: 1000;
-      max-width: 280px;
+      z-index: 999999; /* Ligga absolut överst av allt */
+      max-width: 300px;
+      font-family: monospace;
     "
 >
-    <div style="font-weight:bold; margin-bottom:0.25rem;">🪄 Mouse Tracker</div>
-    <p><b>Mouse:</b> {mouseX} × {mouseY}</p>
-    <p><b>Hovered type:</b> {elType}</p>
-    <p><b>Class:</b> {hoveredClass}</p>
-    <p><b>Position:</b> {position}</p>
+    <div style="font-weight: bold; color: #38bdf8; border-bottom: 1px solid #475569; padding-bottom: 0.25rem; margin-bottom: 0.5rem;">
+      🔍 WINDOW INSPECTOR
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 90px 1fr; gap: 0.25rem;">
+      <span>XY:</span> <span style="color: #f43f5e;">{mouseX}px, {mouseY}px</span>
+      <span>Element:</span> <span style="color: #a78bfa;">{elType.toLowerCase()}</span>
+      <span>Position:</span> <span>{position}</span>
+    </div>
 
     {#if winid}
-      <p><b>winId:</b> {winid}</p>
+      <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #475569; display: grid; grid-template-columns: 90px 1fr; gap: 0.25rem;">
+        <span style="color: #38bdf8; font-weight: bold;">winId:</span> 
+        <span style="color: #38bdf8; font-size: 0.75rem; word-break: break-all;">{winid}</span>
+        
+        <span style="color: #fbbf24;">parentId:</span> 
+        <span style="color: #fbbf24; font-size: 0.75rem; word-break: break-all;">{parentId}</span>
+        
+        <span style="color: #34d399;">z-index:</span> 
+        <span style="color: #34d399; font-weight: bold;">{zIndex}</span>
+      </div>
     {/if}
 
-    {#if hoverId}
-      <p><b>hoverId:</b> {hoverId}</p>
-    {/if}
-
-    {#if rect}
-      <p><b>Hovered rect:</b></p>
-      <ul style="margin:0; padding-left:1rem;">
-        <li>top: {Math.round(rect.top)}</li>
-        <li>left: {Math.round(rect.left)}</li>
-        <li>w: {Math.round(rect.width)}</li>
-        <li>h: {Math.round(rect.height)}</li>
-        <li>bottom: {Math.round(rect.bottom)}</li>
-      </ul>
-    {/if}
-
-    {#if overBox}
-      <p style="color:#0066cc;"><b>Inside draggable-box</b></p>
-    {/if}
-    {#if overContent}
-      <p style="color:#009933;"><b>Inside draggable-content</b></p>
-    {/if}
-    {#if overBounding}
-      <p style="color:#cc0000;"><b>Inside boundingEl</b></p>
-    {/if}
+    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; font-size: 0.7rem;">
+      <span style="padding: 0.1rem 0.3rem; border-radius: 4px; background: {isInsideFrame ? '#0284c7' : '#334155'};">Frame</span>
+      <span style="padding: 0.1rem 0.3rem; border-radius: 4px; background: {isInsideContent ? '#16a34a' : '#334155'};">Content</span>
+    </div>
   </div>
 {/if}
 
 <style>
-.highlight {
-  outline: 2px solid red;
-  outline-offset: -2px;
+/* Globala debug-overlays som läggs till dynamiskt under hovring */
+:global(.debug-highlight-frame) {
+	outline: 2px solid #38bdf8 !important;
+	outline-offset: -2px !important;
+}
+
+:global(.debug-highlight-content) {
+	outline: 1px dashed #34d399 !important;
+	outline-offset: -4px !important;
 }
 </style>
