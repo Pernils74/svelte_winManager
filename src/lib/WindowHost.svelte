@@ -34,6 +34,9 @@ WindowBackend
 	└── Content B (bounds B)
 		└── Window B1 -->
 
+<!-- https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/WindowHost.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/%2Bpage.svelte -->
+
 <!-- WindowHost.svelte -->
 <script lang="ts">
 import { type Component, onMount, type Snippet } from "svelte";
@@ -44,11 +47,10 @@ import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 interface Props {
-	children?: Snippet;
+	desktopContent?: Snippet; // 🌟 Nytt, tydligt namn
 	topbarContent?: Snippet;
 }
-
-let { children, topbarContent }: Props = $props();
+let { desktopContent, topbarContent }: Props = $props();
 
 const wManager = getWindowManager();
 
@@ -70,9 +72,8 @@ let isStandalone = $derived(
 );
 
 // Komponenten laddas asynkront från windowRegistry.
-let standaloneComponent = $state<Component<any> | null>(null);
+
 let standaloneLoading = $state(false);
-let standaloneError = $state<string | null>(null);
 
 let contentEl = $state<HTMLElement | undefined>(undefined);
 
@@ -85,10 +86,6 @@ let minimizedWindows = $derived(
 			win.state.isMinimized,
 	),
 );
-
-// let rootWindows = $derived(
-//   wManager.getChildren(ROOT_WIN_ID),
-// );
 
 let rootWindows = $derived(
 	wManager.getChildren(ROOT_WIN_ID).filter(
@@ -103,8 +100,6 @@ $effect(() => {
 		!standaloneWinId ||
 		!standaloneComponentKey
 	) {
-		standaloneComponent = null;
-		standaloneError = null;
 		standaloneLoading = false;
 		return;
 	}
@@ -116,8 +111,6 @@ $effect(() => {
 	let cancelled = false;
 	let unsubscribe: (() => void) | undefined;
 
-	standaloneComponent = null;
-	standaloneError = null;
 	standaloneLoading = true;
 
 	async function initializeStandaloneWindow() {
@@ -125,7 +118,6 @@ $effect(() => {
 			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
 			const component = await getComponentByKey(componentKey);
 			if (cancelled) return;
-			standaloneComponent = component;
 
 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
 			let winInstance = wManager.find(targetWinId);
@@ -177,8 +169,6 @@ $effect(() => {
 				`[WindowHost] Kunde inte initiera "${componentKey}"`,
 				error,
 			);
-
-			standaloneError = error instanceof Error ? error.message : "Okänt fel vid laddning av fönsterkomponenten.";
 		} finally {
 			if (!cancelled) {
 				standaloneLoading = false;
@@ -216,12 +206,11 @@ let activeWindows = $derived(
 	wManager.windows.filter((win) => {
 		if (win.winId === ROOT_WIN_ID || win.state.isMinimized) return false;
 
-		// Om vi är i en fristående flik/fönster, vill vi BARA rendera just det fönstret!
+		// We are inside a standalone tab/window/tauri, We just want to render this actual window
 		if (isStandalone) {
 			return win.winId === standaloneWinId;
 		}
-
-		// Annars renderar vi alla fönster som inte är frikopplade (vanliga skrivbordet)
+		// Else render all windows that is not detached (regular mdi windows)
 		return !win.isDetached;
 	}),
 );
@@ -243,6 +232,7 @@ let activeWindows = $derived(
 		{#if standaloneLoading}
 		  <div class="loading">Laddar fristående komponent...</div>
 		{:else}
+			<!-- 1. Fönstren loopas ut först -->
 		  {#each activeWindows as win (win.winId)}
 			{#if win.component}
 			  {@const WindowComponent = win.component}
@@ -263,10 +253,15 @@ let activeWindows = $derived(
 				/>
 			  </WindowFrame>
 			{/if}
-		  {/each}
+
+		  {/each}  <!--for ..activeWindows as win (win.winId)} -->
+			  <!-- If desktopContent -->
+		  {#if !isStandalone && desktopContent}
+			  {@render desktopContent()}
+		  {/if}
 		{/if}
 	  {/if}
-	</main> <!-- 💡 HÄR! Nu stängs main-taggen korrekt innan footern påbörjas -->
+	</main> <!-- 💡 Closing of main tag -->
   
 	{#if !isStandalone && minimizedWindows.length > 0}
 	  <footer class="taskbar">

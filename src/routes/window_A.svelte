@@ -66,7 +66,6 @@ $effect(() => {
 	wManager.updateProps({
 		myNoneReactiveProp: message,
 	});
-	console.log("win AA");
 });
 </script>
 
