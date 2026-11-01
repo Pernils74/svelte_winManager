@@ -478,7 +478,7 @@ function onMouseMove(event: MouseEvent) {
 
 function cleanupInteraction() {
 	window.removeEventListener("mousemove", onMouseMove);
-	window.removeEventListener("mouseup", endInteraction);
+	window.removeEventListener("mouseup", handleMouseUp);
 	document.body.style.userSelect = "";
 }
 
@@ -565,6 +565,13 @@ function close() {
 	endInteraction();
 	manager.closeWin(win);
 }
+
+// Spara fönstrets lokala innehållsyta till managern så dess barn kan hitta den!
+$effect(() => {
+	if (contentEl && win.boundingEl !== contentEl) {
+		win.boundingEl = contentEl;
+	}
+});
 </script>
 
 <div
@@ -667,11 +674,12 @@ function close() {
 
 
 
-  <!-- <div class="content" bind:this={contentEl}>
+  <div class="content" bind:this={contentEl}>
 
 
 	{@render children()}     
-	{#each manager.getChildren(win.winId) as child (child.winId)}
+</div>
+	<!-- {#each manager.getChildren(win.winId) as child (child.winId)}
 	  {#if child.component && !child.state.isMinimized && !child.isDetached}
 		
 		<WindowFrame win={child} bounds={contentEl}>

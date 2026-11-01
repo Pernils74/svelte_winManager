@@ -1,3 +1,39 @@
+<!-- 
+WindowManager
+    └── State / API / Hierarchy
+
+WindowHost
+    ├── Workspace
+    │   └── renderWindow(win)
+    │       └── WindowFrame
+    │           ├── Titlebar
+    │           ├── Content
+    │           │   ├── WindowComponent
+    │           │   └── Child Windows
+    │           └── Resize Handles
+    │
+    ├── Taskbar
+    └── Detached Windows
+
+WindowBackend
+    ├── Browser Tab
+    ├── Browser Window
+    └── Tauri -->
+
+	<!-- Workspace (root bounds)
+	│
+	├── Window A
+	│   └── Content A (bounds A)
+	│       ├── Window A1
+	│       │   └── Content A1 (bounds A1)
+	│       │       └── Window A1a
+	│       │
+	│       └── Window A2
+	│
+	└── Window B
+		└── Content B (bounds B)
+			└── Window B1 -->
+
 
  <!-- WindowHost.svelte -->
 <script lang="ts">
@@ -185,7 +221,43 @@ $effect(() => {
 		})),
 	);
 });
+
+// Hämta ALLA aktiva fönster i ett platt format (både föräldrar och barn)
+let activeWindows = $derived(
+	wManager.windows.filter(
+		(win) => win.winId !== ROOT_WIN_ID && !win.state.isMinimized && !win.isDetached,
+	),
+);
 </script>
+  
+  <div class="layout">
+	<main class="workspace" bind:this={contentEl}>
+	
+	  {#if contentEl}
+		<!-- Rita bara ut alla fönster i tur och ordning – rakt upp och ner! -->
+		{#each activeWindows as win (win.winId)}
+		  {#if win.component}
+			{@const WindowComponent = win.component}
+			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
+  
+			<!-- Alla fönster mäts nu mot huvudskärmen (contentEl) -->
+			<!-- <WindowFrame {win} bounds={win.contentEl}> -->
+			{@const parentInstance = wManager.find(win.parentId)}
+			{@const parentBounds = parentInstance?.boundingEl ?? contentEl}
+			<WindowFrame {win} bounds={parentBounds}>
+				<WindowComponent
+					bind:win={wManager.windows[globalIdx]}
+					winId={win.winId}
+					parentId={win.parentId}
+					{...win.props}
+			  />
+			</WindowFrame>
+		  {/if}
+		{/each}
+	  {/if}
+	</main>
+</div>
+  
 
 
 
@@ -217,18 +289,18 @@ $effect(() => {
 
 
 
-
+<!-- 
   <div class="layout">
 	<main class="workspace" bind:this={contentEl}>
 		{#if contentEl}
-	  <!-- Renderar alla fönster som ligger direkt på rooten -->
-	  {#each wManager.getChildren(ROOT_WIN_ID) as rootWin (rootWin.winId)}
-		{@render renderWindow(rootWin)}
-	  {/each}
+	  
+	      {#each wManager.getChildren(ROOT_WIN_ID) as rootWin (rootWin.winId)}
+		     {@render renderWindow(rootWin)}
+	      {/each}
   
 	  {/if}
 	</main>
-</div>
+</div> -->
 
 
 
