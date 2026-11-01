@@ -324,30 +324,6 @@ function findDropParent(
 	return ROOT_WIN_ID;
 }
 
-function findDropParent_old(
-	clientX: number,
-	clientY: number,
-	draggedId: string,
-): string {
-	const elements = document.elementsFromPoint(clientX, clientY);
-	const descendants = new Set(
-		manager.getDescendants(draggedId).map((child) => child.winId),
-	);
-
-	for (const element of elements) {
-		const frame = element.closest<HTMLElement>("[data-window-id]");
-		const targetId = frame?.dataset.windowId;
-
-		if (!targetId || targetId === draggedId) continue;
-		if (targetId === ROOT_WIN_ID) continue;
-		if (descendants.has(targetId)) continue;
-
-		return targetId;
-	}
-
-	return ROOT_WIN_ID;
-}
-
 function handleMouseUp(event: MouseEvent) {
 	const id = dragWinId;
 
@@ -602,8 +578,8 @@ function close() {
 
 // Spara fönstrets lokala innehållsyta till managern så dess barn kan hitta den!
 $effect(() => {
-	if (contentEl && win.boundingEl !== contentEl) {
-		win.boundingEl = contentEl;
+	if (contentEl) {
+		manager.setBoundingEl(win.winId, contentEl);
 	}
 });
 </script>

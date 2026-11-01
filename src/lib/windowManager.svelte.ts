@@ -537,123 +537,59 @@ export class WindowManager {
 		const win = this.find(id);
 		const newParent = this.find(newParentId);
 
-		if (!win || !newParent || id === ROOT_WIN_ID) {
+		if (!win || id === ROOT_WIN_ID) return false;
+		if (newParentId !== ROOT_WIN_ID && !newParent) return false;
+
+		// Förhindra cykliska relationer (samma som du hade innan)
+		if (id === newParentId || this.getDescendants(id).some((child) => child.winId === newParentId)) {
 			return false;
 		}
 
-		// Förhindra att ett fönster blir sin egen förälder
-		// eller flyttas in i ett av sina egna barn.
-		if (
-			id === newParentId ||
-			this.getDescendants(id).some(
-				(child) => child.winId === newParentId,
-			)
-		) {
-			return false;
-		}
-
-		// Hämta den gamla förälderns koordinatsystem.
-		const oldParentElement = win.boundingEl;
-		const oldParentRect = oldParentElement?.getBoundingClientRect();
-
-		// Hämta den nya förälderns koordinatsystem.
-		const parentElement = newParentId === ROOT_WIN_ID ? null : newParent.boundingEl;
-
-		const parentRect = parentElement?.getBoundingClientRect();
-
-		// Beräkna storleken på den gamla förälderns yta.
-		const oldParentWidth = oldParentRect?.width ??
-			this.find(win.parentId)?.state.width ??
-			0;
-
-		const oldParentHeight = oldParentRect?.height ??
-			this.find(win.parentId)?.state.height ??
-			0;
-
-		// Beräkna storleken på den nya förälderns yta.
-		const newParentWidth = parentRect?.width ??
-			newParent.state.width ??
-			0;
-
-		const newParentHeight = parentRect?.height ??
-			newParent.state.height ??
-			0;
-
-		// Fönstrets nuvarande position i skärmkoordinater.
-		const currentAbsoluteLeft = (oldParentRect?.left ?? 0) + win.state.left;
-
-		const currentAbsoluteTop = (oldParentRect?.top ?? 0) + win.state.top;
-
-		// Använd skärmpositionen från dragningen om den finns.
-		const targetScreenLeft = screenRect?.left ?? currentAbsoluteLeft;
-
-		const targetScreenTop = screenRect?.top ?? currentAbsoluteTop;
-
-		// Använd angiven storlek om den skickats med.
-		const sourceWidth = screenRect?.width ?? win.state.width;
-
-		const sourceHeight = screenRect?.height ?? win.state.height;
-
-		// Konvertera skärmpositionen till den gamla
-		// förälderns lokala koordinater.
-		const oldLocalLeft = targetScreenLeft - (oldParentRect?.left ?? 0);
-
-		const oldLocalTop = targetScreenTop - (oldParentRect?.top ?? 0);
-
-		// Skala positionen proportionellt mellan föräldrarna.
-		const scaleX = oldParentWidth > 0 && newParentWidth > 0 ? newParentWidth / oldParentWidth : 1;
-
-		const scaleY = oldParentHeight > 0 && newParentHeight > 0 ? newParentHeight / oldParentHeight : 1;
-
-		let left = oldLocalLeft * scaleX;
-		let top = oldLocalTop * scaleY;
-
-		// Skala även fönstrets storlek.
-		let width = sourceWidth * scaleX;
-		let height = sourceHeight * scaleY;
-
-		// Begränsa storleken till den nya förälderns yta.
-		if (newParentWidth > 0) {
-			width = Math.min(width, newParentWidth);
-		}
-
-		if (newParentHeight > 0) {
-			height = Math.min(height, newParentHeight);
-		}
-
-		// Begränsa positionen så att hela fönstret ryms.
-		if (newParentWidth > 0) {
-			left = Math.max(
-				0,
-				Math.min(left, newParentWidth - width),
-			);
-		} else {
-			left = Math.max(0, left);
-		}
-
-		if (newParentHeight > 0) {
-			top = Math.max(
-				0,
-				Math.min(top, newParentHeight - height),
-			);
-		} else {
-			top = Math.max(0, top);
-		}
-
-		// Uppdatera föräldrarelationen.
+		// 1. Spara undan det nya trädet och elementet
 		win.parentId = newParentId;
-		win.boundingEl = parentElement;
+		win.boundingEl = newParentId === ROOT_WIN_ID ? null : newParent!.boundingEl;
 
-		// Uppdatera position och storlek.
-		win.state.left = left;
-		win.state.top = top;
-		win.state.width = width;
-		win.state.height = height;
+		// 2. Hantera position och storlek baserat på skärmkoordinater där man släppte fönstret
+		if (screenRect) {
+			let targetLeft = screenRect.left ?? win.state.left;
+			let targetTop = screenRect.top ?? win.state.top;
+			let targetWidth = screenRect.width ?? win.state.width;
+			let targetHeight = screenRect.height ?? win.state.height;
 
-		// Fokusera det flyttade fönstret.
-		// this.focus(id);
+			// Om vi droppade inuti ett annat fönster, hämta dess mått för clamp-kontroll
+			if (newParentId !== ROOT_WIN_ID && newParent?.boundingEl) {
+				const parentRect = newParent.boundingEl.getBoundingClientRect();
+
+				// Säkerställ att barnfönstret inte blir större än sin nya förälders innehållsyta
+				targetWidth = Math.min(targetWidth, parentRect.width);
+				targetHeight = Math.min(targetHeight, parentRect.height);
+
+				// Konvertera skärmkoordinaten (där du släppte) till förälderns lokala koordinatsystem
+				targetLeft = targetLeft - parentRect.left;
+				targetTop = targetTop - parentRect.top;
+
+				// Håll fönstret innanför förälderns kanter direkt vid drop
+				targetLeft = Math.max(0, Math.min(targetLeft, parentRect.width - targetWidth));
+				targetTop = Math.max(0, Math.min(targetTop, parentRect.height - targetHeight));
+			} else {
+				// Om det släpps på skrivbordsroten (root), använd bara de råa skärmkoordinaterna
+				// (förutsatt att din workspace startar på 0,0 på skärmen)
+				const workspaceEl = document.querySelector(".workspace");
+				if (workspaceEl) {
+					const wsRect = workspaceEl.getBoundingClientRect();
+					targetLeft = targetLeft - wsRect.left;
+					targetTop = targetTop - wsRect.top;
+				}
+			}
+
+			// Uppdatera tillståndet direkt
+			win.state.width = targetWidth;
+			win.state.height = targetHeight;
+			win.state.left = targetLeft;
+			win.state.top = targetTop;
+		}
+
 		this.focus(win);
-
 		return true;
 	}
 
@@ -1182,6 +1118,14 @@ export class WindowManager {
 		// Skicka signal till backend om det var frikopplat
 		if (win.isDetached) {
 			this.backend.close(win.winId);
+		}
+	}
+
+	// windowManager.svelte.ts
+	setBoundingEl(id: WindowId, el: HTMLElement | null): void {
+		const win = this.find(id);
+		if (win && win.boundingEl !== el) {
+			win.boundingEl = el;
 		}
 	}
 

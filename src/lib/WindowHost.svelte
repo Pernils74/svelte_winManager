@@ -227,6 +227,7 @@ let activeWindows = $derived(
 		  {#each activeWindows as win (win.winId)}
 			{#if win.component}
 			  {@const WindowComponent = win.component}
+    			<!-- 1. Hitta exakt vilket globalt index detta fönster har i din riktiga array -->
 			  {@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
 	
 			  <!-- 🌟 SMART BOUNDS-HANTERING -->
