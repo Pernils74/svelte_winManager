@@ -665,28 +665,9 @@ function close() {
     {/if}
   </div>
 
-  <div class="content" bind:this={contentEl}>
-		<!-- <div class="component-host">
-			{@render children()}
-		</div> -->
 
-    <!-- {@render children()}     
-    {#each manager.getChildren(win.winId) as  child (child.winId)}
-      {#if  child.component && !child.state.isMinimized && !child.isDetached  }
-      <WindowFrame win={child} bounds={contentEl}>
-        {@const ChildComponent = child.component}
-          <ChildComponent
-            win= {child}
-            winId={child.winId}
-            parentId={child.parentId}
-			// payload={child.payload}  
-            {...child.props}
-			// payload={child.payload}  // för att den inte skall skriva över någon egen child.payload
-          />
-        
-       </WindowFrame> 
-      {/if}
-    {/each} -->
+
+  <!-- <div class="content" bind:this={contentEl}>
 
 
 	{@render children()}     
@@ -708,14 +689,7 @@ function close() {
 	
 	  {/if}
 	{/each}
-	
-	
-	
-
-
-
-
-  </div>
+  </div> -->
 
 
 

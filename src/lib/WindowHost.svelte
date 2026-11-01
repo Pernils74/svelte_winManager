@@ -189,6 +189,47 @@ $effect(() => {
 
 
 
+  <!-- Central snippet som renderar ett fönster och dess subfönster rekursivt -->
+  {#snippet renderWindow(win)}
+    {#if win.component}
+      {@const WindowComponent = win.component}
+      {@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
+  
+      <!-- WindowFrame hanterar BARA ramen, positionen, drag/resize -->
+      <WindowFrame {win} bounds={win.parentId === ROOT_WIN_ID ? contentEl : undefined}>
+        
+        <!-- Här renderas själva applikationskomponenten (fönstrets innehåll) -->
+        <WindowComponent
+          bind:win={wManager.windows[globalIdx]}
+          winId={win.winId}
+          parentId={win.parentId}
+          {...win.props}
+        />
+  
+        <!-- REKURSION: Om denna komponent i sin tur har underfönster, renderas de här i sin förälders contentEl -->
+        {#each wManager.getChildren(win.winId) as child (child.winId)}
+          {@render renderWindow(child)}
+        {/each}
+  
+      </WindowFrame>
+    {/if}
+  {/snippet}
+
+
+
+
+  <div class="layout">
+	<main class="workspace" bind:this={contentEl}>
+		{#if contentEl}
+	  <!-- Renderar alla fönster som ligger direkt på rooten -->
+	  {#each wManager.getChildren(ROOT_WIN_ID) as rootWin (rootWin.winId)}
+		{@render renderWindow(rootWin)}
+	  {/each}
+  
+	  {/if}
+	</main>
+</div>
+
 
 
 {#if isStandalone}
@@ -263,8 +304,8 @@ $effect(() => {
 
 
 
-    <main class="workspace" bind:this={contentEl}>
-      {#if contentEl}
+    <!-- <main class="workspace" bind:this={contentEl}>
+      {#if contentEl} -->
 
         <!-- {#each rootWindows as win (win.winId)}
           {#if !win.state.isMinimized}
@@ -285,7 +326,7 @@ $effect(() => {
 
 <!-- Inuti WindowHost.svelte (Längre ner för skrivbordsfönster) -->
 
-{#each rootWindows as win (win.winId)}
+<!-- {#each rootWindows as win (win.winId)}
   {#if !win.state.isMinimized}
     <WindowFrame {win} bounds={contentEl}>
       {#if win.component}
@@ -300,17 +341,19 @@ $effect(() => {
       {/if}
     </WindowFrame>
   {/if}
-{/each}
+{/each} -->
 
 
 
-
+<!-- 
       {/if}
 
       {#if children}
-        {@render children()}
-      {/if}
-    </main>
+        {@render children()} -->
+
+
+      <!-- {/if}
+    </main> -->
 
 
 
