@@ -1,5 +1,3 @@
-
-
 <!--
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
@@ -100,7 +98,6 @@ $effect(() => {
 });
 </script>
 
-WindowHost.topbarContent ="hjhkhkjh"
 <WindowHost>
   {#snippet children()}
     <div class="welcome-container">
