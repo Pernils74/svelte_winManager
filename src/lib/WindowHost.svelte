@@ -9,8 +9,8 @@ import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 interface Props {
-  children?: Snippet;
-  topbarContent?: Snippet;
+	children?: Snippet;
+	topbarContent?: Snippet;
 }
 
 let { children, topbarContent }: Props = $props();
@@ -19,19 +19,19 @@ const wManager = getWindowManager();
 
 // URL-parametrar för ett fristående fönster.
 let standaloneWinId = $derived(
-  page.url.searchParams.get("winId"),
+	page.url.searchParams.get("winId"),
 );
 
 let standaloneComponentKey = $derived(
-  page.url.searchParams.get("componentKey"),
+	page.url.searchParams.get("componentKey"),
 );
 
 let standaloneTitle = $derived(
-  page.url.searchParams.get("title") ?? "Fristående",
+	page.url.searchParams.get("title") ?? "Fristående",
 );
 
 let isStandalone = $derived(
-  !!(standaloneWinId && standaloneComponentKey),
+	!!(standaloneWinId && standaloneComponentKey),
 );
 
 // Komponenten laddas asynkront från windowRegistry.
@@ -44,11 +44,11 @@ let contentEl = $state<HTMLElement | undefined>(undefined);
 let winCount = $derived(wManager.winCount);
 
 let minimizedWindows = $derived(
-  wManager.windows.filter(
-    (win) =>
-      win.winId !== ROOT_WIN_ID &&
-      win.state.isMinimized,
-  ),
+	wManager.windows.filter(
+		(win) =>
+			win.winId !== ROOT_WIN_ID &&
+			win.state.isMinimized,
+	),
 );
 
 // let rootWindows = $derived(
@@ -56,136 +56,134 @@ let minimizedWindows = $derived(
 // );
 
 let rootWindows = $derived(
-  wManager.getChildren(ROOT_WIN_ID).filter(
-    (win) => !win.isDetached,
-  ),
+	wManager.getChildren(ROOT_WIN_ID).filter(
+		(win) => !win.isDetached,
+	),
 );
 
 // Ladda komponenten och skapa fristående fönsterinstans.
 $effect(() => {
-  if (
-    !isStandalone ||
-    !standaloneWinId ||
-    !standaloneComponentKey
-  ) {
-    standaloneComponent = null;
-    standaloneError = null;
-    standaloneLoading = false;
-    return;
-  }
+	if (
+		!isStandalone ||
+		!standaloneWinId ||
+		!standaloneComponentKey
+	) {
+		standaloneComponent = null;
+		standaloneError = null;
+		standaloneLoading = false;
+		return;
+	}
 
-  const targetWinId = standaloneWinId;
-  const componentKey = standaloneComponentKey;
-  const title = standaloneTitle;
+	const targetWinId = standaloneWinId;
+	const componentKey = standaloneComponentKey;
+	const title = standaloneTitle;
 
-  let cancelled = false;
-  let unsubscribe: (() => void) | undefined;
+	let cancelled = false;
+	let unsubscribe: (() => void) | undefined;
 
-  standaloneComponent = null;
-  standaloneError = null;
-  standaloneLoading = true;
+	standaloneComponent = null;
+	standaloneError = null;
+	standaloneLoading = true;
 
-  async function initializeStandaloneWindow() {
-    try {
-      // 🌟 1. Ladda komponenten från ditt routes-register asynkront
-      const component = await getComponentByKey(componentKey);
-      if (cancelled) return;
-      standaloneComponent = component;
+	async function initializeStandaloneWindow() {
+		try {
+			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
+			const component = await getComponentByKey(componentKey);
+			if (cancelled) return;
+			standaloneComponent = component;
 
-      // 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
-      let winInstance = wManager.find(targetWinId);
-      if (!winInstance) {
-        winInstance = {
-          winId: targetWinId,
-          title,
-          componentKey,
-          component,
-          thumbnail: null,
-          props: {},
-          parentId: null,
-          boundingEl: null,
-          state: {
-            left: 0,
-            top: 0,
-            width: window.innerWidth,
-            height: window.innerHeight,
-            isMinimized: false,
-            isMaximized: true,
-            transparency: 1,
-          },
-          storedState: null,
-          zIndex: 1,
-          tileOffset: 0,
-          showButtons: false,
-          docking: {},
-          payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
-          isDetached: true,
-          context: { type: "browser-tab" },
-        };
+			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
+			let winInstance = wManager.find(targetWinId);
+			if (!winInstance) {
+				winInstance = {
+					winId: targetWinId,
+					title,
+					componentKey,
+					component,
+					thumbnail: null,
+					props: {},
+					parentId: null,
+					boundingEl: null,
+					state: {
+						left: 0,
+						top: 0,
+						width: window.innerWidth,
+						height: window.innerHeight,
+						isMinimized: false,
+						isMaximized: true,
+						transparency: 1,
+					},
+					storedState: null,
+					zIndex: 1,
+					tileOffset: 0,
+					showButtons: false,
+					docking: {},
+					payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
+					isDetached: true,
+					context: { type: "browser-tab" },
+				};
 
-        wManager.windows.push(winInstance);
-      } else {
-        winInstance.component = component;
-        winInstance.componentKey = componentKey;
-        winInstance.title = title;
-      }
+				wManager.windows.push(winInstance);
+			} else {
+				winInstance.component = component;
+				winInstance.componentKey = componentKey;
+				winInstance.title = title;
+			}
 
-      if (cancelled) return;
+			if (cancelled) return;
 
-      // 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
-      // Denna ersätter din gamla `wManager.backend.onMessage`
-      unsubscribe = wManager.setupStandaloneSync(targetWinId);
-    } catch (error) {
-      if (cancelled) return;
+			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
+			// Denna ersätter din gamla `wManager.backend.onMessage`
+			unsubscribe = wManager.setupStandaloneSync(targetWinId);
+		} catch (error) {
+			if (cancelled) return;
 
-      console.error(
-        `[WindowHost] Kunde inte initiera "${componentKey}"`,
-        error,
-      );
+			console.error(
+				`[WindowHost] Kunde inte initiera "${componentKey}"`,
+				error,
+			);
 
-      standaloneError = error instanceof Error
-        ? error.message
-        : "Okänt fel vid laddning av fönsterkomponenten.";
-    } finally {
-      if (!cancelled) {
-        standaloneLoading = false;
-      }
-    }
-  }
+			standaloneError = error instanceof Error ? error.message : "Okänt fel vid laddning av fönsterkomponenten.";
+		} finally {
+			if (!cancelled) {
+				standaloneLoading = false;
+			}
+		}
+	}
 
-  void initializeStandaloneWindow();
+	void initializeStandaloneWindow();
 
-  return () => {
-    cancelled = true;
-    unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
-  };
+	return () => {
+		cancelled = true;
+		unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
+	};
 });
 
 onMount(() => {
-  if (!contentEl) return;
-  const updateBounds = () => {
-    if (!contentEl) return;
-    wManager.setRootBounds(
-      contentEl.clientWidth,
-      contentEl.clientHeight,
-    );
-  };
+	if (!contentEl) return;
+	const updateBounds = () => {
+		if (!contentEl) return;
+		wManager.setRootBounds(
+			contentEl.clientWidth,
+			contentEl.clientHeight,
+		);
+	};
 
-  updateBounds();
-  const observer = new ResizeObserver(updateBounds);
-  observer.observe(contentEl);
-  return () => observer.disconnect();
+	updateBounds();
+	const observer = new ResizeObserver(updateBounds);
+	observer.observe(contentEl);
+	return () => observer.disconnect();
 });
 
 // debug effect
 $effect(() => {
-  console.log(
-    "rootWindows",
-    rootWindows.map((w) => ({
-      title: w.title,
-      detached: w.isDetached,
-    })),
-  );
+	console.log(
+		"rootWindows",
+		rootWindows.map((w) => ({
+			title: w.title,
+			detached: w.isDetached,
+		})),
+	);
 });
 </script>
 
@@ -205,14 +203,11 @@ $effect(() => {
         <p>{standaloneError}</p>
         <p>Komponentnyckel: {standaloneComponentKey}</p>
       </div>
-    {:else if standaloneComponent && standaloneWinId}
 
-
+    <!-- {:else if standaloneComponent && standaloneWinId}
       {@const winInstance = wManager.find(standaloneWinId)}
       {#if winInstance}
         {@const ComponentToRender = standaloneComponent}
-
-
         <ComponentToRender
           win={winInstance}
           winId={winInstance.winId}
@@ -220,11 +215,29 @@ $effect(() => {
           payload={winInstance.payload}
           {...winInstance.props}
         />
+      {:else} -->
+
+<!-- Inuti WindowHost.svelte (Högst upp för fristående flikar/tauri) -->
+
+{:else if standaloneComponent && standaloneWinId}
+  {@const winInstance = wManager.find(standaloneWinId)}
+  {#if winInstance}
+    {@const ComponentToRender = standaloneComponent}
+    {@const standaloneIndex = wManager.windows.findIndex(w => w.winId === standaloneWinId)}
+    <ComponentToRender
+      bind:win={wManager.windows[standaloneIndex]}
+      winId={winInstance.winId}
+      parentId={winInstance.parentId}
+      // payload={winInstance.payload}
+      {...winInstance.props}
+    />
+  {:else}
 
 
+  <!-- ... -->
 
-      {:else}
-        <div class="loading">
+
+      <div class="loading">
           Fönsterinstansen kunde inte hittas.
         </div>
       {/if}
@@ -252,7 +265,8 @@ $effect(() => {
 
     <main class="workspace" bind:this={contentEl}>
       {#if contentEl}
-        {#each rootWindows as win (win.winId)}
+
+        <!-- {#each rootWindows as win (win.winId)}
           {#if !win.state.isMinimized}
             <WindowFrame {win} bounds={contentEl}>
               {#if win.component}
@@ -267,7 +281,30 @@ $effect(() => {
               {/if}
             </WindowFrame>
           {/if}
-        {/each}
+        {/each} -->
+
+<!-- Inuti WindowHost.svelte (Längre ner för skrivbordsfönster) -->
+
+{#each rootWindows as win (win.winId)}
+  {#if !win.state.isMinimized}
+    <WindowFrame {win} bounds={contentEl}>
+      {#if win.component}
+        {@const WindowComponent = win.component}
+        {@const hostIndex = wManager.windows.findIndex(w => w.winId === win.winId)}
+        <WindowComponent
+          bind:win={wManager.windows[hostIndex]}
+          winId={win.winId}
+          parentId={win.parentId}
+          {...win.props}
+        />
+      {/if}
+    </WindowFrame>
+  {/if}
+{/each}
+
+
+
+
       {/if}
 
       {#if children}
@@ -319,190 +356,190 @@ $effect(() => {
 
 <style>
 .standalone-container {
-  position: absolute;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: #1e1e1e;
-  overflow: auto;
+	position: absolute;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	background: #1e1e1e;
+	overflow: auto;
 }
 
 .loading {
-  color: white;
-  display: grid;
-  place-content: center;
-  gap: 0.75rem;
-  min-height: 100%;
-  padding: 1.5rem;
-  box-sizing: border-box;
-  font-family: sans-serif;
-  text-align: center;
+	color: white;
+	display: grid;
+	place-content: center;
+	gap: 0.75rem;
+	min-height: 100%;
+	padding: 1.5rem;
+	box-sizing: border-box;
+	font-family: sans-serif;
+	text-align: center;
 }
 
 .error {
-  color: #ffb4b4;
+	color: #ffb4b4;
 }
 
 .layout {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border: 2px solid black;
-  box-sizing: border-box;
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	border: 2px solid black;
+	box-sizing: border-box;
 }
 
 .topbar {
-  position: relative;
-  z-index: 10;
-  flex: 0 0 2.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0 0.75rem;
-  background: lightblue;
-  border-bottom: 1px solid #999;
+	position: relative;
+	z-index: 10;
+	flex: 0 0 2.5rem;
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0 0.75rem;
+	background: lightblue;
+	border-bottom: 1px solid #999;
 }
 
 .workspace {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  isolation: isolate;
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	isolation: isolate;
 }
 
 .taskbar {
-  position: relative;
-  z-index: 100;
-  flex: 0 0 2.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.75rem;
-  background: #c1414165;
-  border-top: 1px solid #999;
-  overflow: visible;
+	position: relative;
+	z-index: 100;
+	flex: 0 0 2.5rem;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0 0.75rem;
+	background: #c1414165;
+	border-top: 1px solid #999;
+	overflow: visible;
 }
 
 .taskbar-label {
-  margin-right: 0.5rem;
-  white-space: nowrap;
-  color: white;
+	margin-right: 0.5rem;
+	white-space: nowrap;
+	color: white;
 }
 
 .task-item {
-  position: relative;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
+	position: relative;
+	align-self: stretch;
+	display: flex;
+	align-items: center;
 }
 
 .task-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  height: 2rem;
-  max-width: 180px;
-  padding: 0 0.65rem;
-  border: 1px solid #777;
-  border-radius: 5px;
-  background: #ffffffd9;
-  color: #222;
-  cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	height: 2rem;
+	max-width: 180px;
+	padding: 0 0.65rem;
+	border: 1px solid #777;
+	border-radius: 5px;
+	background: #ffffffd9;
+	color: #222;
+	cursor: pointer;
 }
 
 .task-btn:hover,
 .task-btn:focus-visible {
-  background: white;
-  border-color: #3578c7;
+	background: white;
+	border-color: #3578c7;
 }
 
 .task-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: #dce9fa;
-  font-size: 1.1rem;
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 24px;
+	width: 24px;
+	height: 24px;
+	border-radius: 4px;
+	background: #dce9fa;
+	font-size: 1.1rem;
 }
 
 .task-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .thumbnail-popup {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 0.6rem);
-  z-index: 1000;
-  width: 280px;
-  padding: 8px;
-  border: 1px solid #b7b7b7;
-  border-radius: 9px;
-  background: #f8f8f8;
-  box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translate(-50%, 8px) scale(0.97);
-  transform-origin: bottom center;
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease,
-    visibility 140ms ease;
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 0.6rem);
+	z-index: 1000;
+	width: 280px;
+	padding: 8px;
+	border: 1px solid #b7b7b7;
+	border-radius: 9px;
+	background: #f8f8f8;
+	box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transform: translate(-50%, 8px) scale(0.97);
+	transform-origin: bottom center;
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease,
+		visibility 140ms ease;
 }
 
 .task-item:hover .thumbnail-popup,
 .task-item:focus-within .thumbnail-popup {
-  opacity: 1;
-  visibility: visible;
-  transform: translate(-50%, 0) scale(1);
+	opacity: 1;
+	visibility: visible;
+	transform: translate(-50%, 0) scale(1);
 }
 
 .thumbnail-heading {
-  padding: 3px 4px 8px;
-  color: #222;
-  font-size: 0.85rem;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	padding: 3px 4px 8px;
+	color: #222;
+	font-size: 0.85rem;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .thumbnail-image,
 .thumbnail-placeholder {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  box-sizing: border-box;
-  background: #e6e6e6;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+	display: block;
+	width: 100%;
+	aspect-ratio: 16 / 10;
+	box-sizing: border-box;
+	background: #e6e6e6;
+	border: 1px solid #ccc;
+	border-radius: 4px;
 }
 
 .thumbnail-image {
-  object-fit: contain;
+	object-fit: contain;
 }
 
 .thumbnail-placeholder {
-  display: grid;
-  place-content: center;
-  border-style: dashed;
-  color: #666;
-  font-size: 0.8rem;
-  text-align: center;
+	display: grid;
+	place-content: center;
+	border-style: dashed;
+	color: #666;
+	font-size: 0.8rem;
+	text-align: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thumbnail-popup {
-    transition: none;
-  }
+	.thumbnail-popup {
+		transition: none;
+	}
 }
 </style>

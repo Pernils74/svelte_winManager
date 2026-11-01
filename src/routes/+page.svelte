@@ -71,6 +71,7 @@ onMount(() => {
 		left: 650,
 		top: 300,
 	});
+
 	// if (1 == 0) {
 	//   wManager.open(WindowC, {
 	//     title: "🪟 Window C",

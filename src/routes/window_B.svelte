@@ -7,7 +7,7 @@ export interface WindowBProps {
 }
 
 let {
-	win,
+	win = $bindable(),
 	winId,
 	parentId,
 	myNoneReactiveProp,

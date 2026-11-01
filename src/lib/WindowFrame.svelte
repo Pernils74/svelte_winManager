@@ -670,7 +670,7 @@ function close() {
 			{@render children()}
 		</div> -->
 
-    {@render children()}     
+    <!-- {@render children()}     
     {#each manager.getChildren(win.winId) as  child (child.winId)}
       {#if  child.component && !child.state.isMinimized && !child.isDetached  }
       <WindowFrame win={child} bounds={contentEl}>
@@ -686,7 +686,35 @@ function close() {
         
        </WindowFrame> 
       {/if}
-    {/each}
+    {/each} -->
+
+
+	{@render children()}     
+	{#each manager.getChildren(win.winId) as child (child.winId)}
+	  {#if child.component && !child.state.isMinimized && !child.isDetached}
+		
+		<WindowFrame win={child} bounds={contentEl}>
+		  {@const ChildComponent = child.component}
+		  
+		  {@const globalIdx = manager.windows.findIndex(w => w.winId === child.winId)}
+	
+		  <ChildComponent
+			bind:win={manager.windows[globalIdx]}
+			winId={child.winId}
+			parentId={child.parentId}
+			{...child.props}
+		  />
+		</WindowFrame> 
+	
+	  {/if}
+	{/each}
+	
+	
+	
+
+
+
+
   </div>
 
 
@@ -724,11 +752,11 @@ function close() {
 
   {#each resizeHandles as handle (handle)}
     <div
-      class="resize-handle {handle}"
-      use:interaction={handle}
-      role="presentation"
-      aria-hidden="true"
-    ></div>
+	class="resize-handle {handle}"
+	use:interaction={handle}
+	role="presentation"
+	aria-hidden="true"
+></div>
   {/each}
 </div>
 

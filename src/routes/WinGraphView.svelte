@@ -58,6 +58,19 @@ async function loadPlotly() {
 onMount(() => {
 	const init = async () => {
 		await loadPlotly();
+
+		// 🟢 MANUELL FIX: Aktivera WebGL-tilläggen explicit för att tysta WebGL-varningen
+		try {
+			const canvas = document.createElement("canvas");
+			const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+			if (gl) {
+				gl.getExtension("EXT_color_buffer_float");
+				gl.getExtension("WEBGL_color_buffer_float");
+			}
+		} catch (e) {
+			// Ignorera i tysthet om WebGL saknas i denna dolda temporära canvas
+		}
+
 		const Plotly = (window as any).Plotly;
 		await Plotly.newPlot(
 			plotEl,
