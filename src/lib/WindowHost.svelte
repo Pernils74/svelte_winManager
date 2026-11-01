@@ -47,29 +47,19 @@ import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 interface Props {
-	desktopContent?: Snippet; // 🌟 Nytt, tydligt namn
-	topbarContent?: Snippet;
+	desktopContent?: Snippet; // 🌟 Desktop content in root window
+	topbarContent?: Snippet; // 🌟 Topbar content in root window
 }
 let { desktopContent, topbarContent }: Props = $props();
 
 const wManager = getWindowManager();
 
-// URL-parametrar för ett fristående fönster.
-let standaloneWinId = $derived(
-	page.url.searchParams.get("winId"),
-);
+// Reading of URL-parametrar for standalone windows (win.isDetached=true)
+let standaloneWinId = $derived(page.url.searchParams.get("winId"));
+let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
+let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
 
-let standaloneComponentKey = $derived(
-	page.url.searchParams.get("componentKey"),
-);
-
-let standaloneTitle = $derived(
-	page.url.searchParams.get("title") ?? "Fristående",
-);
-
-let isStandalone = $derived(
-	!!(standaloneWinId && standaloneComponentKey),
-);
+let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
 
 // Komponenten laddas asynkront från windowRegistry.
 
@@ -185,6 +175,7 @@ $effect(() => {
 });
 
 onMount(() => {
+	// If start of root window
 	if (!contentEl) return;
 	const updateBounds = () => {
 		if (!contentEl) return;
