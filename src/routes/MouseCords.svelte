@@ -14,6 +14,10 @@ let position = $state("");
 let winid = $state("");
 let parentId = $state("");
 let zIndex = $state(0);
+let winWidth = $state(0);
+let winHeight = $state(0);
+let winLeft = $state(0);
+let winTop = $state(0);
 
 let rect = $state<DOMRect | null>(null);
 let isInsideFrame = $state(false);
@@ -55,12 +59,20 @@ function onMouseOver(event: MouseEvent) {
 			if (win) {
 				parentId = win.parentId ?? "root";
 				zIndex = win.zIndex;
+				winHeight = win.state.height;
+				winWidth = win.state.width;
+				winLeft = win.state.left;
+				winTop = win.state.top;
 			}
 		}
 	} else {
 		winid = "";
 		parentId = "";
 		zIndex = 0;
+		winHeight = 0;
+		winWidth = 0;
+		winLeft = 0;
+		winTop = 0;
 	}
 
 	if (content) {
@@ -116,6 +128,13 @@ function onMouseOver(event: MouseEvent) {
         
         <span style="color: #34d399;">z-index:</span> 
         <span style="color: #34d399; font-weight: bold;">{zIndex}</span>
+
+        <span style="color: #34d399;">wi X hei:</span> 
+        <span style="color: #34d399; font-weight: bold;">{winWidth} X {winHeight}</span>
+
+        <span style="color: #34d399;">le X to:</span> 
+        <span style="color: #34d399; font-weight: bold;">{winLeft} X {winTop}</span>
+
       </div>
     {/if}
 

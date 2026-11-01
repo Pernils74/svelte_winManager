@@ -324,7 +324,41 @@ function findDropParent(
 	return ROOT_WIN_ID;
 }
 
+// WindowFrame.svelte -> handleMouseUp
+
 function handleMouseUp(event: MouseEvent) {
+	const id = dragWinId;
+
+	try {
+		if (reparentDrag && id) {
+			// 1. Hitta vilket fönster (eller root) som ligger under muspekaren [1.10]
+			const targetId = findDropParent(
+				event.clientX,
+				event.clientY,
+				id,
+			);
+
+			// 2. Hämta fönstrets exakta position på skärmen precis när vi släpper musen [1.10]
+			const rect = frameEl?.getBoundingClientRect();
+
+			if (rect) {
+				// 3. Vi skickar ALLTID med skärmkoordinaterna!
+				// Managern tar hand om att räkna om dem rätt oavsett drop-mål.
+				manager.reparent(id, targetId, {
+					left: rect.left,
+					top: rect.top,
+					width: rect.width,
+					height: rect.height,
+				});
+			}
+		}
+	} finally {
+		reparentDrag = false;
+		endInteraction(); // [1.10]
+	}
+}
+
+function handleMouseUp_old(event: MouseEvent) {
 	const id = dragWinId;
 
 	try {

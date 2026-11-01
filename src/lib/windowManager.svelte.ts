@@ -523,7 +523,6 @@ export class WindowManager {
 		this.focus(wincopy);
 		return wincopy;
 	}
-
 	reparent(
 		id: WindowId,
 		newParentId: WindowId,
@@ -536,60 +535,83 @@ export class WindowManager {
 	): boolean {
 		const win = this.find(id);
 		const newParent = this.find(newParentId);
+		const rootWin = this.find(ROOT_WIN_ID);
 
 		if (!win || id === ROOT_WIN_ID) return false;
 		if (newParentId !== ROOT_WIN_ID && !newParent) return false;
 
-		// Förhindra cykliska relationer (samma som du hade innan)
-		if (id === newParentId || this.getDescendants(id).some((child) => child.winId === newParentId)) {
+		// Förhindra cykliska relationer.
+		if (
+			id === newParentId ||
+			this.getDescendants(id).some((child) => child.winId === newParentId)
+		) {
 			return false;
 		}
 
-		// 1. Spara undan det nya trädet och elementet
-		win.parentId = newParentId;
-		win.boundingEl = newParentId === ROOT_WIN_ID ? null : newParent!.boundingEl;
+		let nextLeft = win.state.left;
+		let nextTop = win.state.top;
+		let nextWidth = win.state.width;
+		let nextHeight = win.state.height;
 
-		// 2. Hantera position och storlek baserat på skärmkoordinater där man släppte fönstret
 		if (screenRect) {
-			let targetLeft = screenRect.left ?? win.state.left;
-			let targetTop = screenRect.top ?? win.state.top;
-			let targetWidth = screenRect.width ?? win.state.width;
-			let targetHeight = screenRect.height ?? win.state.height;
+			const targetLeft = screenRect.left ?? win.state.left;
+			const targetTop = screenRect.top ?? win.state.top;
+			nextWidth = screenRect.width ?? win.state.width;
+			nextHeight = screenRect.height ?? win.state.height;
 
-			// Om vi droppade inuti ett annat fönster, hämta dess mått för clamp-kontroll
 			if (newParentId !== ROOT_WIN_ID && newParent?.boundingEl) {
+				// 🌟 DROP INUTI ETT ANNAT FÖNSTER:
 				const parentRect = newParent.boundingEl.getBoundingClientRect();
+				const pWidth = newParent.state.width;
+				const pHeight = newParent.state.height;
 
-				// Säkerställ att barnfönstret inte blir större än sin nya förälders innehållsyta
-				targetWidth = Math.min(targetWidth, parentRect.width);
-				targetHeight = Math.min(targetHeight, parentRect.height);
+				// 1. Konvertera skärmkoordinaten till förälderns LOKALA koordinatsystem
+				nextLeft = targetLeft - parentRect.left;
+				nextTop = targetTop - parentRect.top;
 
-				// Konvertera skärmkoordinaten (där du släppte) till förälderns lokala koordinatsystem
-				targetLeft = targetLeft - parentRect.left;
-				targetTop = targetTop - parentRect.top;
+				// 2. Säkra att fönstret inte startar utanför förälderns övre eller vänstra kant
+				nextLeft = Math.max(0, nextLeft);
+				nextTop = Math.max(0, nextTop);
 
-				// Håll fönstret innanför förälderns kanter direkt vid drop
-				targetLeft = Math.max(0, Math.min(targetLeft, parentRect.width - targetWidth));
-				targetTop = Math.max(0, Math.min(targetTop, parentRect.height - targetHeight));
+				// 3. Justera storleken (Klipp bredden/höjden efter förälderns resterande yta!)
+				// Istället för att krympa fönstret proportionellt, klipper vi det precis vid förälderns kant
+				nextWidth = Math.min(nextWidth, pWidth - nextLeft);
+				nextHeight = Math.min(nextHeight, pHeight - nextTop);
 			} else {
-				// Om det släpps på skrivbordsroten (root), använd bara de råa skärmkoordinaterna
-				// (förutsatt att din workspace startar på 0,0 på skärmen)
-				const workspaceEl = document.querySelector(".workspace");
-				if (workspaceEl) {
-					const wsRect = workspaceEl.getBoundingClientRect();
-					targetLeft = targetLeft - wsRect.left;
-					targetTop = targetTop - wsRect.top;
+				// 🌟 DROP TILLBAKA PÅ SKRIVBORDSROTEN (ROOT):
+				// Vi använder inte längre document.querySelector!
+				// Vi har frameEl i WindowFrame som mäter mot skärmen, så om vi släpper på roten
+				// behöver vi bara konvertera skärmkoordinaten relativt programmets start-koordinat på skärmen.
+				if (rootWin && newParent?.boundingEl) {
+					// Om din vy skickar med en fungerande referens för roots bounds
+					const rootRect = newParent.boundingEl.getBoundingClientRect();
+					nextLeft = targetLeft - rootRect.left;
+					nextTop = targetTop - rootRect.top;
+				} else {
+					// Fallback om rotens DOM saknas (t.ex. vid boot/synk)
+					nextLeft = targetLeft;
+					nextTop = targetTop;
 				}
 			}
-
-			// Uppdatera tillståndet direkt
-			win.state.width = targetWidth;
-			win.state.height = targetHeight;
-			win.state.left = targetLeft;
-			win.state.top = targetTop;
 		}
 
+		// Uppdatera relation och geometri.
+		win.parentId = newParentId;
+		win.boundingEl = null;
+
+		Object.assign(win.state, {
+			left: nextLeft,
+			top: nextTop,
+			width: nextWidth,
+			height: nextHeight,
+			isMaximized: false, // Starta omaximerat så den lokala geometrin gäller
+		});
+
+		win.docking = {};
+		win.storedState = null;
+
 		this.focus(win);
+
 		return true;
 	}
 
@@ -1099,6 +1121,21 @@ export class WindowManager {
 			return false;
 		}
 	}
+
+	// closeWin(win: WindowInstance): void {
+	// 	if (!win || win.winId === ROOT_WIN_ID) return;
+
+	// 	// 🌟 1. Rensa bort alla lagrade funktions-callbacks för detta fönster
+	// 	cleanupWindowCallbacks(win.winId);
+
+	// 	// 2. Om fönstret är frikopplat (tab/tauri), säg till backend att stänga det fysiska fönstret
+	// 	if (win.isDetached) {
+	// 		this.backend.close(win.winId);
+	// 	}
+
+	// 	// 3. Ta bort fönstret från din reaktiva array
+	// 	this.windows = this.windows.filter((w) => w.winId !== win.winId);
+	// }
 
 	closeWin(win: WindowInstance): void {
 		if (!win || win.winId === ROOT_WIN_ID) return;
