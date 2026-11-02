@@ -51,6 +51,8 @@ import WinGraphA from "./WinGraph_A.svelte";
 import WindowB from "./window_B.svelte";
 import WindowC from "./WinGraph_A.svelte";
 
+import debug from "./debug.svelte";
+
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
 import mouseCoords from "./MouseCords.svelte";
@@ -69,6 +71,7 @@ registerComponents(
 onMount(() => {
 	wManager.open(WindowA, {
 		title: "🪟 Window A",
+		winId: "1",
 		width: 600,
 		height: 600,
 		left: 10,
@@ -76,23 +79,32 @@ onMount(() => {
 		titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
-	// wManager.open(WinGraphA, {
-	// 	title: "🪟 Window graph A",
-	// 	width: 600,
-	// 	height: 700,
-	// 	left: 650,
-	// 	top: 300,
+	wManager.open(WinGraphA, {
+		title: "🪟 Window graph A",
+		width: 600,
+		height: 700,
+		left: 650,
+		top: 300,
+	});
+
+	// wManager.open(WindowC, {
+	// 	title: "🪟 Window C",
+	// 	parentId: 1, // Reparent this window to the window with ID 1 (Window A)
+	// 	width: 700,
+	// 	height: 600,
+	// 	left: 250,
+	// 	top: 800,
 	// });
 
-	// if (1 == 0) {
-	//   wManager.open(WindowC, {
-	//     title: "🪟 Window C",
-	//     width: 700,
-	//     height: 600,
-	//     left: 850,
-	//     top: 800,
-	//   });
-	// }
+	wManager.open(debug, {
+		title: "🪟 debug",
+		// Reparent this window to the window with ID 1 (Window A)
+		parentId: "1",
+		width: 700,
+		height: 600,
+		left: 250,
+		top: 800,
+	});
 });
 
 const allComponents = $derived(getAllRegisteredKeys());

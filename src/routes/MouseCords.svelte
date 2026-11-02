@@ -7,316 +7,81 @@ const wManager = getWindowManager();
 let showPopup = $state(true);
 let expanded = $state(true);
 
+// Mouse coordinates
 let mouseX = $state(0);
 let mouseY = $state(0);
 
-let elType = $state("");
-let hoveredClass = $state("");
-let position = $state("");
-let tagId = $state("");
-
-let frame = $state<HTMLElement | null>(null);
-let content = $state<HTMLElement | null>(null);
-let bounds = $state<HTMLElement | null>(null);
-
-let frameRect = $state<DOMRect | null>(null);
-let contentRect = $state<DOMRect | null>(null);
-let boundsRect = $state<DOMRect | null>(null);
-let elementRect = $state<DOMRect | null>(null);
-
-let winid = $state("");
+// Selected window
+let winId = $state("");
 let parentId = $state("");
-let zIndex = $state(0);
 
-let winWidth = $state(0);
-let winHeight = $state(0);
-let winLeft = $state(0);
-let winTop = $state(0);
+// Window position
+let winX = $state(0);
+let winY = $state(0);
 
-let isInsideFrame = $state(false);
-let isInsideContent = $state(false);
-let isShiftDown = $state(false);
-
-let parentWidth = $state(0);
-let parentHeight = $state(0);
-
-let frameWidth = $state(0);
-let frameHeight = $state(0);
-
-let boundsLeft = $state(0);
-let boundsTop = $state(0);
-
-let localLeft = $state(0);
-let localTop = $state(0);
-
-let deltaWidth = $state(0);
-let deltaHeight = $state(0);
-
-let transform = $state("");
-let overflow = $state("");
-let display = $state("");
-
-let scrollLeft = $state(0);
-let scrollTop = $state(0);
-
-let clientLeft = $state(0);
-let clientTop = $state(0);
-
-let offsetWidth = $state(0);
-let offsetHeight = $state(0);
-
-let scaleX = $state(1);
-let scaleY = $state(1);
-
-let dropTarget = $state("");
-let dropTargetRect = $state<DOMRect | null>(null);
-
-let calculatedLeft = $state(0);
-let calculatedTop = $state(0);
-let calculatedWidth = $state(0);
-let calculatedHeight = $state(0);
-let calculatedScale = $state(1);
-
-let logs = $state<string[]>([]);
-
-function addLog(message: string) {
-	logs = [
-		`${new Date().toLocaleTimeString()} ${message}`,
-		...logs,
-	].slice(0, 12);
-}
-
-function round(value: number, decimals = 2) {
-	return Number.isFinite(value) ? Number(value.toFixed(decimals)) : 0;
-}
-
-function getRect(el: HTMLElement | null) {
-	return el?.getBoundingClientRect() ?? null;
-}
+// Runtime information
+let runtimeType = $state("");
+let runtimeId = $state("");
 
 function inspect(target: HTMLElement) {
-	elType = target.tagName;
-	hoveredClass = target.className?.toString() ?? "";
-	tagId = target.id ?? "";
-	position = getComputedStyle(target).position;
-	elementRect = getRect(target);
+	// Ignore the inspector itself
+	if (target.closest(".window-inspector")) return;
 
-	frame = target.closest(".window-frame") as HTMLElement | null;
-	content = target.closest(".content") as HTMLElement | null;
+	const frame = target.closest(
+		".window-frame",
+	) as HTMLElement | null;
 
-	isInsideFrame = !!frame;
-	isInsideContent = !!content;
-
-	document.querySelectorAll(
-		".window-frame, .content",
-	).forEach((el) => {
-		el.classList.remove(
-			"debug-highlight-frame",
-			"debug-highlight-content",
-			"debug-highlight-bounds",
-		);
-	});
-
-	frame?.classList.add("debug-highlight-frame");
-	content?.classList.add("debug-highlight-content");
-
-	winid = frame?.getAttribute("data-window-id") ?? "";
-
-	const win = winid ? wManager.find(winid) : null;
-
-	if (!win || !frame) {
-		resetWindowData();
+	if (!frame) {
+		resetWindow();
 		return;
 	}
 
+	const id = frame.getAttribute("data-window-id");
+
+	if (!id) {
+		resetWindow();
+		return;
+	}
+
+	const win = wManager.find(id);
+
+	if (!win) {
+		resetWindow();
+		return;
+	}
+
+	winId = win.winId;
 	parentId = win.parentId ?? "root";
-	zIndex = win.zIndex;
 
-	winWidth = win.state.width;
-	winHeight = win.state.height;
-	winLeft = win.state.left;
-	winTop = win.state.top;
+	winX = win.state.left;
+	winY = win.state.top;
 
-	frameRect = getRect(frame);
-
-	frameWidth = frameRect?.width ?? 0;
-	frameHeight = frameRect?.height ?? 0;
-
-	deltaWidth = frameWidth - winWidth;
-	deltaHeight = frameHeight - winHeight;
-
-	bounds = win.boundingEl;
-	boundsRect = getRect(bounds);
-
-	boundsLeft = boundsRect?.left ?? 0;
-	boundsTop = boundsRect?.top ?? 0;
-
-	parentWidth = bounds?.clientWidth ?? 0;
-	parentHeight = bounds?.clientHeight ?? 0;
-
-	scrollLeft = bounds?.scrollLeft ?? 0;
-	scrollTop = bounds?.scrollTop ?? 0;
-
-	clientLeft = bounds?.clientLeft ?? 0;
-	clientTop = bounds?.clientTop ?? 0;
-
-	offsetWidth = bounds?.offsetWidth ?? 0;
-	offsetHeight = bounds?.offsetHeight ?? 0;
-
-	bounds?.classList.add("debug-highlight-bounds");
-
-	if (frameRect && boundsRect && bounds) {
-		localLeft = frameRect.left -
-			boundsRect.left -
-			bounds.clientLeft +
-			bounds.scrollLeft;
-
-		localTop = frameRect.top -
-			boundsRect.top -
-			bounds.clientTop +
-			bounds.scrollTop;
-	}
-
-	contentRect = getRect(
-		frame.querySelector(".content") as HTMLElement | null,
-	);
-
-	const style = getComputedStyle(frame);
-
-	transform = style.transform;
-	overflow = style.overflow;
-	display = style.display;
-
-	if (frame.offsetWidth && frame.offsetHeight) {
-		scaleX = frameRect ? frameRect.width / frame.offsetWidth : 1;
-
-		scaleY = frameRect ? frameRect.height / frame.offsetHeight : 1;
-	}
-
-	calculateReparent();
+	runtimeType = win.runtime?.type ?? "unknown";
+	runtimeId = win.runtime?.id ?? "";
 }
 
-function calculateReparent() {
-	if (!bounds || !frameRect) return;
-
-	const rect = bounds.getBoundingClientRect();
-
-	const left = frameRect.left -
-		rect.left -
-		bounds.clientLeft +
-		bounds.scrollLeft;
-
-	const top = frameRect.top -
-		rect.top -
-		bounds.clientTop +
-		bounds.scrollTop;
-
-	const width = frameRect.width;
-	const height = frameRect.height;
-
-	const availableWidth = Math.max(
-		1,
-		bounds.clientWidth - left,
-	);
-
-	const availableHeight = Math.max(
-		1,
-		bounds.clientHeight - top,
-	);
-
-	const scale = Math.min(
-		1,
-		availableWidth / width,
-		availableHeight / height,
-	);
-
-	calculatedLeft = round(left);
-	calculatedTop = round(top);
-	calculatedWidth = round(width * scale);
-	calculatedHeight = round(height * scale);
-	calculatedScale = round(scale, 4);
-}
-
-function resetWindowData() {
-	winid = "";
+function resetWindow() {
+	winId = "";
 	parentId = "";
-	zIndex = 0;
 
-	winWidth = 0;
-	winHeight = 0;
-	winLeft = 0;
-	winTop = 0;
+	winX = 0;
+	winY = 0;
 
-	frameRect = null;
-	contentRect = null;
-	boundsRect = null;
-	bounds = null;
-}
-
-function inspectDropTarget(x: number, y: number) {
-	dropTarget = "";
-	dropTargetRect = null;
-
-	const elements = document.elementsFromPoint(x, y);
-
-	for (const element of elements) {
-		const candidate = element.closest(
-			".window-frame",
-		) as HTMLElement | null;
-
-		if (!candidate) continue;
-
-		const id = candidate.getAttribute("data-window-id");
-
-		if (!id || id === winid) continue;
-
-		const win = wManager.find(id);
-		if (!win) continue;
-
-		dropTarget = id;
-		dropTargetRect = candidate.getBoundingClientRect();
-
-		return;
-	}
+	runtimeType = "";
+	runtimeId = "";
 }
 
 function onMouseMove(event: MouseEvent) {
 	mouseX = event.clientX;
 	mouseY = event.clientY;
-	isShiftDown = event.shiftKey;
-
-	inspectDropTarget(mouseX, mouseY);
 }
 
 function onMouseOver(event: MouseEvent) {
-	const target = event.target as HTMLElement;
+	const target = event.target;
 
-	if (!target || target.closest(".window-inspector")) return;
+	if (!(target instanceof HTMLElement)) return;
 
 	inspect(target);
-}
-
-function logCurrent() {
-	addLog(
-		`WIN ${winid} parent=${parentId} ` +
-			`local=${round(localLeft)},${round(localTop)} ` +
-			`size=${winWidth}x${winHeight}`,
-	);
-
-	addLog(
-		`DROP ${dropTarget || "none"} ` +
-			`mouse=${mouseX},${mouseY}`,
-	);
-
-	addLog(
-		`CALC ${calculatedLeft},${calculatedTop} ` +
-			`${calculatedWidth}x${calculatedHeight} ` +
-			`scale=${calculatedScale}`,
-	);
-}
-
-function clearLogs() {
-	logs = [];
 }
 
 function togglePopup() {
@@ -330,211 +95,104 @@ function togglePopup() {
 />
 
 {#if showPopup}
-    <div
+	<div
 	class="window-inspector"
-	style:left="{Math.min(mouseX + 15, window.innerWidth - 350)}px"
-	style:top="{Math.min(mouseY + 15, window.innerHeight - 500)}px"
+	style:left="{Math.min(
+			mouseX + 15,
+			(typeof window !== 'undefined' ? window.innerWidth : 400) - 350
+		)}px"
+	style:top="{Math.min(
+			mouseY + 15,
+			(typeof window !== 'undefined' ? window.innerHeight : 600) - 220
+		)}px"
 >
-        <div class="header">
-            <div>
-                <strong>🔍 WINDOW INSPECTOR</strong>
-                <span class="subtitle">Runtime geometry debugger</span>
-            </div>
+		<!-- Header -->
+		<div class="header">
+			<div>
+				<strong>🔍 WINDOW INSPECTOR</strong>
+				<span class="subtitle">Window identity & runtime</span>
+			</div>
 
-            <div class="header-actions">
-                <button onclick={() => expanded = !expanded}>
-                    {expanded ? "−" : "+"}
-                </button>
-                <button onclick={togglePopup}>×</button>
-            </div>
-        </div>
+			<div class="header-actions">
+				<button
+					onclick={() => (expanded = !expanded)}
+					title="Expand / collapse"
+				>
+					{expanded ? "−" : "+"}
+				</button>
 
-        {#if expanded}
-            <div class="body">
+				<button
+					onclick={togglePopup}
+					title="Close inspector"
+				>
+					×
+				</button>
+			</div>
+		</div>
 
-                <section>
-                    <h4>🖱 Mouse</h4>
-                    <div class="grid">
-                        <span>Client XY</span>
-                        <b>{mouseX}, {mouseY}</b>
+		{#if expanded}
+			<div class="body">
+				<!-- Mouse -->
+				<section>
+					<h4>🖱 Mouse</h4>
 
-                        <span>Shift</span>
-                        <b class:active={isShiftDown}>
-                            {isShiftDown ? "PRESSED" : "false"}
-                        </b>
+					<div class="grid">
+						<span>Client X</span>
+						<b>{mouseX}</b>
 
-                        <span>Element</span>
-                        <b>{elType}</b>
+						<span>Client Y</span>
+						<b>{mouseY}</b>
+					</div>
+				</section>
 
-                        <span>Class</span>
-                        <b class="wrap">{hoveredClass}</b>
+				<!-- Window -->
+				<section>
+					<h4>🪟 Window</h4>
 
-                        <span>Position</span>
-                        <b>{position}</b>
+					{#if winId}
+						<div class="grid">
+							<span>winId</span>
+							<b class="blue wrap">{winId}</b>
 
-                        <span>Element ID</span>
-                        <b>{tagId}</b>
-                    </div>
-                </section>
+							<span>parentId</span>
+							<b class="yellow wrap">{parentId}</b>
 
-                {#if winid}
-                    <section>
-                        <h4>🪟 Window state</h4>
-                        <div class="grid">
-                            <span>winId</span>
-                            <b class="blue wrap">{winid}</b>
+							<span>Position X</span>
+							<b>{winX}</b>
 
-                            <span>parentId</span>
-                            <b class="yellow">{parentId}</b>
+							<span>Position Y</span>
+							<b>{winY}</b>
+						</div>
+					{:else}
+						<div class="empty">
+							No window selected
+						</div>
+					{/if}
+				</section>
 
-                            <span>z-index</span>
-                            <b>{zIndex}</b>
+				<!-- Runtime -->
+				<section>
+					<h4>⚙️ Runtime</h4>
 
-                            <span>State left/top</span>
-                            <b>{winLeft} / {winTop}</b>
+					{#if winId}
+						<div class="grid">
+							<span>Status</span>
+							<b class:active={runtimeType !== "unknown"}>
+								{runtimeType}
+							</b>
 
-                            <span>State width/height</span>
-                            <b>{winWidth} × {winHeight}</b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>📐 Frame DOM</h4>
-                        <div class="grid">
-                            <span>Screen left/top</span>
-                            <b>
-                                {round(frameRect?.left ?? 0)} /
-                                {round(frameRect?.top ?? 0)}
-                            </b>
-
-                            <span>DOM width/height</span>
-                            <b>{round(frameWidth)} × {round(frameHeight)}</b>
-
-                            <span>State - DOM</span>
-                            <b class:warning={
-                                Math.abs(deltaWidth) > 1 ||
-                                Math.abs(deltaHeight) > 1
-                            }>
-                                {round(deltaWidth)} × {round(deltaHeight)}
-                            </b>
-
-                            <span>Scale X/Y</span>
-                            <b>{round(scaleX, 4)} / {round(scaleY, 4)}</b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>📦 Parent bounds</h4>
-                        <div class="grid">
-                            <span>Element</span>
-                            <b>{bounds?.tagName ?? "missing"}</b>
-
-                            <span>Screen left/top</span>
-                            <b>{round(boundsLeft)} / {round(boundsTop)}</b>
-
-                            <span>Client width/height</span>
-                            <b>{parentWidth} × {parentHeight}</b>
-
-                            <span>Offset width/height</span>
-                            <b>{offsetWidth} × {offsetHeight}</b>
-
-                            <span>Client border L/T</span>
-                            <b>{clientLeft} / {clientTop}</b>
-
-                            <span>Scroll L/T</span>
-                            <b>{scrollLeft} / {scrollTop}</b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>🎯 Local coordinates</h4>
-                        <div class="grid">
-                            <span>Calculated left/top</span>
-                            <b class="green">
-                                {round(localLeft)} / {round(localTop)}
-                            </b>
-
-                            <span>State left/top</span>
-                            <b>{winLeft} / {winTop}</b>
-
-                            <span>Difference</span>
-                            <b class:warning={
-                                Math.abs(localLeft - winLeft) > 1 ||
-                                Math.abs(localTop - winTop) > 1
-                            }>
-                                {round(localLeft - winLeft)} /
-                                {round(localTop - winTop)}
-                            </b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>🧮 Reparent simulation</h4>
-                        <div class="grid">
-                            <span>Local left/top</span>
-                            <b>{calculatedLeft} / {calculatedTop}</b>
-
-                            <span>New width/height</span>
-                            <b class="green">
-                                {calculatedWidth} × {calculatedHeight}
-                            </b>
-
-                            <span>Scale factor</span>
-                            <b>{calculatedScale}</b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>🎯 Drop target</h4>
-                        <div class="grid">
-                            <span>Target ID</span>
-                            <b class="yellow">{dropTarget || "none"}</b>
-
-                            <span>Target screen XY</span>
-                            <b>
-                                {round(dropTargetRect?.left ?? 0)} /
-                                {round(dropTargetRect?.top ?? 0)}
-                            </b>
-
-                            <span>Target size</span>
-                            <b>
-                                {round(dropTargetRect?.width ?? 0)} ×
-                                {round(dropTargetRect?.height ?? 0)}
-                            </b>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4>🎨 CSS</h4>
-                        <div class="grid">
-                            <span>Display</span>
-                            <b>{display}</b>
-
-                            <span>Overflow</span>
-                            <b>{overflow}</b>
-
-                            <span>Transform</span>
-                            <b class="wrap">{transform}</b>
-                        </div>
-                    </section>
-                {/if}
-
-                <section>
-                    <h4>📋 Debug log</h4>
-
-                    <div class="log-actions">
-                        <button onclick={logCurrent}>Capture</button>
-                        <button onclick={clearLogs}>Clear</button>
-                    </div>
-
-                    {#each logs as log}
-                        <div class="log">{log}</div>
-                    {/each}
-                </section>
-
-            </div>
-        {/if}
-    </div>
+							<span>Runtime ID</span>
+							<b class="wrap">{runtimeId || "—"}</b>
+						</div>
+					{:else}
+						<div class="empty">
+							No runtime selected
+						</div>
+					{/if}
+				</section>
+			</div>
+		{/if}
+	</div>
 {/if}
 
 <style>
@@ -546,11 +204,14 @@ function togglePopup() {
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
+
 	background: rgba(15, 23, 42, 0.97);
 	color: #f8fafc;
+
 	border: 1px solid #475569;
 	border-radius: 9px;
-	box-shadow: 0 8px 30px rgba(0,0,0,.5);
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+
 	font: 11px/1.4 monospace;
 	pointer-events: auto;
 }
@@ -559,6 +220,7 @@ function togglePopup() {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+
 	padding: 9px;
 	background: #1e293b;
 	border-bottom: 1px solid #475569;
@@ -608,7 +270,7 @@ h4 {
 
 .grid {
 	display: grid;
-	grid-template-columns: 115px minmax(0, 1fr);
+	grid-template-columns: 100px minmax(0, 1fr);
 	gap: 4px;
 }
 
@@ -633,28 +295,12 @@ h4 {
 	color: #fbbf24 !important;
 }
 
-.green {
-	color: #34d399 !important;
-}
-
-.warning {
-	color: #fb7185 !important;
-}
-
 .active {
 	color: #34d399 !important;
 }
 
-.log-actions {
-	display: flex;
-	gap: 5px;
-	margin-bottom: 5px;
-}
-
-.log {
-	padding: 3px;
-	color: #cbd5e1;
-	border-bottom: 1px solid #334155;
-	overflow-wrap: anywhere;
+.empty {
+	color: #94a3b8;
+	padding: 5px 0;
 }
 </style>

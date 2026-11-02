@@ -31,6 +31,7 @@
 //  └─ layout
 
 import { onDestroy, onMount, type Snippet } from "svelte";
+import { tick } from "svelte";
 
 // Längst upp bland dina övriga importer:
 import { receive, send } from "./windowTransitions";
@@ -101,6 +102,17 @@ const resizeHandles: ResizeMode[] = [
 	"left",
 ];
 
+// $effect(() => {
+// 	measure();
+// });
+// async function measure() {
+// 	const t0 = performance.now();
+// 	await tick();
+// 	// wManager.updateMetrics({ renderMs: performance.now() - t0 });
+
+// 	win.metrics.renderMs = performance.now() - t0;
+// }
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), Math.max(min, max));
 }
@@ -142,7 +154,7 @@ onMount(() => {
 	const rect = frameEl.getBoundingClientRect();
 
 	if (win.state.width <= 0 || win.state.height <= 0) {
-		manager.update(win.winId, {
+		manager.updateState(win.winId, {
 			width: win.state.width || rect.width,
 			height: win.state.height || rect.height,
 		});
@@ -513,10 +525,10 @@ function onMouseMove(event: MouseEvent) {
 
 	if (dragMode === "move") {
 		// manager.update(activeWin.winId, nextRect);
-		manager.update(activeWin.winId, { ...nextRect, transparency: 0.65 });
+		manager.updateState(activeWin.winId, { ...nextRect, transparency: 0.65 });
 	} else {
 		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-		manager.update(activeWin.winId, { transparency: 0.85 });
+		manager.updateState(activeWin.winId, { transparency: 0.85 });
 	}
 }
 
@@ -529,7 +541,7 @@ function cleanupInteraction() {
 function endInteraction() {
 	// 🌟 ÅTERSTÄLL TRANSPARENSEN HÄR:
 	if (dragWinId) {
-		manager.update(dragWinId, { transparency: startTransparency });
+		manager.updateState(dragWinId, { transparency: startTransparency });
 	}
 	dragMode = null;
 	dragWinId = null;
@@ -565,7 +577,7 @@ function changeTransparency(event: WheelEvent) {
 
 	const delta = event.deltaY < 0 ? 0.05 : -0.05;
 
-	manager.update(win.winId, {
+	manager.updateState(win.winId, {
 		transparency: clamp(
 			Number((win.state.transparency + delta).toFixed(2)),
 			0.2,
@@ -617,27 +629,26 @@ $effect(() => {
 	}
 });
 
+// $effect(() => {
+// 	if (!frameEl || !win) return;
+
+// 	const style = getComputedStyle(frameEl);
+// 	const offsetParent = frameEl.offsetParent;
+
+// 	console.log("[WINDOW POSITIONING]", {
+// 		winId: win.winId,
+// 		parentId: win.parentId,
+// 		position: style.position,
+// 		offsetParent: offsetParent?.className,
+// 		boundingEl: win.boundingEl?.className,
+// 		frameRect: frameEl.getBoundingClientRect(),
+// 		offsetLeft: frameEl.offsetLeft,
+// 		offsetTop: frameEl.offsetTop,
+// 	});
+//});
+
 $effect(() => {
-	if (!frameEl || !win) return;
-
-	const style = getComputedStyle(frameEl);
-	const offsetParent = frameEl.offsetParent;
-
-	console.log("[WINDOW POSITIONING]", {
-		winId: win.winId,
-		parentId: win.parentId,
-
-		position: style.position,
-
-		offsetParent: offsetParent?.className,
-
-		boundingEl: win.boundingEl?.className,
-
-		frameRect: frameEl.getBoundingClientRect(),
-
-		offsetLeft: frameEl.offsetLeft,
-		offsetTop: frameEl.offsetTop,
-	});
+	console.count(`Frame ${win.winId}`);
 });
 </script>
 

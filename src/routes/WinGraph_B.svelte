@@ -18,6 +18,7 @@ https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraphView.
 
 <script lang="ts">
 import type { WindowComponentProps, WindowInstance } from "#lib/windowManager.svelte.ts";
+import { onMount } from "svelte";
 
 import GraphView from "./WinGraphView.svelte";
 
@@ -63,6 +64,14 @@ let actualRenderMs = $state(0);
 let batchAdjustment = $state(0);
 let controllerStatus = $state("Waiting");
 
+let longTaskMs = 0;
+let longTaskCount = 0;
+
+let totalLongTasks = $state(0);
+let lastLongTaskMs = $state(0);
+
+let longTaskObserver: PerformanceObserver | undefined;
+
 function clamp(
 	value: number,
 	min: number,
@@ -71,83 +80,83 @@ function clamp(
 	return Math.max(min, Math.min(max, value));
 }
 
-/**
- * PID-regulator.
- *
- * targetMs = önskad renderingstid
- * actualMs = uppmätt renderingstid
- *
- * Ökar batch om renderingen är för snabb.
- * Minskar batch om renderingen är för långsam.
- */
+function startPerformanceMonitor() {
+	if (
+		!PerformanceObserver.supportedEntryTypes?.includes("longtask")
+	) {
+		console.warn("Long Task API not supported");
+		return;
+	}
+
+	longTaskObserver = new PerformanceObserver((list) => {
+		for (const entry of list.getEntries()) {
+			longTaskMs += entry.duration;
+			longTaskCount++;
+		}
+	});
+
+	longTaskObserver.observe({
+		type: "longtask",
+		buffered: false,
+	});
+}
+
 function regulateBatch(actualMs: number) {
-	const targetMs = Math.max(1, Number(config.updateMs) || 100);
+	const targetMs = config.updateMs;
 
-	if (!Number.isFinite(actualMs) || actualMs <= 0) {
-		return;
-	}
-	actualRenderMs = actualMs;
-	const now = performance.now();
-	const dt = previousTime > 0 ? clamp((now - previousTime) / 1000, 0.01, 2) : 0.1;
-	previousTime = now;
-	// Normaliserat reglerfel
-	const error = (targetMs - actualMs) / targetMs;
-	// Dödzon för att undvika små oscillationer
-	if (Math.abs(error) < DEAD_BAND) {
-		controllerStatus = "Target reached";
-		batchAdjustment = 0;
-		previousError = error;
-		return;
-	}
-	// Integral med anti-windup
-	integral = clamp(
-		integral + error * dt,
-		-3,
-		3,
-	);
-	// Derivatadel
-	const derivative = (error - previousError) / dt;
-	previousError = error;
-	// PID-utgång
-	const pid = KP * error +
-		KI * integral +
-		KD * derivative;
+	if (actualMs <= 0) return;
 
-	// Begränsa förändring till max 20 % per cykel
-	const adjustment = clamp(
-		pid,
-		-MAX_STEP,
-		MAX_STEP,
+	const current = config.pointsPerBatch;
+
+	const estimated = Math.round(
+		current *
+			(targetMs / actualMs),
 	);
-	const currentBatch = Math.max(
-		MIN_BATCH,
-		Math.round(Number(config.pointsPerBatch) || 1),
-	);
-	const newBatch = Math.round(
-		clamp(
-			currentBatch * (1 + adjustment),
-			MIN_BATCH,
-			MAX_BATCH,
+
+	config.pointsPerBatch = Math.max(
+		1,
+		Math.min(
+			estimated,
+			100000,
 		),
 	);
-	batchAdjustment = newBatch - currentBatch;
-	if (newBatch !== currentBatch) {
-		// Ändrar samma reaktiva config som A använder
-		config.pointsPerBatch = newBatch;
-	}
-	if (error < 0) {
-		controllerStatus = "Reducing batch";
-	} else {
-		controllerStatus = "Increasing batch";
-	}
 }
 
 /**
  * Anropas från GraphView efter varje Plotly-rendering.
  */
 function onRenderMs(ms: number) {
+	win.metrics.renderMs = ms;
 	regulateBatch(ms);
 }
+
+onMount(() => {
+	if (
+		!PerformanceObserver.supportedEntryTypes?.includes("longtask")
+	) {
+		controllerStatus = "Long Task API unavailable";
+		return;
+	}
+
+	longTaskObserver = new PerformanceObserver((list) => {
+		for (const entry of list.getEntries()) {
+			longTaskMs += entry.duration;
+			longTaskCount++;
+
+			totalLongTasks++;
+			lastLongTaskMs = entry.duration;
+		}
+	});
+
+	longTaskObserver.observe({
+		type: "longtask",
+		buffered: false,
+	});
+
+	return () => {
+		longTaskObserver?.disconnect();
+	};
+});
 </script>
 
 <div class="container">

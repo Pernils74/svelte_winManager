@@ -1,5 +1,3 @@
-<!-- WinGraphView.svelte -->
-
 <script lang="ts">
 import { onMount } from "svelte";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
@@ -18,179 +16,291 @@ type GraphConfig = {
 interface Props extends Partial<WindowComponentProps> {
 	payload?: GraphConfig;
 	points?: Point3D[];
-
-	// Rapportera faktisk renderingstid till B
 	onRenderMs?: (ms: number) => void;
 }
 
-let { win, payload, points, onRenderMs }: Props = $props();
+let {
+	win,
+	payload,
+	points,
+	onRenderMs,
+}: Props = $props();
 
 let fps = $state(0);
 let renderMs = $state(0);
-
-let frameCount = 0;
-let lastTime = performance.now();
+let plotlyReady = $state(false);
 
 let plotEl: HTMLDivElement;
-let plotlyReady = $state(false);
 
 let pointsPerBatch = $derived(points?.length ?? 0);
 
-let resizeObserver: ResizeObserver;
+let resizeObserver: ResizeObserver | undefined;
 
-// Hindrar gamla renderingsresultat från att rapporteras
-let renderSequence = 0;
+// --------------------------------------------------
+// Render state
+// --------------------------------------------------
 
-async function loadPlotly() {
-	if ((window as any).Plotly) return;
-	const script = document.createElement("script");
-	script.src = "https://cdn.plot.ly/plotly-3.1.0.min.js";
-	document.head.appendChild(script);
-	await new Promise<void>((resolve, reject) => {
+let renderBusy = false;
+let dirty = false;
+
+let latestPoints: Point3D[] = [];
+
+let frameQueued = false;
+let disposed = false;
+
+// --------------------------------------------------
+// FPS
+// --------------------------------------------------
+
+let frameCount = 0;
+let lastFpsTime = 0;
+
+function updateFps() {
+	frameCount++;
+
+	const now = performance.now();
+
+	if (now - lastFpsTime >= 1000) {
+		fps = frameCount;
+		frameCount = 0;
+		lastFpsTime = now;
+	}
+}
+
+// --------------------------------------------------
+// Plotly loader
+// --------------------------------------------------
+
+let plotlyLoadPromise: Promise<void> | undefined;
+
+function loadPlotly(): Promise<void> {
+	if ((window as any).Plotly) {
+		return Promise.resolve();
+	}
+
+	if (plotlyLoadPromise) {
+		return plotlyLoadPromise;
+	}
+
+	plotlyLoadPromise = new Promise<void>((resolve, reject) => {
+		const script = document.createElement("script");
+
+		script.src = "https://cdn.plot.ly/plotly-3.1.0.min.js";
+		script.async = true;
+
 		script.onload = () => resolve();
-		script.onerror = () =>
-			reject(
-				new Error("Could not load Plotly"),
-			);
+
+		script.onerror = () => {
+			plotlyLoadPromise = undefined;
+			reject(new Error("Could not load Plotly"));
+		};
+
+		document.head.appendChild(script);
+	});
+
+	return plotlyLoadPromise;
+}
+
+// --------------------------------------------------
+// Actual render
+// --------------------------------------------------
+
+async function render(snapshot: Point3D[]) {
+	const t0 = performance.now();
+
+	const Plotly = (window as any).Plotly;
+	const x = snapshot.map((p) => p.x);
+	const y = snapshot.map((p) => p.y);
+	const z = snapshot.map((p) => p.z);
+
+	await Plotly.react(
+		plotEl,
+		[
+			{
+				type: "scatter3d",
+				mode: "markers",
+				x,
+				y,
+				z,
+				marker: {
+					size: 2,
+				},
+			},
+		],
+	);
+
+	if (disposed) return;
+
+	const elapsed = performance.now() - t0;
+
+	renderMs = elapsed;
+
+	updateFps();
+
+	// Rapportera verklig Plotly-tid till B
+	onRenderMs?.(elapsed);
+}
+
+// --------------------------------------------------
+// Render loop
+// --------------------------------------------------
+
+async function renderLoop() {
+	if (renderBusy || disposed || !plotlyReady) return;
+
+	renderBusy = true;
+
+	try {
+		while (dirty && !disposed) {
+			// Markera att aktuell data tas om hand
+			dirty = false;
+
+			// Snapshot av senaste data
+			const snapshot = latestPoints;
+
+			await render(snapshot);
+		}
+	} catch (error) {
+		console.error("Plotly render error:", error);
+	} finally {
+		renderBusy = false;
+
+		// Data kan ha ändrats under rendering
+		if (dirty && !disposed) {
+			requestRender();
+		}
+	}
+}
+
+// --------------------------------------------------
+// Render scheduler
+// --------------------------------------------------
+
+function requestRender() {
+	if (disposed || frameQueued || !plotlyReady) return;
+
+	frameQueued = true;
+
+	requestAnimationFrame(() => {
+		frameQueued = false;
+
+		if (disposed) return;
+
+		void renderLoop();
 	});
 }
 
-onMount(() => {
-	const init = async () => {
-		await loadPlotly();
+// --------------------------------------------------
+// Data updates
+// --------------------------------------------------
 
-		// 🟢 MANUELL FIX: Aktivera WebGL-tilläggen explicit för att tysta WebGL-varningen
-		try {
-			const canvas = document.createElement("canvas");
-			const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-			if (gl) {
-				gl.getExtension("EXT_color_buffer_float");
-				gl.getExtension("WEBGL_color_buffer_float");
-			}
-		} catch (e) {
-			// Ignorera i tysthet om WebGL saknas i denna dolda temporära canvas
-		}
+$effect(() => {
+	latestPoints = points ?? [];
 
-		const Plotly = (window as any).Plotly;
-		await Plotly.newPlot(
-			plotEl,
-			[
-				{
-					type: "scatter3d",
-					mode: "markers",
-					x: [],
-					y: [],
-					z: [],
-					marker: {
-						size: 2,
-					},
-				},
-			],
-			{
-				margin: {
-					l: 0,
-					r: 0,
-					t: 0,
-					b: 0,
-				},
-			},
-			{
-				responsive: true,
-			},
-		);
-		resizeObserver = new ResizeObserver(() => {
-			Plotly.Plots.resize(plotEl);
-		});
-		resizeObserver.observe(plotEl);
-		plotlyReady = true;
-	};
-	void init();
-	return () => {
-		renderSequence++;
-		resizeObserver?.disconnect();
-	};
+	dirty = true;
+
+	requestRender();
 });
 
-/**
- * Rendera grafen och rapportera verklig tid
- * tillbaka till WinGraph_B.
- */
-$effect(() => {
-	if (!plotlyReady) return;
+// --------------------------------------------------
+// Initialize
+// --------------------------------------------------
 
-	const plotPoints = points ?? [];
-	const currentSequence = ++renderSequence;
+onMount(() => {
+	disposed = false;
 
-	const Plotly = (window as any).Plotly;
-
-	frameCount++;
-	const now = performance.now();
-
-	if (now - lastTime >= 1000) {
-		fps = frameCount;
-		frameCount = 0;
-		lastTime = now;
-	}
-
-	const x = plotPoints.map((p) => p.x);
-	const y = plotPoints.map((p) => p.y);
-	const z = plotPoints.map((p) => p.z);
-
-	async function render() {
-		const t0 = performance.now();
+	const init = async () => {
 		try {
-			await Plotly.react(
+			await loadPlotly();
+
+			if (disposed) return;
+
+			const Plotly = (window as any).Plotly;
+
+			await Plotly.newPlot(
 				plotEl,
 				[
 					{
 						type: "scatter3d",
 						mode: "markers",
-						x,
-						y,
-						z,
+						x: [],
+						y: [],
+						z: [],
 						marker: {
 							size: 2,
 						},
 					},
 				],
+				{
+					margin: {
+						l: 0,
+						r: 0,
+						t: 0,
+						b: 0,
+					},
+				},
+				{
+					responsive: true,
+				},
 			);
 
-			const elapsed = performance.now() - t0;
-			// Rapportera endast senaste renderingen
-			if (currentSequence !== renderSequence) {
+			if (disposed) {
+				Plotly.purge(plotEl);
 				return;
 			}
-			renderMs = elapsed;
-			// Skicka mätvärdet till PID-regulatorn i B
-			onRenderMs?.(elapsed);
+
+			resizeObserver = new ResizeObserver(() => {
+				Plotly.Plots.resize(plotEl);
+			});
+
+			resizeObserver.observe(plotEl);
+
+			lastFpsTime = performance.now();
+
+			plotlyReady = true;
+
+			// Starta första rendering
+			dirty = true;
+			requestRender();
 		} catch (error) {
-			console.error("Plotly render error:", error);
+			console.error("Plotly initialization error:", error);
 		}
-	}
-	void render();
+	};
+
+	void init();
+
+	return () => {
+		disposed = true;
+
+		resizeObserver?.disconnect();
+
+		if ((window as any).Plotly && plotEl) {
+			(window as any).Plotly.purge(plotEl);
+		}
+	};
 });
 </script>
 
 <div class="window-container">
 	<div class="stats">
-			FPS:
-			<strong>{fps}</strong>
-	
-			<br />
-	
-			Render:
-			<strong>{renderMs.toFixed(1)} ms</strong>
-	
-			<br />
-	
-			Points per batch:
-			<strong>{pointsPerBatch}</strong>
-	
-			<br />
-	
-			Target:
-			<strong>{payload?.updateMs ?? 0} ms</strong>
-		</div>
+		FPS:
+		<strong>{fps}</strong>
+
+		<br />
+
+		Render:
+		<strong>{renderMs.toFixed(1)} ms</strong>
+
+		<br />
+
+		Points per batch:
+		<strong>{pointsPerBatch}</strong>
+
+		<br />
+
+		Target:
+		<strong>{payload?.updateMs ?? 0} ms</strong>
+	</div>
 
 	<div class="graph-container">
 		<div bind:this={plotEl} class="plot"></div>
@@ -212,6 +322,7 @@ $effect(() => {
 .stats {
 	padding: 6px;
 	font-size: 12px;
+	flex: 0 0 auto;
 }
 
 .graph-container {
