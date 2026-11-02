@@ -647,9 +647,9 @@ $effect(() => {
 // 	});
 //});
 
-$effect(() => {
-	console.count(`Frame ${win.winId}`);
-});
+// $effect(() => {
+// 	console.count(`Frame ${win.winId}`);
+// });
 </script>
 
 <div
@@ -714,14 +714,14 @@ $effect(() => {
         <button 
           type="button" 
           title="Frikoppla till skrivbordsfönster" 
-          onclick={() => manager.detachWindow(win, "tauri")}>
+          onclick={() => manager.detachWindow(win, "tauri-window")}>
           🗔
         </button>
       {:else}
         <button 
           type="button" 
           title="Frikoppla till ny webbfönster" 
-          onclick={() => manager.detachWindow(win, "window")}>
+          onclick={() => manager.detachWindow(win, "browser-window")}>
           🗗🪟
         </button>
       {/if}

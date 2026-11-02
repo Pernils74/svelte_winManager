@@ -39,92 +39,6 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/%
 
 <!-- WindowHost.svelte -->
 <script lang="ts">
-// <div class="layout" class:standalone-host={isStandalone}>
-
-// 	{#if !isStandalone}
-// 	  <header class="topbar">
-// 		{#if topbarContent}{@render topbarContent()}{/if}
-// 		<span>Current open windows: {winCount}</span>
-// 	  </header>
-// 	{/if}
-
-// 	<!-- Dvs det är detta som skall ersättas		 -->
-// 	<!-- Om vi är standalone blir main.workspace 100vw/100vh automatiskt -->
-// 	<main class="workspace" bind:this={rootContentEl}>
-// 	  {#if rootContentEl}
-// 		{#if standaloneLoading}
-// 		  <div class="loading">Laddar fristående komponent...</div>
-// 		{:else}
-// 			<!-- 1. Fönstren loopas ut först -->
-// 		  {#each activeWindows as win (win.winId)}
-// 			{#if win.component}
-// 			  {@const WindowComponent = win.component}
-//     			<!-- 1. Hitta exakt vilket globalt index detta fönster har i din riktiga array -->
-// 			  {@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
-
-// 			  <!-- 🌟 SMART BOUNDS-HANTERING -->
-// 			  {@const parentInstance = wManager.find(win.parentId)}
-// 			  <!-- Om vi är standalone ska fönstret fylla hela skärmen (contentEl),
-// 				   annars begränsas barnet till sin förälder -->
-// 			  {@const parentBounds = isStandalone ? rootContentEl : (parentInstance?.boundingEl ?? rootContentEl)}
-
-// 			  <WindowFrame {win} bounds={parentBounds}>
-// 				<WindowComponent
-// 				  bind:win={wManager.windows[globalIdx]}
-// 				  winId={win.winId}
-// 				  parentId={win.parentId}
-// 				  {...win.props}
-// 				/>
-// 			  </WindowFrame>
-// 			{/if}
-
-// 		  {/each}  <!--for ..activeWindows as win (win.winId)} -->
-// 			  <!-- If desktopContent -->
-// 		  {#if !isStandalone && desktopContent}
-// 			  {@render desktopContent()}
-// 		  {/if}
-// 		{/if}
-// 	  {/if}
-// 	</main> <!-- 💡 Closing of main tag -->
-// 	<!-- till hit  -->
-
-// 	{#if !isStandalone && minimizedWindows.length > 0}
-// 	  <footer class="taskbar">
-// 		<span class="taskbar-label">Minimerade fönster</span>
-
-// 		{#each minimizedWindows as win (win.winId)}
-// 		  <div class="task-item">
-// 			<button
-// 			  type="button"
-// 			  class="task-btn"
-// 			  aria-label={`Återställ ${win.title}`}
-// 			  onclick={() => wManager.restore(win)}
-// 			>
-// 			  <span class="task-icon" aria-hidden="true">◫</span>
-// 			  <span class="task-title">{win.title}</span>
-// 			</button>
-
-// 			<div class="thumbnail-popup" aria-hidden="true">
-// 			  <div class="thumbnail-heading">{win.title}</div>
-
-// 			  {#if win.thumbnail}
-// 				<img
-// 				  class="thumbnail-image"
-// 				  src={win.thumbnail}
-// 				  alt=""
-// 				/>
-// 			  {:else}
-// 				<div class="thumbnail-placeholder">
-// 				  Förhandsvisning saknas
-// 				</div>
-// 				{/if}
-// 			</div>
-// 		  </div>
-// 		{/each}
-// 	  </footer>
-// 	{/if}
-//   </div>
-
 import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
 
@@ -166,7 +80,7 @@ let minimizedWindows = $derived(
 
 let rootWindows = $derived(
 	wManager.getChildren(ROOT_WIN_ID).filter(
-		(win) => !win.isDetached,
+		(win) => win.viewPort.type == "workspace",
 	),
 );
 
@@ -223,8 +137,8 @@ $effect(() => {
 					showButtons: false,
 					docking: {},
 					payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
-					isDetached: true,
-					context: { type: "browser-tab" },
+
+					viewPort: { id: "s", type: "browser-tab" },
 				};
 
 				wManager.windows.push(winInstance);
@@ -307,22 +221,18 @@ onMount(() => {
 
 // Hämta ALLA aktiva fönster i ett platt format (både föräldrar och barn)
 // Vi ser till att activeWindows vet om vi är i standalone eller workspace
-let activeWindows = $derived(
-	wManager.windows.filter((win) => {
-		if (win.winId === ROOT_WIN_ID || win.state.isMinimized) return false;
+// let activeWindows = $derived(
+// 	wManager.windows.filter((win) => {
+// 		if (win.winId === ROOT_WIN_ID || win.state.isMinimized) return false;
 
-		// We are inside a standalone tab/window/tauri, We just want to render this actual window
-		if (isStandalone) {
-			return win.winId === standaloneWinId;
-		}
-		// Else render all windows that is not detached (regular mdi windows)
-		return !win.isDetached;
-	}),
-);
-
-$effect(() => {
-	console.count("WindowHost");
-});
+// 		// We are inside a standalone tab/window/tauri, We just want to render this actual window
+// 		if (isStandalone) {
+// 			return win.winId === standaloneWinId;
+// 		}
+// 		// Else render all windows that is not detached (regular mdi windows)
+// 		return !win.isDetached;
+// 	}),
+// );
 </script>
 
 <!-- Vi sätter en CSS-klass på layouten om vi är standalone så vi kan dölja topbar/taskbar via CSS eller villkor -->
@@ -341,6 +251,16 @@ $effect(() => {
 			{@const WindowComponent = win.component}
 			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
 			{@const parentInstance = wManager.find(win.parentId)}
+
+
+{@const x = console.log(
+	"RENDER",
+	win.winId,
+	win.title,
+	win.viewPort.type
+)}
+
+
 			<WindowFrame
 				{win}
 				bounds={parentInstance?.boundingEl ?? rootContentEl}
@@ -352,8 +272,8 @@ $effect(() => {
 					{...win.props}
 				/>
 
-				{#each wManager.getChildren(win.winId) as child (child.winId)}
-					{#if !child.state.isMinimized && !child.isDetached}
+				{#each wManager.getRenderableChildren(win.winId, "workspace") as child (child.winId)}
+					{#if !child.state.isMinimized }
 						{@render renderWindow(child)}
 					{:else}
 						{console.log(`Child window ${child.winId} is minimized or detached, skipping render.`)}
@@ -368,20 +288,30 @@ $effect(() => {
 
 	<main class="workspace" bind:this={rootContentEl}>
 		{#if rootContentEl}
-			{#if standaloneLoading}
-				{console.log("stabdaloneoadin")}
-				<div class="loading">
-					Laddar fristående komponent...
-				</div>
+
+			{#if isStandalone}
+				{#if standaloneLoading}
+					<div class="loading">
+						Laddar...
+					</div>
+
+					<!-- {@const standaloneWin = wManager.find(standaloneWinId)}
+						{#if standaloneWin}
+							{@render renderWindow(standaloneWin)}
+						{/if}	 -->
+				{:else}
+					{@render renderWindow(wManager.find(standaloneWinId))}
+				{/if}
 			{:else}
-				<!-- Rendera ENDAST root-fönster -->
-				{#each rootWindows as win (win.winId)}
+				{#each wManager.getRenderableRoots("workspace") as win (win.winId)}
 					{@render renderWindow(win)}
 				{/each}
-				{#if !isStandalone && desktopContent}
+				
+				{#if desktopContent}
 					{@render desktopContent()}
 				{/if}
 			{/if}
+
 		{/if}
 	</main>
 

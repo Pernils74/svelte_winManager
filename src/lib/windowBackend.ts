@@ -2,8 +2,13 @@
 
 // Längst upp i din fil (eller i funktionen) kan du importera SvelteKits base path:
 //  import { base } from "$app/paths";
+export type WindowTarget = "tab" | "window" | "tauri";
 
-export type WindowTarget = "internal" | "tab" | "window" | "tauri";
+export type WindowViewPortType =
+	| "workspace"
+	| "browser-tab"
+	| "browser-window"
+	| "tauri-window";
 
 export interface ExternalWindowDescriptor {
 	winId: string;
@@ -24,9 +29,9 @@ export interface DetachedWindowState {
 }
 
 export interface WindowBackend {
-	readonly target: Exclude<WindowTarget, "internal">;
+	readonly target: Exclude<WindowViewPortType, "internal">;
 
-	open(window: ExternalWindowDescriptor, target: WindowTarget): Promise<void>;
+	open(window: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
 	close(winId: string): Promise<void>;
 	// send(
 	//   winId: string,
@@ -77,6 +82,38 @@ type MessageCallback = (state: DetachedWindowState) => void;
 // 		type: "window:close";
 // 	};
 
+import type { RpcMessage } from "./windowRpc";
+
+export interface WindowBackend {
+	readonly target: Exclude<WindowViewPortType, "internal">;
+
+	open(
+		window: ExternalWindowDescriptor,
+		target: WindowViewPortType,
+	): Promise<void>;
+
+	close(winId: string): Promise<void>;
+
+	send(
+		winId: string,
+		state: DetachedWindowState,
+	): Promise<void>;
+
+	onMessage(
+		winId: string,
+		callback: (state: DetachedWindowState) => void,
+	): () => void;
+
+	sendRpc(message: RpcMessage): Promise<void>;
+
+	onRpcMessage(
+		winId: string,
+		callback: (message: RpcMessage) => void,
+	): () => void;
+
+	destroy(): void;
+}
+
 // Lägg till i BrowserMessage-typen i src/lib/windowBackend.ts
 type BrowserMessage =
 	| { winId: string; type: "state:update"; state: DetachedWindowState }
@@ -117,7 +154,7 @@ const initStorageKey = (winId: string): string => `win_payload_init_${winId}`;
  * för att ta emot initial payload och senare uppdateringar.
  */
 export class WindowBackendManager implements WindowBackend {
-	readonly target: Exclude<WindowTarget, "internal">;
+	readonly target: Exclude<WindowViewPortType, "internal">;
 
 	private listeners = new Map<string, Set<MessageCallback>>();
 	private openedWindows = new Map<string, Window | null>();
@@ -130,9 +167,9 @@ export class WindowBackendManager implements WindowBackend {
 
 	// Leta upp din constructor i WindowBackendManager och uppdatera till detta:
 	constructor() {
-		this.target = isTauri() ? "tauri" : "tab";
+		this.target = isTauri() ? "tauri-window" : "browser-tab";
 
-		if (this.target === "tab" && isBrowser()) {
+		if (this.target === "browser-tab" && isBrowser()) {
 			if (typeof BroadcastChannel !== "undefined") {
 				this.channel = new BroadcastChannel(CHANNEL_NAME);
 				this.channel.onmessage = (event: MessageEvent<BrowserMessage>) => {
@@ -175,14 +212,14 @@ export class WindowBackendManager implements WindowBackend {
 			}
 		}
 
-		if (this.target === "tauri") {
+		if (this.target === "tauri-window") {
 			this.initListenerPromise = this.initTauriListeners();
 		}
 	}
 
 	async open(
 		descriptor: ExternalWindowDescriptor,
-		target: WindowTarget,
+		target: WindowViewPortType,
 	): Promise<void> {
 		if (this.destroyed) {
 			throw new Error("WindowBackendManager har redan förstörts.");
@@ -192,17 +229,17 @@ export class WindowBackendManager implements WindowBackend {
 			throw new Error("winId och componentKey krävs.");
 		}
 
-		if (target === "tauri") {
+		if (target === "tauri-window") {
 			await this.openTauri(descriptor);
 			return;
 		}
 
-		if (target === "window") {
+		if (target === "browser-window") {
 			this.openBrowserWindow(descriptor);
 			return;
 		}
 
-		if (target === "tab") {
+		if (target === "browser-tab") {
 			this.openBrowserTab(descriptor);
 			return;
 		}
@@ -214,7 +251,7 @@ export class WindowBackendManager implements WindowBackend {
 	 * Stänger ett externt fönster.
 	 */
 	async close(winId: string): Promise<void> {
-		if (this.target === "tauri") {
+		if (this.target === "tauri-window") {
 			try {
 				// 1. Skapa en variabel för strängen. Detta döljer importen för Vite/Rollup under bygget!
 				const modulePath = "@tauri-apps/api/webviewWindow";
