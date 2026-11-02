@@ -46,6 +46,18 @@ import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
+import { registerComponents } from "./windowRegistry";
+
+// 🟢 Registrera alla fönsterkomponenter här istället för i +page.svelte
+
+registerComponents(
+	import.meta.glob(
+		// 🟢 Plocka bara filer som INTE börjar med +
+		["/src/routes/**/*.svelte", "!/src/routes/**/+*.svelte"],
+		{ eager: true },
+	),
+);
+
 interface Props {
 	desktopContent?: Snippet; // 🌟 Desktop content in root window
 	topbarContent?: Snippet; // 🌟 Topbar content in root window
@@ -272,9 +284,9 @@ onMount(() => {
 					{...win.props}
 				/>
 
-				{#each wManager.getRenderableChildren(win.winId, "workspace") as child (child.winId)}
-					{#if !child.state.isMinimized }
-						{@render renderWindow(child)}
+				{#each wManager.getChildren(win.winId) as child (child.winId)}
+					{#if !child.state.isMinimized && child.viewPort.type == "workspace"}
+						{@render renderWindow(child)}  // Anropar sig själv rekursivt
 					{:else}
 						{console.log(`Child window ${child.winId} is minimized or detached, skipping render.`)}
 					

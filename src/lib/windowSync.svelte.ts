@@ -59,7 +59,8 @@ export class WindowSync {
 		descriptor: ExternalWindowDescriptor,
 		target: WindowTarget,
 	): Promise<void> {
-		await this.backend.open(descriptor, targetToViewport(target));
+		// await this.backend.open(descriptor, targetToViewport(target));
+		await this.backend.open(descriptor, target);
 	}
 
 	/**
@@ -84,10 +85,17 @@ export class WindowSync {
 			$effect(() => {
 				const state = readState();
 
+				const cleanState = ""; //snapshot(state);
+
 				void this.backend.send(winId, {
 					payload: state.payload,
 					props: state.props,
 				});
+
+				// void this.backend.send(winId, {
+				// 	payload: cleanState.payload,
+				// 	props: cleanState.props,
+				// });
 			});
 
 			return () => {

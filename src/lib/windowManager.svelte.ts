@@ -158,7 +158,7 @@ export interface WindowInstance<TPayload = unknown> {
 	winId: WindowId;
 	title: string;
 	thumbnail: string | null;
-	component: Component<any> | null;
+	component: Component<any>;
 	componentKey?: string; // component as string, needed for browsertab and tauri backend
 	props: Record<string, unknown>;
 	parentId: WindowId | null;
@@ -884,19 +884,23 @@ export class WindowManager {
 	 */
 
 	async detachWindow(
-		winId: string,
+		win: WindowInstance,
 		target: WindowTarget,
 	): Promise<void> {
-		const win = this.find(winId);
+		// const win = this.find(winId);
 
 		if (!win) {
-			throw new Error(`Window ${winId} hittades inte.`);
+			throw new Error(`Window ${win} hittades inte.`);
 		}
 
+		const componentKey = getComponentKey(win.component);
+		if (!componentKey) {
+			return; // Early exit
+		}
 		const descriptor: ExternalWindowDescriptor = {
 			winId: win.winId,
 			title: win.title,
-			componentKey: win.componentKey,
+			componentKey, //: getComponentKey(win.component), //   win.componentKey,
 			payload: win.payload,
 			props: win.props ?? {},
 			width: win.state?.width,
@@ -908,11 +912,11 @@ export class WindowManager {
 		await this.sync.open(descriptor, target);
 
 		win.viewPort = {
-			id: winId,
+			id: win.winId,
 			type: target === "tab" ? "browser-tab" : target === "window" ? "browser-window" : "tauri-window",
 		};
 
-		this.setupStandaloneSync(winId);
+		this.setupStandaloneSync(win.winId);
 	}
 	/**
 	 * Stänger ett frikopplat fönster.
