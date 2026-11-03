@@ -572,6 +572,7 @@ export class WindowManager {
 
 	updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
 		const win = this.find(id);
+		console.log("hittades win ?", win);
 		if (!win) return;
 
 		// 🟢 Skydd mot eviga loopar: Jämför strängifierad data
@@ -592,6 +593,15 @@ export class WindowManager {
 			} else {
 				win.payload = payload;
 			}
+
+			// 🟢 Tvinga ut ett nätverkspaket till BroadcastChannel DIREKT!
+			// Det gör att alla fristående flikar omedelbart tar emot ändringen.
+			// 	if (win.viewPort.type !== "workspace") {
+			// 		void this.sync.send(id, {
+			// 			payload: $state.snapshot(win.payload),
+			// 			props: $state.snapshot(win.props ?? {}),
+			// 		}).catch((err) => console.error("[WindowManager] Manuellt synkfel:", err));
+			// 	}
 		}
 	}
 
@@ -875,7 +885,53 @@ export class WindowManager {
 		this.focus(win);
 	}
 
+	// src/lib/windowManager.svelte.ts
+
 	setupStandaloneSync(winId: WindowId): () => void {
+		this.sync.start(
+			winId,
+			() => {
+				const win = this.find(winId);
+				if (!win) return { payload: null, props: {} };
+
+				// 自由 1. Genom att köra $state.snapshot() inuti denna funktion
+				// tvingar vi Svelte 5 att läsa av ALLA reaktiva proxies djupt.
+				// Detta gör att effekten vaknar så fort något inuti payload eller props muteras!
+				console.log("win ");
+				return {
+					payload: win.payload,
+					props: win.props ?? {},
+				};
+
+				// return {
+				// 	payload: $state.snapshot(win.payload),
+				// 	props: $state.snapshot(win.props ?? {}),
+				// };
+			},
+			(state: DetachedWindowState) => {
+				console.log("detached ");
+
+				const win = this.find(winId);
+				if (!win) return;
+
+				// 🟢 Om du har serialize/deserialize-funktioner från din gamla kod,
+				// kör dem här i mottagaren:
+				// const processedProps = deserializePropsWithFunctions(state.props, winId, this);
+				// this.updateProps(processedProps, winId);
+				this.updatePayload(winId, state.payload);
+				this.updateProps(state.props ?? {}, win);
+			},
+			(updates) => {
+				this.updateState(winId, updates);
+			},
+		);
+
+		return () => this.sync.stop(winId);
+		// 🟢 Om du vill behålla din gamla städning för fönster-callbacks:
+		// cleanupWindowCallbacks(winId);
+	}
+
+	setupStandaloneSync_old(winId: WindowId): () => void {
 		this.sync.start(
 			winId,
 			() => {

@@ -33,7 +33,7 @@ function spawnStatic() {
 function spawnReactive() {
 	const child = wManager.open(Window_B, {
 		// parentId: winId,
-		winId: "Window_B_prop",
+		// winId: "Window_B_prop",
 		title: "🔗 Window_B (Reactive Props)",
 		width: 550,
 		height: 600,
@@ -54,7 +54,7 @@ const myPayload = $state({
 function spawnPayload() {
 	wManager.open(Window_B, {
 		// parentId: winId,
-		winId: "Window_B_payload",
+		// winId: "Window_B_payload",
 		title: "📦 Window_B (Payload)",
 		width: 550,
 		height: 800,

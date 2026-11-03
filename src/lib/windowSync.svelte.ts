@@ -248,16 +248,11 @@ function isWindowStateUpdateMessage(
 // }
 
 export class WindowSync {
-	private readonly sessions = new Map<
-		string,
-		SyncSession
-	>();
+	private readonly sessions = new Map<string, SyncSession>();
 
 	private destroyed = false;
 
-	constructor(
-		private readonly backend: WindowBackend,
-	) {}
+	constructor(private readonly backend: WindowBackend) {}
 
 	/**
 	 * Öppnar ett externt fönster.
@@ -408,9 +403,7 @@ export class WindowSync {
 
 		const stopEffect = $effect.root(() => {
 			$effect(() => {
-				if (stopped || this.destroyed) {
-					return;
-				}
+				if (stopped || this.destroyed) return;
 
 				// readState måste läsa reaktiva värden.
 				const current = readState();
@@ -422,22 +415,13 @@ export class WindowSync {
 				});
 
 				// Ingen förändring: inget nätverksmeddelande.
-				if (
-					lastSnapshot &&
-					deepEqual(
-						lastSnapshot,
-						currentSnapshot,
-					)
-				) {
+				if (lastSnapshot && deepEqual(lastSnapshot, currentSnapshot)) {
 					return;
 				}
 
 				lastSnapshot = currentSnapshot;
 
-				const message: Extract<
-					WindowMessage,
-					{ type: "sync:payload" }
-				> = {
+				const message: Extract<WindowMessage, { type: "sync:payload" }> = {
 					type: "sync:payload",
 					winId,
 					state: currentSnapshot,
