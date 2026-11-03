@@ -1,6 +1,9 @@
 // src/lib/windowRpc.ts
 
-import type { WindowMessage, WindowTransportPacket } from "./windowBackend";
+import type {
+	WindowBackend,
+	WindowMessage,
+} from "./windowBackend";
 
 export interface RpcTransport {
 	readonly endpointId: string;
@@ -297,102 +300,17 @@ export class WindowRpc {
 }
 
 /**
- * Generiskt interface mot Broker.
- *
- * WindowRpc känner inte till BroadcastChannel,
- * LocalStorage eller Tauri.
- */
-export interface RawRpcBroker {
-	readonly endpointId: string;
-
-	sendRaw(
-		message: WindowMessage,
-	): Promise<void>;
-
-	onRawMessage(
-		winId: string,
-		callback: (packet: WindowTransportPacket) => void,
-	): () => void;
-}
-
-/**
- * Adapter mellan Broker och RPC.
- */
-
-/**
  * Interface mot den gemensamma WindowBackend-kanalen.
  *
  * RPC känner inte till BroadcastChannel,
  * LocalStorage eller Tauri.
  */
-export interface RawRpcBroker {
-	readonly endpointId: string;
+export type RawRpcBroker = Pick<
+	WindowBackend,
+	"endpointId" | "sendRaw" | "onRawMessage"
+>;
 
-	sendRaw(
-		winId: string,
-		data: unknown,
-	): Promise<void>;
-
-	onRawMessage(
-		winId: string,
-		callback: (packet: WindowTransportPacket) => void,
-	): () => void;
-}
-
-/**
- * Adapter mellan WindowBackend och RPC.
- */
 export function createRpcTransport(
-	broker: RawRpcBroker,
-): RpcTransport {
-	return {
-		endpointId: broker.endpointId,
-
-		async send(message: WindowMessage): Promise<void> {
-			if (
-				message.type !== "rpc:request" &&
-				message.type !== "rpc:response"
-			) {
-				throw new Error(
-					"RPC-transporten kan endast skicka RPC-meddelanden.",
-				);
-			}
-
-			await broker.sendRaw(message.winId, message);
-		},
-
-		onMessage(winId, callback) {
-			return broker.onRawMessage(
-				winId,
-				(packet) => {
-					if (packet.winId !== winId) return;
-
-					const message = packet.data;
-
-					if (
-						!message ||
-						typeof message !== "object"
-					) {
-						return;
-					}
-
-					const rpcMessage = message as WindowMessage;
-
-					if (
-						rpcMessage.type !== "rpc:request" &&
-						rpcMessage.type !== "rpc:response"
-					) {
-						return;
-					}
-
-					callback(rpcMessage);
-				},
-			);
-		},
-	};
-}
-
-export function createRpcTransport_old(
 	broker: RawRpcBroker,
 ): RpcTransport {
 	return {

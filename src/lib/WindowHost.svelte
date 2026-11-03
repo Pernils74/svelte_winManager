@@ -72,6 +72,7 @@ const wManager = getWindowManager();
 // Reading of URL-parametrar for standalone windows (win.isDetached=true)
 let standaloneWinId = $derived(page.url.searchParams.get("winId"));
 let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
+let standaloneParentId = $derived(page.url.searchParams.get("parentId"));
 let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
 
 let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
@@ -129,7 +130,7 @@ $effect(() => {
 					component,
 					thumbnail: null,
 					props: {},
-					parentId: null,
+					parentId: standaloneParentId,
 					boundingEl: null,
 					state: {
 						left: 0,

@@ -920,6 +920,7 @@ export class WindowManager {
 			winId: win.winId,
 			title: win.title,
 			componentKey: win.componentKey,
+			parentId: win.parentId,
 			payload: $state.snapshot(win.payload),
 			props: $state.snapshot(win.props ?? {}),
 			width: win.state?.width,

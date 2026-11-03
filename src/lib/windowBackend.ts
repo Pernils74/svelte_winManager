@@ -49,6 +49,7 @@ export interface ExternalWindowDescriptor {
 	winId: string;
 	title: string;
 	componentKey: string;
+	parentId?: WindowId | null;
 	payload: unknown;
 	props: Record<string, unknown>;
 	width?: number;
@@ -57,22 +58,11 @@ export interface ExternalWindowDescriptor {
 	top?: number;
 }
 
-export interface DetachedWindowState {
-	payload: unknown;
-	props: Record<string, unknown>;
-}
-
 /**
  * Transportpaket.
  *
  * Broker tolkar aldrig data.
  */
-export interface WindowTransportPacket {
-	winId: string;
-	sourceId: string;
-	data: unknown;
-}
-
 export type RawMessageCallback = (
 	packet: WindowTransportPacket,
 ) => void;
@@ -92,10 +82,7 @@ export interface WindowBackend {
 
 	close(winId: string): Promise<void>;
 
-	sendRaw(
-		winId: string,
-		data: unknown,
-	): Promise<void>;
+	sendRaw(message: WindowMessage): Promise<void>;
 
 	onRawMessage(
 		winId: string,
@@ -182,11 +169,46 @@ function isTransportPacket(
 
 	const packet = value as Record<string, unknown>;
 
-	return (
+	if (!(
 		typeof packet.winId === "string" &&
 		typeof packet.sourceId === "string" &&
-		"data" in packet
-	);
+		!!packet.message &&
+		typeof packet.message === "object" &&
+		"winId" in packet.message &&
+		packet.message.winId === packet.winId &&
+		"type" in packet.message &&
+		typeof packet.message.type === "string"
+	)) {
+		return false;
+	}
+
+	const message = packet.message as Record<string, unknown>;
+
+	switch (message.type) {
+		case "sync:payload":
+			return isDetachedState(message.state);
+		case "sync:state-update":
+			return !!message.updates &&
+				typeof message.updates === "object" &&
+				!Array.isArray(message.updates);
+		case "rpc:request":
+			return typeof message.requestId === "string" &&
+				typeof message.sourceId === "string" &&
+				typeof message.method === "string" &&
+				Array.isArray(message.args) &&
+				(message.targetEndpointId === undefined ||
+					typeof message.targetEndpointId === "string");
+		case "rpc:response":
+			return typeof message.requestId === "string" &&
+				typeof message.sourceId === "string" &&
+				typeof message.targetEndpointId === "string" &&
+				(message.error === undefined ||
+					typeof message.error === "string");
+		case "system:close":
+			return true;
+		default:
+			return false;
+	}
 }
 
 function isDetachedState(
@@ -220,6 +242,11 @@ export class WindowBackendManager implements WindowBackend {
 	private listeners = new Map<
 		string,
 		Set<RawMessageCallback>
+	>();
+
+	private initialMessages = new Map<
+		string,
+		WindowTransportPacket
 	>();
 
 	private openedWindows = new Map<
@@ -329,14 +356,17 @@ export class WindowBackendManager implements WindowBackend {
 					return;
 				}
 
-				this.notifyListeners({
+				const packet: WindowTransportPacket = {
 					winId,
 					sourceId: "initial-state",
-					data: {
-						kind: "sync",
+					message: {
+						type: "sync:payload",
+						winId,
 						state,
 					},
-				});
+				};
+				this.initialMessages.set(winId, packet);
+				this.notifyListeners(packet);
 			} catch (error) {
 				console.error(
 					"[WindowBackend] Could not read initial state:",
@@ -405,6 +435,9 @@ export class WindowBackendManager implements WindowBackend {
 			"title",
 			descriptor.title,
 		);
+		if (descriptor.parentId) {
+			url.searchParams.set("parentId", descriptor.parentId);
+		}
 
 		return url;
 	}
@@ -523,6 +556,9 @@ export class WindowBackendManager implements WindowBackend {
 			componentKey,
 			title,
 		});
+		if (descriptor.parentId) {
+			params.set("parentId", descriptor.parentId);
+		}
 
 		const webview = new api.WebviewWindow(
 			`detached-${winId}`,
@@ -586,8 +622,9 @@ export class WindowBackendManager implements WindowBackend {
 			return;
 		}
 
-		await this.sendRaw(winId, {
-			kind: "window:close",
+		await this.sendRaw({
+			type: "system:close",
+			winId,
 		});
 	}
 
@@ -615,22 +652,19 @@ export class WindowBackendManager implements WindowBackend {
 	// Raw transport
 	// --------------------------------------------------
 
-	async sendRaw(
-		winId: string,
-		data: unknown,
-	): Promise<void> {
+	async sendRaw(message: WindowMessage): Promise<void> {
 		this.assertAlive();
 
-		if (!winId) {
+		if (!message.winId) {
 			throw new Error(
-				"sendRaw kräver ett winId.",
+				"sendRaw kräver ett meddelande med winId.",
 			);
 		}
 
 		const packet: WindowTransportPacket = {
-			winId,
+			winId: message.winId,
 			sourceId: this.endpointId,
-			data,
+			message,
 		};
 
 		if (this.target === "tauri-window") {
@@ -641,7 +675,7 @@ export class WindowBackendManager implements WindowBackend {
 			) as TauriEventApi;
 
 			await api.emit(
-				tauriEventName(winId),
+				tauriEventName(message.winId),
 				packet,
 			);
 
@@ -689,6 +723,11 @@ export class WindowBackendManager implements WindowBackend {
 		}
 
 		callbacks.add(callback);
+		const initialMessage = this.initialMessages.get(winId);
+		if (initialMessage) {
+			callback(initialMessage);
+			this.initialMessages.delete(winId);
+		}
 
 		if (this.target === "tauri-window") {
 			void this.ensureTauriListener(winId);
@@ -747,6 +786,15 @@ export class WindowBackendManager implements WindowBackend {
 		if (this.destroyed) return;
 
 		if (!isTransportPacket(value)) return;
+
+		if (
+			value.message.type === "system:close" &&
+			new URLSearchParams(globalThis.location.search)
+				.get("winId") === value.winId
+		) {
+			globalThis.close();
+			return;
+		}
 
 		this.notifyListeners(value);
 	}
@@ -815,6 +863,7 @@ export class WindowBackendManager implements WindowBackend {
 		}
 
 		this.openedWindows.clear();
+		this.initialMessages.clear();
 	}
 }
 

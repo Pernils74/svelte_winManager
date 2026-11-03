@@ -4,7 +4,7 @@ import type {
 	DetachedWindowState,
 	ExternalWindowDescriptor,
 	WindowBackend,
-	// WindowTarget,
+	WindowMessage,
 	WindowTransportPacket,
 	WindowViewPortType,
 } from "./windowBackend";
@@ -14,23 +14,12 @@ type ReadState = () => DetachedWindowState;
 
 type ApplyState = (state: DetachedWindowState) => void;
 
-interface SyncMessage {
-	kind: "sync";
-	state: DetachedWindowState;
-}
-
-export interface WindowStateUpdateMessage {
-	type: "window-state-update";
-	winId: WindowId;
-	updates: Partial<WindowState>;
-}
-
 interface SyncSession {
 	stopEffect: () => void;
 	unsubscribe: () => void;
 }
 
-function snapshot<T>(value: T): T {
+function snapshot<T>(value: T) {
 	return $state.snapshot(value);
 }
 
@@ -206,52 +195,11 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 	return true;
 }
 
-function isSyncMessage(
-	value: unknown,
-): value is SyncMessage {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-
-	const message = value as Record<string, unknown>;
-
-	if (message.kind !== "sync") return false;
-
-	const state = message.state;
-
-	if (!state || typeof state !== "object") {
-		return false;
-	}
-
-	const candidate = state as Record<string, unknown>;
-
-	return (
-		"payload" in candidate &&
-		"props" in candidate &&
-		typeof candidate.props === "object" &&
-		candidate.props !== null &&
-		!Array.isArray(candidate.props)
-	);
-}
-
 function isWindowStateUpdateMessage(
-	value: unknown,
+	value: WindowMessage,
 	winId: string,
-): value is WindowStateUpdateMessage {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-
-	const message = value as Record<string, unknown>;
-	if (
-		message.type !== "window-state-update" ||
-		message.winId !== winId ||
-		!message.updates ||
-		typeof message.updates !== "object" ||
-		Array.isArray(message.updates)
-	) {
-		return false;
-	}
+): value is Extract<WindowMessage, { type: "sync:state-update" }> {
+	if (value.type !== "sync:state-update" || value.winId !== winId) return false;
 
 	const numericKeys = new Set([
 		"left",
@@ -267,7 +215,7 @@ function isWindowStateUpdateMessage(
 	]);
 
 	return Object.entries(
-		message.updates as Record<string, unknown>,
+		value.updates as Record<string, unknown>,
 	).every(([key, item]) => {
 		if (numericKeys.has(key)) {
 			return typeof item === "number" && Number.isFinite(item);
@@ -387,15 +335,18 @@ export class WindowSync {
 					return;
 				}
 
+				const message = packet.message;
+				if (message.winId !== winId) return;
+
 				if (
 					isWindowStateUpdateMessage(
-						packet.data,
+						message,
 						winId,
 					)
 				) {
 					try {
 						applyWindowStateUpdate?.(
-							packet.data.updates,
+							message.updates,
 						);
 					} catch (error) {
 						console.error(
@@ -406,13 +357,19 @@ export class WindowSync {
 					return;
 				}
 
-				if (!isSyncMessage(packet.data)) {
+				if (
+					message.type !== "sync:payload" ||
+					!message.state ||
+					typeof message.state.props !== "object" ||
+					message.state.props === null ||
+					Array.isArray(message.state.props)
+				) {
 					return;
 				}
 
 				const incoming = snapshot({
-					payload: packet.data.state.payload,
-					props: packet.data.state.props,
+					payload: message.state.payload,
+					props: message.state.props,
 				});
 
 				// Identiskt state behöver inte appliceras.
@@ -477,15 +434,19 @@ export class WindowSync {
 
 				lastSnapshot = currentSnapshot;
 
-				const message: SyncMessage = {
-					kind: "sync",
+				const message: Extract<
+					WindowMessage,
+					{ type: "sync:payload" }
+				> = {
+					type: "sync:payload",
+					winId,
 					state: currentSnapshot,
 				};
 
 				// Transportfel hanteras utan att förstöra
 				// den reaktiva effekten.
 				void this.backend
-					.sendRaw(winId, message)
+					.sendRaw(message)
 					.catch((error) => {
 						console.error(
 							`[WindowSync] Transportfel för ${winId}:`,
@@ -507,13 +468,16 @@ export class WindowSync {
 	): Promise<void> {
 		this.assertAlive();
 
-		const message: WindowStateUpdateMessage = {
-			type: "window-state-update",
+		const message: Extract<
+			WindowMessage,
+			{ type: "sync:state-update" }
+		> = {
+			type: "sync:state-update",
 			winId,
 			updates: snapshot(updates),
 		};
 
-		await this.backend.sendRaw(winId, message);
+		await this.backend.sendRaw(message);
 	}
 
 	/**
@@ -530,8 +494,9 @@ export class WindowSync {
 			props: state.props ?? {},
 		});
 
-		await this.backend.sendRaw(winId, {
-			kind: "sync",
+		await this.backend.sendRaw({
+			type: "sync:payload",
+			winId,
 			state: cleanState,
 		});
 	}
