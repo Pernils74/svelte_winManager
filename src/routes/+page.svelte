@@ -20,10 +20,10 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRpc.ts
 
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/+page.svelte
 
+https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_B.svelte
+https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_A.svelte
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_C.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_B.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_A.svelte
 
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/README.md

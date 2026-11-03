@@ -43,12 +43,7 @@ import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
-import {
-	getWindowManager,
-	ROOT_WIN_ID,
-	type WindowInstance,
-	type WindowState,
-} from "./windowManager.svelte";
+import { getWindowManager, ROOT_WIN_ID, type WindowInstance, type WindowState } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 // import { registerComponents } from "./windowRegistry";
@@ -332,37 +327,53 @@ function publishStandaloneStateUpdate(
 
 
 
-	<main class="workspace" bind:this={rootContentEl}>
-		{#if rootContentEl }
-			{#if isStandalone}
-				{#if standaloneLoading}
-					<div class="loading">
-						Laddar...
-					</div>
-				{:else}
-					{@const standaloneWin = wManager.find(standaloneWinId)}
-					{#if standaloneWin && !standaloneWin.state.isMinimized}
-						{@render renderWindow(standaloneWin)}
-					{/if}	 
-				{/if}
 
-  			{:else}
-				{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
-					{#if !win.state.isMinimized && win.viewPort.type == "workspace"}
-						{@render renderWindow(win)}
-					{/if}
-				{/each}
 
-				<!-- {#each wManager.getRenderableRoots("workspace") as win (win.winId)}
-					{@render renderWindow(win)}
-				{/each} -->
-				{#if desktopContent}
-					{@render desktopContent()}
-				{/if}
-			{/if}
 
+<!-- src/lib/WindowHost.svelte -->
+<main class="workspace" bind:this={rootContentEl}>
+	{#if rootContentEl }
+		{#if isStandalone}
+			{#if standaloneLoading}
+				<div class="loading">
+					Laddar...
+				</div>
+			{:else}
+				{@const standaloneWin = wManager.find(standaloneWinId)}
+				{#if standaloneWin && !standaloneWin.state.isMinimized}
+					{@render renderWindow(standaloneWin)}
+				{/if}	 
+			{"}"}	 
 		{/if}
-	</main>
+
+		{:else}
+			<!-- 1. Rendera alla vanliga rot-fönster -->
+			{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
+				{#if !win.state.isMinimized && win.viewPort.type == "workspace"}
+					{@render renderWindow(win)}
+				{/if}
+			{/each}
+
+			<!-- 🟢 2. RENDERA ALLA FORÄLDRALÖSA FÖNSTER SEPARAT HÄR -->
+			{#each wManager.getOrphanWorkspaceWindows() as orphanWin (orphanWin.winId)}
+				{console.log("oprphant ", orphanWin.winId)}
+				{@render renderWindow(orphanWin)}
+			{/each}
+
+			{#if desktopContent}
+				{@render desktopContent()}
+			{/if}
+		{/if}
+
+	{/if}
+</main>
+
+
+
+
+
+
+
 
 	<!-- {#if !isStandalone && minimizedWindows.length > 0} -->
 	{#if minimizedWindows.length > 0}
