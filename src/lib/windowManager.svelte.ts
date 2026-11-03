@@ -842,7 +842,7 @@ export class WindowManager {
 	}
 
 	// Inuti setupStandaloneSync(winId: WindowId) i windowManager.svelte.ts
-	private setupStandaloneSync(winId: string): void {
+	private setupStandaloneSync_old(winId: string): void {
 		this.sync.start(
 			winId,
 			() => {
@@ -870,6 +870,29 @@ export class WindowManager {
 			},
 		);
 	}
+
+	private setupStandaloneSync(winId: string): void {
+		this.sync.start(
+			winId,
+			() => {
+				const win = this.find(winId);
+
+				return {
+					payload: win?.payload,
+					props: win?.props ?? {},
+				};
+			},
+			(state: DetachedWindowState) => {
+				const win = this.find(winId);
+
+				if (!win) return;
+
+				this.updatePayload(winId, state.payload);
+				this.updateProps(winId, state.props ?? {});
+			},
+		);
+	}
+
 	/**
 	 * Startar dubbelriktad payload-synk för ett specifikt frikopplat fönster.
 	 * Används både av huvudappen vid sömlös MDI-reparenting och av standalone-flikar.
@@ -877,35 +900,36 @@ export class WindowManager {
 
 	async detachWindow(
 		win: WindowInstance,
-		target: WindowTarget,
+		target: WindowViewPortType,
 	): Promise<void> {
-		// const win = this.find(winId);
-
 		if (!win) {
 			throw new Error(`Window ${win} hittades inte.`);
 		}
-		// const componentKey = win.componentKey;
+
 		const descriptor: ExternalWindowDescriptor = {
 			winId: win.winId,
 			title: win.title,
-			componentKey: win.componentKey, //: getComponentKey(win.component), //   win.componentKey,
-			payload: win.payload,
-			props: win.props ?? {},
+			componentKey: win.componentKey,
+			payload: $state.snapshot(win.payload),
+			props: $state.snapshot(win.props ?? {}),
 			width: win.state?.width,
 			height: win.state?.height,
 			left: win.state?.left,
 			top: win.state?.top,
 		};
 
+		// Öppna först. Om detta misslyckas ändras inte viewport.
 		await this.sync.open(descriptor, target);
 
 		win.viewPort = {
 			id: win.winId,
-			type: target === "tab" ? "browser-tab" : target === "window" ? "browser-window" : "tauri-window",
+			type: target, //=== "tab" ? "browser-tab" : target === "window" ? "browser-window" : "tauri-window",
 		};
 
-		// this.setupStandaloneSync(win.winId);
+		// Starta dubbelriktad state-synk.
+		this.setupStandaloneSync(win.winId);
 	}
+
 	/**
 	 * Stänger ett frikopplat fönster.
 	 */
