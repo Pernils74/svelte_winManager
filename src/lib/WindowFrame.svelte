@@ -625,6 +625,35 @@ $effect(() => {
 		manager.setBoundingEl(win.winId, contentEl);
 	}
 });
+
+// ... dina importer och befintlig logik
+
+// 🟢 Lokal, helautomatisk synkbevakare för denna specifika fönsterram
+$effect(() => {
+	// 1. Hämta fönstrets förälder (om den finns) direkt från din manager
+	const parent = win.parentId ? manager.find(win.parentId) : null;
+
+	// 2. Kontrollera om fönstret självt ELLER dess förälder är detached
+	const isSelfDetached = win.viewPort.type !== "workspace";
+	const isParentDetached = parent ? parent.viewPort.type !== "workspace" : false;
+	console.log("Det är det fönstret: ${win");
+	// 🟢 DIN UTALERADE REGEL: Kör bara synk över rpc/channel om någon av oss är detached
+	if (isSelfDetached || isParentDetached) {
+		// Genom att köra snapshot på payload och props inuti effekten,
+		// prenumererar Svelte 5 automatiskt på varenda djupt fält (counter, text etc.)!
+		const currentPayload = $state.snapshot(win.payload);
+		const currentProps = $state.snapshot(win.props);
+
+		console.log(`📡 [WindowFrame Sync] Strömmar automatiskt för fönster: ${win.title} (${win.winId})`);
+
+		// Skicka ut på kanalen via din sync-motor
+
+		void manager.sync.send(win.winId, {
+			payload: currentPayload,
+			props: currentProps ?? {},
+		}).catch((err) => console.error(`[WindowFrame Sync] Fel vid utskick för ${win.winId}:`, err));
+	}
+});
 </script>
 
 <div

@@ -229,7 +229,7 @@ export class WindowManager {
 
 	// private readonly backend: WindowBackend;
 	private readonly backend: WindowBackend;
-	private readonly sync: WindowSync;
+	public readonly sync: WindowSync;
 
 	constructor(options: WindowManagerOptions = {}) {
 		this.backend = options.backend ?? createWindowBackend();
@@ -442,6 +442,11 @@ export class WindowManager {
 		});
 
 		this.windows.push(win);
+		// 🟢 STARTA SYNK DIREKT VID FÖDELSELN:
+		// Detta sätter upp BroadcastChannel-lyssnaren i bakgrunden direkt,
+		// oavsett om fönstret renderas på skärmen eller inte!
+		// this.setupStandaloneSync(win.winId);
+
 		return win;
 	}
 
@@ -574,13 +579,30 @@ export class WindowManager {
 		Object.assign(win.metrics, updates);
 	}
 
-	// src/lib/windowManager.svelte.ts
+	/**
+	 * Kollar om ett fönster ELLER någon av dess föräldrar i rakt uppstigande led är detached.
+	 */
+	isWindowOrParentDetached(id: WindowId): boolean {
+		const win = this.find(id);
+		if (!win || win.winId === ROOT_WIN_ID) return false;
+
+		// 1. Om fönstret självt är utflyttat, returnera true
+		if (win.viewPort.type !== "workspace") return true;
+
+		// 2. Om fönstret har en förälder, kolla förälderns status rekursivt
+		if (win.parentId && win.parentId !== ROOT_WIN_ID) {
+			return this.isWindowOrParentDetached(win.parentId);
+		}
+
+		return false;
+	}
 
 	updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
 		const win = this.find(id);
+		console.log("Updating payload for window: ");
 		if (!win) return;
 
-		// Om det är ett helt nytt objekt/referens (eller ett primitivt värde) skriver vi över det
+		// 1. Mutera det reaktiva objektet lokalt i minnet
 		if (win.payload !== payload) {
 			if (
 				win.payload && typeof win.payload === "object" &&
@@ -592,23 +614,17 @@ export class WindowManager {
 			}
 		}
 
-		// 🟢 TVINGA ALLTID UT UTSSKICKET OM FÖNSTRET INTE ÄR I WORKSPACE!
-		// Eftersom objektet muteras i minnet innan denna metod körs, struntar vi i JSON-strängjämförelsen.
-		// Vi tar en ren, fräsch snapshot och skjuter ut på BroadcastChannel direkt.
+		// 🟢 2. SÄKRA RPC-KANALEN: Om fönstret inte är ett rent internt workspace-fönster,
+		// skjut ut ändringen på kanalen direkt. Detta lagar "detach parent till detached child"
+		// och alla andra kombinationer oavsett om svelte har avregistrerat DOM-trädet!
+		if (win.viewPort.type !== "workspace") {
+			console.log(`🚀 [RPC Transport] Tvingar synk för fönster ${id} (${win.title})`);
 
-		// void this.sync.send(id, {
-		// 	payload: $state.snapshot(win.payload),
-		// 	props: $state.snapshot(win.props ?? {}),
-		// }).catch((err) => console.error("[WindowManager] Manuellt synkfel:", err));
-
-		// if (win.viewPort.type !== "workspace") {
-		// 	console.log(`🚀 [WindowManager] Skickar payload-synk för detached fönster ${id} till kanalen!`);
-
-		// 	void this.sync.send(id, {
-		// 		payload: $state.snapshot(win.payload),
-		// 		props: $state.snapshot(win.props ?? {}),
-		// 	}).catch((err) => console.error("[WindowManager] Manuellt synkfel:", err));
-		// }
+			void this.sync.send(id, {
+				payload: $state.snapshot(win.payload),
+				props: $state.snapshot(win.props ?? {}),
+			}).catch((err) => console.error("[WindowManager] RPC-synk misslyckades:", err));
+		}
 	}
 
 	updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
@@ -942,6 +958,52 @@ export class WindowManager {
 
 	// src/lib/windowManager.svelte.ts
 
+	// src/lib/windowManager.svelte.ts
+
+	// setupStandaloneSync(winId: WindowId): () => void {
+	// 	// när vi nu sätter upp sync redan i WindowManager.open
+	// 	this.sync.start(
+	// 		winId,
+	// 		() => {
+	// 			const win = this.find(winId);
+	// 			if (!win) return { payload: null, props: {} };
+
+	// 			// Leta upp föräldern i hierarkin för att kunna kontrollera dess viewport
+	// 			const parent = win.parentId ? this.find(win.parentId) : null;
+
+	// 			// 🟢 DIN LOGIK: Kontrollera om fönstret självt ELLER dess förälder är detached
+	// 			const isSelfDetached = win.viewPort.type !== "workspace";
+	// 			const isParentDetached = parent ? parent.viewPort.type !== "workspace" : false;
+
+	// 			console.log("Detected detached state: Self: ${isSelf");
+	// 			// Om vi ska skicka (någon av oss är detached), returnera de levande runorna
+	// 			// så att WindowSyncs $effect kan spåra dem automatiskt i bakgrunden! [1.21]
+	// 			if (isSelfDetached || isParentDetached) {
+	// 				return {
+	// 					payload: win.payload,
+	// 					props: win.props ?? {},
+	// 				};
+	// 			}
+
+	// 			// Annars returnerar vi bara en statisk tom struktur så att ingen nätverkstrafik skickas i onödan
+	// 			return { payload: null, props: {} };
+	// 		},
+	// 		(state: DetachedWindowState) => {
+	// 			const win = this.find(winId);
+	// 			if (!win) return;
+
+	// 			// Ta emot och uppdatera lokalt tillstånd reaktivt
+	// 			this.updatePayload(winId, state.payload);
+	// 			this.updateProps(state.props ?? {}, win);
+	// 		},
+	// 		(updates) => {
+	// 			this.updateState(winId, updates);
+	// 		},
+	// 	);
+
+	// 	return () => this.sync.stop(winId);
+	// }
+
 	setupStandaloneSync(winId: WindowId): () => void {
 		this.sync.start(
 			winId,
@@ -990,34 +1052,6 @@ export class WindowManager {
 		return () => this.sync.stop(winId);
 		// 🟢 Om du vill behålla din gamla städning för fönster-callbacks:
 		// cleanupWindowCallbacks(winId);
-	}
-
-	setupStandaloneSync_old(winId: WindowId): () => void {
-		this.sync.start(
-			winId,
-			() => {
-				const win = this.find(winId);
-
-				return {
-					payload: win?.payload,
-					props: win?.props ?? {},
-				};
-			},
-			(state: DetachedWindowState) => {
-				const win = this.find(winId);
-
-				if (!win) return;
-
-				this.updatePayload(winId, state.payload);
-				this.updateProps(state.props ?? {}, win);
-			},
-			(updates) => {
-				this.updateState(winId, updates);
-			},
-		);
-
-		// Host äger livscykeln för sin lokala sync-prenumeration.
-		return () => this.sync.stop(winId);
 	}
 
 	/**

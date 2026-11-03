@@ -201,7 +201,7 @@ $effect(() => {
 
 	return () => {
 		cancelled = true;
-		unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
+		// unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
 	};
 });
 
