@@ -46,17 +46,15 @@ import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
-import { registerComponents } from "./windowRegistry";
+// import { registerComponents } from "./windowRegistry";
 
-// 🟢 Registrera alla fönsterkomponenter här istället för i +page.svelte
-
-registerComponents(
-	import.meta.glob(
-		// 🟢 Plocka bara filer som INTE börjar med +
-		["/src/routes/**/*.svelte", "!/src/routes/**/+*.svelte"],
-		{ eager: true },
-	),
-);
+//🟢 Registrera alla fönsterkomponenter här istället för i +page.svelte
+// registerComponents(
+// 	import.meta.glob(
+// 		["/src/routes/**/*.svelte", "!/src/routes/**/+*.svelte"],
+// 		{ eager: true },
+// 	),
+// );
 
 interface Props {
 	desktopContent?: Snippet; // 🌟 Desktop content in root window

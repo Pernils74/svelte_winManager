@@ -12,6 +12,8 @@ const loadedComponents = new Map<string, Component<any>>();
 // component -> key
 const loadedKeys = new WeakMap<Component<any>, string>();
 
+// registry.ts
+
 export function registerComponents(
 	modules: Record<string, any>,
 ): void {

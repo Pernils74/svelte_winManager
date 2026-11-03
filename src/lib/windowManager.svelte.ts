@@ -1008,6 +1008,23 @@ export interface WindowManagerOptions {
 	backend?: WindowBackend;
 }
 
+// export function initializeWindowManager(
+// 	options?: WindowManagerOptions,
+// ): WindowManager {
+// 	try {
+// 		return getContextManager();
+// 	} catch {
+// 		const manager = new WindowManager(
+// 			options?.backend,
+// 			// options?.modules,
+// 		);
+// 		setContextManager(manager);
+// 		return manager;
+// 	}
+// }
+
+import { registerComponents } from "./windowRegistry";
+
 export function initializeWindowManager(
 	options?: WindowManagerOptions,
 ): WindowManager {
@@ -1016,8 +1033,11 @@ export function initializeWindowManager(
 	} catch {
 		const manager = new WindowManager(
 			options?.backend,
-			// options?.modules,
 		);
+
+		if (options?.modules) {
+			registerComponents(options.modules);
+		}
 
 		setContextManager(manager);
 		return manager;

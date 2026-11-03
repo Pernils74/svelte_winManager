@@ -9,7 +9,9 @@ export default defineConfig(({ command, mode }) => {
   const isDev = command === "serve";
 
   // 🌟 NYTT: Ladda miljövariabler utan att använda 'process.env'
-  const env = loadEnv(mode, globalThis.process?.cwd?.() || ".");
+  // const env = loadEnv(mode, globalThis.process?.cwd?.() || ".");
+  const env = loadEnv(mode, (globalThis as any).process?.cwd?.() || ".");
+  
   const basePath = env.BASE_PATH || "/svelte_winManager";
 
   return {

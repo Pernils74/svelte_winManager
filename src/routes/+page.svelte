@@ -1,6 +1,6 @@
-<!--
 
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
+
+<!-- https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts
 
@@ -27,15 +27,10 @@ https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_A.svel
 
 https://github.com/Pernils74/svelte_winManager/blob/dev/README.md
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte
--->
+https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte -->
 
-<!-- gammalt ...
 
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/tauriWindowBackend.ts
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/browserTabBackend.ts
 
--->
 
 <!-- +page.svelte -->
 <script lang="ts">
@@ -51,17 +46,26 @@ import WindowA from "./window_A.svelte";
 import WinGraphA from "./WinGraph_A.svelte";
 
 import WindowB from "./window_B.svelte";
-import WindowC from "./WinGraph_A.svelte";
 
 import debug from "./debug.svelte";
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
-import mouseCoords from "./MouseCords.svelte";
 import MouseCords from "./MouseCords.svelte";
 
-const wManager = initializeWindowManager();
-// registerComponents(import.meta.glob("/src/routes/**/*.svelte"));
+// const wManager = initializeWindowManager();
+const wManager = initializeWindowManager({
+	modules: import.meta.glob(
+		"/src/routes/**/*.svelte",
+		{ eager: true },
+	),
+});
+
+// +page.svelte
+
+// import { routeModules } from "#lib/windowRegistry.ts";
+
+// registerComponents(routeModules);
 
 // registerComponents(
 // 	import.meta.glob(
@@ -110,58 +114,61 @@ onMount(() => {
 });
 
 const allComponents = $derived(getAllRegisteredKeys());
-$effect(() => {
-	// console.log(allComponents);
-});
+// $effect(() => {
+// 	// console.log(allComponents);
+// });
 </script>
 
 <MouseCords></MouseCords>
-<WindowHost>
+
 	  {#snippet desktopContent()}
 		<div class="welcome-container">
-		  <h1>Welcome to Svelte Window Manager</h1>
-		  <p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the official documentation.</p>
-		  
-		  <!-- 🌟 NY SEKTION: Häftiga fönsterfunktioner / Genvägar -->
-		  <section class="features-grid">
-			<div class="feature-card">
-			  <h4>🎛️ Context & Hierarchy</h4>
-			  <ul>
+	<h1>Welcome to Svelte Window Manager</h1>
+	<p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the official documentation.</p>
+
+	<!-- 🌟 NY SEKTION: Häftiga fönsterfunktioner / Genvägar -->
+	<section class="features-grid">
+		<div class="feature-card">
+			<h4>🎛️ Context & Hierarchy</h4>
+			<ul>
 				<li><strong>Reparenting:</strong> Hold <kbd>Shift</kbd> while dragging a titlebar to drop and embed a window inside another window context.</li>
 				<li><strong>Desktop Detach:</strong> Fönsterkomponenter kan enkelt flyttas ut till skrivbordsroten igen genom att kalla på hanterarens reparent-metod.</li>
-			  </ul>
-			</div>
-	
-			<div class="feature-card">
-			  <h4>🧬 Cloning & Window State</h4>
-			  <ul>
+			</ul>
+		</div>
+
+		<div class="feature-card">
+			<h4>🧬 Cloning & Window State</h4>
+			<ul>
 				<li><strong>Instant Duplicate:</strong> Hold <kbd>Ctrl</kbd> while dragging a titlebar to create a standalone, decoupled copy of that window with an offset.</li>
 				<li><strong>Intelligent Maximize:</strong> Double-click the titlebar to maximize. It automatically respects and tiles around existing adjacent docked borders.</li>
-			  </ul>
-			</div>
-	
-			<div class="feature-card">
-			  <h4>📐 Proportional Docking & Snapping</h4>
-			  <ul>
+			</ul>
+		</div>
+
+		<div class="feature-card">
+			<h4>📐 Proportional Docking & Snapping</h4>
+			<ul>
 				<li><strong>Magnetic Snapping:</strong> Windows automatically snap edge-to-edge when dragged within a 12px threshold of workspace boundaries or sibling frames.</li>
 				<li><strong>Proportional Resize:</strong> Dragging shared borders expands or shrinks adjacent docked windows fluidly while locked to system constraints.</li>
-			  </ul>
-			</div>
-		  </section>
-	
-		  <div class="registry-section">
-			<h3>Registered Framework Components:</h3>
-			<div class="badge-list">
+			</ul>
+		</div>
+	</section>
+
+	<div class="registry-section">
+		<h3>Registered Framework Components:</h3>
+		<div class="badge-list">
 			  {#each allComponents as key}
 				<span class="component-badge">📦 {key}</span>
 			  {/each}
 			</div>
-		  </div>
-		</div>
+	</div>
+</div>
 	
 		<Wallpaper word="+page.svelte"></Wallpaper>
 	  {/snippet}
-	</WindowHost>
+
+<WindowHost {desktopContent} />
+
+	
 
 <style>
 .welcome-container {
