@@ -151,7 +151,7 @@ export interface WindowInstance<TPayload = unknown> {
 	winId: WindowId;
 	title: string;
 	thumbnail: string | null;
-	component: Component<any>;
+	component: Component<any> | null;
 	componentKey: string; // component as string, needed for browsertab and tauri backend
 	props: Record<string, unknown>;
 	parentId: WindowId | null;
@@ -165,7 +165,7 @@ export interface WindowInstance<TPayload = unknown> {
 	// useMonitor: boolean;
 	showButtons: boolean;
 	docking: WindowDocking;
-	payload: TPayload;
+	payload: TPayload | null;
 	titlebar?: WindowTiltlebarComponent;
 	// isDetached: boolean;
 	viewPort: WindowViewPort;
@@ -179,8 +179,6 @@ export interface OpenWindowOptions<TPayload = unknown> {
 	parentId?: WindowId | null;
 	boundingEl?: HTMLElement | null;
 	tileOffset?: number;
-	// noTile?: boolean;
-	setId?: WindowId;
 	props?: Record<string, unknown>;
 	payload?: TPayload;
 
@@ -242,6 +240,7 @@ export class WindowManager {
 			title: "Root Workspace",
 			thumbnail: null,
 			component: null,
+			componentKey: "",
 			props: {},
 			parentId: null,
 			boundingEl: null,
@@ -271,12 +270,6 @@ export class WindowManager {
 				renderBusy: false,
 			},
 		});
-
-		if (typeof window !== "undefined") {
-			// Vi kan tjuvlyssna på backend-managerns interna meddelandehantering.
-			// Eftersom du har BroadcastChannel instansierad i din backend, modifierar vi
-			// handleBrowserMessage i windowBackend.ts så att huvudappen också reagerar!
-		}
 	}
 
 	get winCount(): number {
@@ -299,7 +292,9 @@ export class WindowManager {
 	) {
 		return this.getChildren(ROOT_WIN_ID)
 			.filter(
-				(w) => w.viewPort.type === runtimeType,
+				(w) =>
+					!w.state.isMinimized &&
+					w.viewPort.type === runtimeType,
 			);
 	}
 
@@ -350,22 +345,22 @@ export class WindowManager {
 			if (existing) return existing as WindowInstance<TPayload>;
 		}
 
-		// const requestedParent = options.parentId ?? ROOT_WIN_ID;
-		// const parent = this.find(requestedParent);
-		// const parentId = parent ? parent.winId : ROOT_WIN_ID;
-
 		const parent = this.find(options.parentId ?? ROOT_WIN_ID) ?? this.find(ROOT_WIN_ID)!;
 		const parentId = parent.winId;
 
 		const tileOffset = options.tileOffset ?? 20;
 		const siblingCount = this.getChildren(parentId).length;
-		// const offset = options.noTile ? 0 : siblingCount * 20;
 
 		const currentOffset = siblingCount * tileOffset;
 		const compKey = options.componentKey ?? getComponentKey(component);
 
-		// console.log("[open] component.name", component.name);
-		// console.log("[open] componentKey", compKey);
+		if (!compKey) {
+			throw new Error(
+				`Komponenten "${
+					component.name ?? "unknown"
+				}" är inte registrerad. Ange componentKey eller registrera komponenten först.`,
+			);
+		}
 
 		const geometry = this.fitToParent(parent, {
 			left: options.left ?? currentOffset,
@@ -407,7 +402,7 @@ export class WindowManager {
 			tileOffset,
 			showButtons: options.showButtons ?? true,
 			docking: options.docking ?? {},
-			payload: (options.payload ?? null) as TPayload,
+			payload: options.payload ?? null,
 			// payload: options.payload ? $state(options.payload) : (null as any),
 			titlebar: options.titlebar,
 			// isDetached: false,
@@ -428,9 +423,17 @@ export class WindowManager {
 		offset = 24,
 		parentId?: WindowId,
 	): WindowInstance | undefined {
+		if (
+			source.winId === ROOT_WIN_ID ||
+			!source.component
+		) {
+			return undefined;
+		}
+
 		const copy = this.open(source.component, {
 			title: `${source.title} (copy)`,
 			parentId: parentId ?? source.parentId,
+			componentKey: source.componentKey,
 			props: { ...source.props },
 			payload: structuredClone(
 				$state.snapshot(source.payload),
@@ -441,6 +444,8 @@ export class WindowManager {
 			width: source.state.width,
 			height: source.state.height,
 			transparency: source.state.transparency,
+			showButtons: source.showButtons,
+			titlebar: source.titlebar,
 		});
 
 		for (const child of this.getChildren(source.winId)) {
@@ -452,32 +457,6 @@ export class WindowManager {
 		}
 
 		return copy;
-	}
-
-	duplicate_old(source: WindowInstance, offset = 24): WindowInstance | undefined {
-		if (!source || source.winId === ROOT_WIN_ID || !source.component) {
-			return undefined;
-		}
-
-		const wincopy = this.open(source.component, {
-			title: `${source.title} (kopia)`,
-			parentId: source.parentId ?? ROOT_WIN_ID,
-			boundingEl: source.boundingEl,
-			props: { ...source.props },
-			payload: source.payload,
-
-			left: source.state.left + offset,
-			top: source.state.top + offset,
-			width: source.state.width,
-			height: source.state.height,
-			transparency: source.state.transparency,
-			showButtons: source.showButtons,
-			docking: {},
-			titlebar: source.titlebar,
-		});
-
-		this.focus(wincopy);
-		return wincopy;
 	}
 
 	private fitToParent(
@@ -568,6 +547,29 @@ export class WindowManager {
 		Object.assign(win.metrics, updates);
 	}
 
+	updatePayload_old<TPayload>(id: WindowId, payload: TPayload | null): void {
+		const win = this.find(id);
+		if (!win) return;
+
+		if (Object.is(win.payload, payload)) {
+			return;
+		}
+
+		if (
+			win.payload !== null &&
+			typeof win.payload === "object" &&
+			payload !== null &&
+			typeof payload === "object" &&
+			!Array.isArray(win.payload) &&
+			!Array.isArray(payload)
+		) {
+			Object.assign(win.payload, payload);
+			return;
+		}
+
+		win.payload = payload;
+	}
+
 	updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
 		const win = this.find(id);
 		if (!win) return;
@@ -596,46 +598,31 @@ export class WindowManager {
 	/**
 	 * Updates props on a window.
 	 *
-	 * If `id` is provided, only that window is updated.
+	 * If `win` is provided, only that window is updated.
 	 *
-	 * If `id` is omitted, all windows containing the specified
-	 * prop key(s) are updated.
+	 * Otherwise, all windows already containing at least one of the
+	 * specified prop keys are updated.
 	 *
 	 * Example:
 	 *
-	 * 	updateProps({ text: "Hello" }, winId);
+	 * 	updateProps({ text: "Hello" }, win);
 	 *
 	 * 	updateProps({ theme: "dark" });
 	 *
 	 * For shared reactive data, use `payload` instead of props.
 	 */
-	// updateProps(
-	// 	props: Record<string, unknown>,
-	// 	id?: WindowId,
-	// ): void {
-	// 	if (id) {
-	// 		const win = this.find(id);
-	// 		if (!win) return;
-	// 		Object.assign(win.props, props);
-	// 		return;
-	// 	}
-	// 	for (const win of this.windows) {
-	// 		for (const key of Object.keys(props)) {
-	// 			if (key in win.props) {
-	// 				win.props[key] = props[key];
-	// 			}
-	// 		}
-	// 	}
-	// }
-
 	updateProps(
 		props: Record<string, unknown>,
-		win: WindowInstance,
+		win?: WindowInstance,
 	): void {
-		if (!win) return;
-		const key = getComponentKey(win.component);
+		if (win) {
+			Object.assign(win.props, props);
+			return;
+		}
+
+		const keys = Object.keys(props);
 		for (const w of this.windows) {
-			if (getComponentKey(w.component) === key) {
+			if (keys.some((key) => key in w.props)) {
 				Object.assign(w.props, props);
 			}
 		}
@@ -643,7 +630,7 @@ export class WindowManager {
 
 	updatePropsByKey(key: string, props: Record<string, unknown>): void {
 		for (const win of this.windows) {
-			if (getComponentKey(win.component) === key) {
+			if (win.componentKey === key) {
 				Object.assign(win.props, props);
 			}
 		}
@@ -724,7 +711,7 @@ export class WindowManager {
 	/**
 	 * Resizes a window while proportionally expanding or shrinking adjacent docked sibling windows.
 	 */
-	resizeDockedWindow(win: WindowInstance, mode: ResizeMode | string, proposed: Partial<WindowRect>): void {
+	resizeDockedWindow(win: WindowInstance, mode: ResizeMode, proposed: Partial<WindowRect>): void {
 		if (win.winId === ROOT_WIN_ID) return;
 
 		const old = rectOf(win);
@@ -888,36 +875,7 @@ export class WindowManager {
 		this.focus(win);
 	}
 
-	// Inuti setupStandaloneSync(winId: WindowId) i windowManager.svelte.ts
-	private setupStandaloneSync_old(winId: string): void {
-		this.sync.start(
-			winId,
-			() => {
-				const win = this.find(winId);
-				if (!win) {
-					return {
-						payload: undefined,
-						props: {},
-					};
-				}
-
-				return {
-					payload: win.payload,
-					props: win.props ?? {},
-				};
-			},
-			(state: DetachedWindowState) => {
-				const win = this.find(winId);
-
-				if (!win) return;
-
-				this.updatePayload(winId, state.payload);
-				this.updateProps(winId, state.props ?? {});
-			},
-		);
-	}
-
-	setupStandaloneSync(winId: string): () => void {
+	setupStandaloneSync(winId: WindowId): () => void {
 		this.sync.start(
 			winId,
 			() => {
@@ -934,7 +892,7 @@ export class WindowManager {
 				if (!win) return;
 
 				this.updatePayload(winId, state.payload);
-				this.updateProps(winId, state.props ?? {});
+				this.updateProps(state.props ?? {}, win);
 			},
 			(updates) => {
 				this.updateState(winId, updates);
@@ -952,7 +910,7 @@ export class WindowManager {
 
 	async detachWindow(
 		win: WindowInstance,
-		target: WindowViewPortType,
+		target: Exclude<WindowViewPortType, "workspace">,
 	): Promise<void> {
 		if (!win) {
 			throw new Error(`Window ${win} hittades inte.`);
@@ -985,8 +943,11 @@ export class WindowManager {
 	/**
 	 * Stänger ett frikopplat fönster.
 	 */
-	async closeDetached(id: WindowId): Promise<boolean> {
-		return this.sync.closeDetached(id);
+	async closeDetached(id: WindowId): Promise<void> {
+		const win = this.find(id);
+		if (!win || win.viewPort.type === "workspace") return;
+
+		this.closeWin(win);
 	}
 
 	closeWin(win: WindowInstance): void {
@@ -1004,7 +965,12 @@ export class WindowManager {
 			this.sync.stop(id);
 
 			if (child && child.viewPort.type !== "workspace") {
-				void this.backend.close(id);
+				void this.backend.close(id).catch((error) => {
+					console.error(
+						`[WindowManager] Kunde inte stänga fönster ${id}:`,
+						error,
+					);
+				});
 			}
 		}
 

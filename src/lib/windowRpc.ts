@@ -1,35 +1,15 @@
 // src/lib/windowRpc.ts
 
-export interface RpcRequest {
-	type: "rpc:request";
-	winId: string;
-	requestId: string;
-	sourceId: string;
-	targetEndpointId?: string;
-	method: string;
-	args: unknown[];
-}
-
-export interface RpcResponse {
-	type: "rpc:response";
-	winId: string;
-	requestId: string;
-	sourceId: string;
-	targetEndpointId: string;
-	result?: unknown;
-	error?: string;
-}
-
-export type RpcMessage = RpcRequest | RpcResponse;
+import type { WindowMessage, WindowTransportPacket } from "./windowBackend";
 
 export interface RpcTransport {
 	readonly endpointId: string;
 
-	send(message: RpcMessage): Promise<void>;
+	send(message: WindowMessage): Promise<void>;
 
 	onMessage(
 		winId: string,
-		callback: (message: RpcMessage) => void,
+		callback: (message: WindowMessage) => void,
 	): () => void;
 }
 
@@ -56,39 +36,6 @@ function createId(): string {
 
 function toError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
-}
-
-export function isRpcMessage(
-	value: unknown,
-): value is RpcMessage {
-	if (!value || typeof value !== "object") return false;
-
-	const message = value as Record<string, unknown>;
-
-	if (
-		typeof message.winId !== "string" ||
-		typeof message.requestId !== "string" ||
-		typeof message.sourceId !== "string"
-	) {
-		return false;
-	}
-
-	if (message.type === "rpc:request") {
-		return (
-			typeof message.method === "string" &&
-			Array.isArray(message.args) &&
-			(
-				message.targetEndpointId === undefined ||
-				typeof message.targetEndpointId === "string"
-			)
-		);
-	}
-
-	if (message.type === "rpc:response") {
-		return typeof message.targetEndpointId === "string";
-	}
-
-	return false;
 }
 
 export class WindowRpc {
@@ -188,8 +135,11 @@ export class WindowRpc {
 
 		const requestId = createId();
 
-		const request: RpcRequest = {
-			type: "rpc:request",
+		const request: Extract<
+			WindowMessage,
+			{ type: "rpc:request" }
+		> = {
+			type: "rpc:request" as const,
 			winId: this.winId,
 			requestId,
 			sourceId: this.sourceId,
@@ -230,15 +180,19 @@ export class WindowRpc {
 	}
 
 	private async handleMessage(
-		message: RpcMessage,
+		message: WindowMessage,
 	): Promise<void> {
-		if (this.destroyed) return;
+		if (
+			this.destroyed ||
+			(message.type !== "rpc:request" &&
+				message.type !== "rpc:response")
+		) {
+			return;
+		}
 
 		if (message.winId !== this.winId) return;
-
 		// Ignorera alltid egna utskick.
 		if (message.sourceId === this.sourceId) return;
-
 		if (message.type === "rpc:response") {
 			// Responsen måste vara avsedd för oss.
 			if (message.targetEndpointId !== this.sourceId) {
@@ -250,10 +204,8 @@ export class WindowRpc {
 			);
 
 			if (!pending) return;
-
 			clearTimeout(pending.timeout);
 			this.pending.delete(message.requestId);
-
 			if (message.error !== undefined) {
 				pending.reject(
 					new Error(message.error),
@@ -261,7 +213,6 @@ export class WindowRpc {
 			} else {
 				pending.resolve(message.result);
 			}
-
 			return;
 		}
 
@@ -274,12 +225,12 @@ export class WindowRpc {
 			) {
 				return;
 			}
+			const handler = this.handlers.get(message.method);
 
-			const handler = this.handlers.get(
-				message.method,
-			);
-
-			let response: RpcResponse;
+			let response: Extract<
+				WindowMessage,
+				{ type: "rpc:response" }
+			>;
 
 			try {
 				if (!handler) {
@@ -288,9 +239,7 @@ export class WindowRpc {
 					);
 				}
 
-				const result = await handler(
-					...message.args,
-				);
+				const result = await handler(...message.args);
 
 				response = {
 					type: "rpc:response",
@@ -331,9 +280,7 @@ export class WindowRpc {
 	 */
 	destroy(): void {
 		if (this.destroyed) return;
-
 		this.destroyed = true;
-
 		this.unsubscribe();
 
 		for (const pending of this.pending.values()) {
@@ -359,22 +306,41 @@ export interface RawRpcBroker {
 	readonly endpointId: string;
 
 	sendRaw(
+		message: WindowMessage,
+	): Promise<void>;
+
+	onRawMessage(
+		winId: string,
+		callback: (packet: WindowTransportPacket) => void,
+	): () => void;
+}
+
+/**
+ * Adapter mellan Broker och RPC.
+ */
+
+/**
+ * Interface mot den gemensamma WindowBackend-kanalen.
+ *
+ * RPC känner inte till BroadcastChannel,
+ * LocalStorage eller Tauri.
+ */
+export interface RawRpcBroker {
+	readonly endpointId: string;
+
+	sendRaw(
 		winId: string,
 		data: unknown,
 	): Promise<void>;
 
 	onRawMessage(
 		winId: string,
-		callback: (packet: {
-			winId: string;
-			sourceId: string;
-			data: unknown;
-		}) => void,
+		callback: (packet: WindowTransportPacket) => void,
 	): () => void;
 }
 
 /**
- * Adapter mellan Broker och RPC.
+ * Adapter mellan WindowBackend och RPC.
  */
 export function createRpcTransport(
 	broker: RawRpcBroker,
@@ -382,11 +348,17 @@ export function createRpcTransport(
 	return {
 		endpointId: broker.endpointId,
 
-		async send(message: RpcMessage): Promise<void> {
-			await broker.sendRaw(
-				message.winId,
-				message,
-			);
+		async send(message: WindowMessage): Promise<void> {
+			if (
+				message.type !== "rpc:request" &&
+				message.type !== "rpc:response"
+			) {
+				throw new Error(
+					"RPC-transporten kan endast skicka RPC-meddelanden.",
+				);
+			}
+
+			await broker.sendRaw(message.winId, message);
 		},
 
 		onMessage(winId, callback) {
@@ -395,11 +367,64 @@ export function createRpcTransport(
 				(packet) => {
 					if (packet.winId !== winId) return;
 
-					if (!isRpcMessage(packet.data)) {
+					const message = packet.data;
+
+					if (
+						!message ||
+						typeof message !== "object"
+					) {
 						return;
 					}
 
-					callback(packet.data);
+					const rpcMessage = message as WindowMessage;
+
+					if (
+						rpcMessage.type !== "rpc:request" &&
+						rpcMessage.type !== "rpc:response"
+					) {
+						return;
+					}
+
+					callback(rpcMessage);
+				},
+			);
+		},
+	};
+}
+
+export function createRpcTransport_old(
+	broker: RawRpcBroker,
+): RpcTransport {
+	return {
+		endpointId: broker.endpointId,
+
+		async send(message: WindowMessage): Promise<void> {
+			if (
+				message.type !== "rpc:request" &&
+				message.type !== "rpc:response"
+			) {
+				throw new Error(
+					"RPC-transporten kan endast skicka RPC-meddelanden.",
+				);
+			}
+
+			await broker.sendRaw(message);
+		},
+
+		onMessage(winId, callback) {
+			return broker.onRawMessage(
+				winId,
+				(packet) => {
+					if (packet.winId !== winId) return;
+
+					if (
+						packet.message.type !== "rpc:request" &&
+						packet.message.type !== "rpc:response"
+					) {
+						return;
+					}
+
+					callback(packet.message);
 				},
 			);
 		},

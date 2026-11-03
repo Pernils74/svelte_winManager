@@ -8,16 +8,11 @@ import type {
 	WindowTransportPacket,
 	WindowViewPortType,
 } from "./windowBackend";
-import type {
-	WindowId,
-	WindowState,
-} from "./windowManager.svelte";
+import type { WindowId, WindowState } from "./windowManager.svelte";
 
 type ReadState = () => DetachedWindowState;
 
-type ApplyState = (
-	state: DetachedWindowState,
-) => void;
+type ApplyState = (state: DetachedWindowState) => void;
 
 interface SyncMessage {
 	kind: "sync";
@@ -44,11 +39,7 @@ function snapshot<T>(value: T): T {
  *
  * Optimerad för JSON-kompatibla payloads och props.
  */
-function deepEqual(
-	a: unknown,
-	b: unknown,
-	seen = new WeakMap<object, WeakSet<object>>(),
-): boolean {
+function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<object>>()): boolean {
 	if (Object.is(a, b)) return true;
 
 	if (

@@ -22,15 +22,23 @@ $effect(() => {
 });
 
 function reparentToRoot() {
-	wManager.reparent(winId, "root");
+	const bounds = win.boundingEl?.getBoundingClientRect();
+	if (!bounds) return;
+
+	wManager.reparent(winId, "root", {
+		left: bounds.left,
+		top: bounds.top,
+		width: bounds.width,
+		height: bounds.height,
+	});
 }
 
 function detachToTab() {
-	wManager.detachWindow(win, "tab");
+	wManager.detachWindow(win, "browser-tab");
 }
 
 function detachToWindow() {
-	wManager.detachWindow(win, "window");
+	wManager.detachWindow(win, "browser-window");
 }
 </script>
 

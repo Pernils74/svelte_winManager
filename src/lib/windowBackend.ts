@@ -1,9 +1,43 @@
 // src/lib/windowBackend.ts
 
-// export type WindowTarget =
-// 	| "tab"
-// 	| "window"
-// 	| "tauri";
+import type { WindowId, WindowState } from "./windowManager.svelte";
+
+export interface DetachedWindowState {
+	payload: unknown;
+	props: Record<string, unknown>;
+}
+
+export type WindowMessage =
+	| { type: "sync:payload"; winId: WindowId; state: DetachedWindowState }
+	| { type: "sync:state-update"; winId: WindowId; updates: Partial<WindowState> }
+	| {
+		type: "rpc:request";
+		winId: WindowId;
+		requestId: string;
+		sourceId: string;
+		targetEndpointId?: string;
+		method: string;
+		args: unknown[];
+	}
+	| {
+		type: "rpc:response";
+		winId: WindowId;
+		requestId: string;
+		sourceId: string;
+		targetEndpointId: string;
+		result?: unknown;
+		error?: string;
+	}
+	| { type: "system:close"; winId: WindowId };
+
+export interface WindowTransportPacket {
+	winId: WindowId;
+	sourceId: string;
+	message: WindowMessage;
+}
+
+// --------------------------------------------------
+// --------------------------------------------------
 
 export type WindowViewPortType =
 	| "workspace"

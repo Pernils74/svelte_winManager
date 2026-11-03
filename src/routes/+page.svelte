@@ -90,7 +90,7 @@ onMount(() => {
 
 	wManager.open(WindowA, {
 		title: "🪟 Window A",
-		winId: "1",
+		winId: "Window_A",
 		width: 600,
 		height: 600,
 		left: 10,

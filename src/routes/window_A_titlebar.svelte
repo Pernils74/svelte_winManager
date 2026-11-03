@@ -17,6 +17,7 @@ function refresh() {
 
 function openWindow_B() {
 	wManager.open(WindowB, {
+		winId: "Window_B",
 		title: "🪟 Winodw B",
 		width: 700,
 		height: 600,

@@ -46,6 +46,7 @@ import WindowFrame from "./WindowFrame.svelte";
 import {
 	getWindowManager,
 	ROOT_WIN_ID,
+	type WindowInstance,
 	type WindowState,
 } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
@@ -119,9 +120,9 @@ $effect(() => {
 			if (cancelled) return;
 
 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
-			let winInstance = wManager.find(targetWinId);
+			const winInstance = wManager.find(targetWinId);
 			if (!winInstance) {
-				winInstance = {
+				const newWinInstance: WindowInstance = {
 					winId: targetWinId,
 					title,
 					componentKey,
@@ -143,6 +144,11 @@ $effect(() => {
 					storedState: null,
 					zIndex: 1,
 					tileOffset: 0,
+					metrics: {
+						renderMs: 0,
+						renderStrategy: "immediate",
+						renderBusy: false,
+					},
 					showButtons: false,
 					docking: {},
 					payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
@@ -156,7 +162,7 @@ $effect(() => {
 					},
 				};
 
-				wManager.windows.push(winInstance);
+				wManager.windows.push(newWinInstance);
 			} else {
 				winInstance.component = component;
 				winInstance.componentKey = componentKey;
@@ -285,7 +291,7 @@ function publishStandaloneStateUpdate(
 		</header>
 	{/if}
 
-	{#snippet renderWindow(win)}
+	{#snippet renderWindow(win: WindowInstance)}
 		{#if win.component}
 			{@const WindowComponent = win.component}
 			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
@@ -300,7 +306,7 @@ function publishStandaloneStateUpdate(
 
 			<WindowFrame
 				{win}
-				bounds={parentInstance?.boundingEl ?? rootContentEl}
+				bounds={parentInstance?.boundingEl ?? rootContentEl!}
 			>
 				<WindowComponent
 					bind:win={wManager.windows[globalIdx]}
