@@ -59,7 +59,6 @@ import {
 	type DetachedWindowState,
 	type ExternalWindowDescriptor,
 	type WindowBackend,
-	type WindowTarget,
 } from "./windowBackend.ts";
 
 export const ROOT_WIN_ID = "root";
@@ -871,7 +870,7 @@ export class WindowManager {
 		);
 	}
 
-	private setupStandaloneSync(winId: string): void {
+	setupStandaloneSync(winId: string): () => void {
 		this.sync.start(
 			winId,
 			() => {
@@ -891,6 +890,9 @@ export class WindowManager {
 				this.updateProps(winId, state.props ?? {});
 			},
 		);
+
+		// Host äger livscykeln för sin lokala sync-prenumeration.
+		return () => this.sync.stop(winId);
 	}
 
 	/**
@@ -1004,9 +1006,9 @@ export function initializeWindowManager(
 	try {
 		return getContextManager();
 	} catch {
-		const manager = new WindowManager(
-			options?.backend,
-		);
+		const manager = new WindowManager({
+			backend: options?.backend,
+		});
 
 		if (options?.modules) {
 			registerComponents(options.modules);

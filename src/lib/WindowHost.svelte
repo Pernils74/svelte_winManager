@@ -142,7 +142,13 @@ $effect(() => {
 					docking: {},
 					payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
 
-					viewPort: { id: "s", type: "browser-tab" },
+					viewPort: {
+						id: targetWinId,
+						type: (() => {
+							if ("__TAURI_INTERNALS__" in window) return "tauri-window" as const;
+							return window.name === `detached_${targetWinId}` ? "browser-window" as const : "browser-tab" as const;
+						})(),
+					},
 				};
 
 				wManager.windows.push(winInstance);
@@ -150,6 +156,13 @@ $effect(() => {
 				winInstance.component = component;
 				winInstance.componentKey = componentKey;
 				winInstance.title = title;
+				winInstance.viewPort = {
+					id: targetWinId,
+					type: (() => {
+						if ("__TAURI_INTERNALS__" in window) return "tauri-window" as const;
+						return window.name === `detached_${targetWinId}` ? "browser-window" as const : "browser-tab" as const;
+					})(),
+				};
 			}
 
 			if (cancelled) return;
@@ -202,68 +215,6 @@ onMount(() => {
 		wManager.setBoundingEl(ROOT_WIN_ID, null);
 	};
 });
-
-// $effect(() => {
-// 	if (!isStandalone) return;
-
-// 	const onResize = () => {
-// 		wManager.updateState(
-// 			standaloneWinId,
-// 			{
-// 				top: 0,
-// 				left: 0,
-// 				width: window.innerWidth,
-// 				height: window.innerHeight,
-// 			},
-// 		);
-// 	};
-
-// 	window.addEventListener("resize", onResize);
-
-// 	return () => {
-// 		window.removeEventListener(
-// 			"resize",
-// 			onResize,
-// 		);
-// 	};
-// });
-
-// $effect(() => {
-// 	if (!isStandalone) return;
-
-// 	const onFocus = () => {
-// 		console.log("focus");
-// 	};
-
-// 	const onBlur = () => {
-// 		console.log("blur");
-// 	};
-
-// 	const onVisibility = () => {
-// 		console.log(
-// 			"visibility",
-// 			document.visibilityState,
-// 			document.hidden,
-// 		);
-// 	};
-
-// 	window.addEventListener("focus", onFocus);
-// 	window.addEventListener("blur", onBlur);
-
-// 	document.addEventListener(
-// 		"visibilitychange",
-// 		onVisibility,
-// 	);
-
-// 	return () => {
-// 		window.removeEventListener("focus", onFocus);
-// 		window.removeEventListener("blur", onBlur);
-// 		document.removeEventListener(
-// 			"visibilitychange",
-// 			onVisibility,
-// 		);
-// 	};
-// });
 
 const onFocus = () => {
 	console.log("focus");
@@ -412,7 +363,7 @@ const onVisibility = () => {
 								🪟
 							{:else if win.viewPort.type === "browser-tab"}
 								🌐
-							{:else if win.viewPort.type === "tauri"}
+							{:else if win.viewPort.type === "tauri-window"}
 								🖥️
 							{/if}
 
