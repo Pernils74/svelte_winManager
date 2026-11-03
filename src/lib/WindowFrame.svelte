@@ -270,7 +270,7 @@ function beginInteraction(
 	let activeWin = win;
 
 	if (event.ctrlKey && mode === "move") {
-		const copy = manager.duplicate(win);
+		const copy = manager.duplicateWindow(win);
 		if (!copy) return;
 		activeWin = copy;
 	}
@@ -528,7 +528,7 @@ function onMouseMove(event: MouseEvent) {
 		manager.updateState(activeWin.winId, { ...nextRect, transparency: 0.65 });
 	} else {
 		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-		manager.updateState(activeWin.winId, { transparency: 0.85 });
+		manager.updateState(activeWin.winId, { transparency: 0.75 });
 	}
 }
 

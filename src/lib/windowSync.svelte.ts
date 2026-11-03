@@ -8,6 +8,10 @@ import type {
 	WindowTransportPacket,
 	WindowViewPortType,
 } from "./windowBackend";
+import type {
+	WindowId,
+	WindowState,
+} from "./windowManager.svelte";
 
 type ReadState = () => DetachedWindowState;
 
@@ -18,6 +22,12 @@ type ApplyState = (
 interface SyncMessage {
 	kind: "sync";
 	state: DetachedWindowState;
+}
+
+export interface WindowStateUpdateMessage {
+	type: "window-state-update";
+	winId: WindowId;
+	updates: Partial<WindowState>;
 }
 
 interface SyncSession {
@@ -233,6 +243,48 @@ function isSyncMessage(
 	);
 }
 
+function isWindowStateUpdateMessage(
+	value: unknown,
+	winId: string,
+): value is WindowStateUpdateMessage {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const message = value as Record<string, unknown>;
+	if (
+		message.type !== "window-state-update" ||
+		message.winId !== winId ||
+		!message.updates ||
+		typeof message.updates !== "object" ||
+		Array.isArray(message.updates)
+	) {
+		return false;
+	}
+
+	const numericKeys = new Set([
+		"left",
+		"top",
+		"width",
+		"height",
+		"transparency",
+	]);
+	const booleanKeys = new Set([
+		"isMinimized",
+		"isMaximized",
+		"isFocused",
+	]);
+
+	return Object.entries(
+		message.updates as Record<string, unknown>,
+	).every(([key, item]) => {
+		if (numericKeys.has(key)) {
+			return typeof item === "number" && Number.isFinite(item);
+		}
+		return booleanKeys.has(key) && typeof item === "boolean";
+	});
+}
+
 // function targetToViewport(
 // 	target: WindowTarget,
 // ): WindowViewPortType {
@@ -305,6 +357,9 @@ export class WindowSync {
 		winId: string,
 		readState: ReadState,
 		applyState: ApplyState,
+		applyWindowStateUpdate?: (
+			updates: Partial<WindowState>,
+		) => void,
 	): void {
 		this.assertAlive();
 
@@ -338,6 +393,25 @@ export class WindowSync {
 					packet.sourceId ===
 						this.backend.endpointId
 				) {
+					return;
+				}
+
+				if (
+					isWindowStateUpdateMessage(
+						packet.data,
+						winId,
+					)
+				) {
+					try {
+						applyWindowStateUpdate?.(
+							packet.data.updates,
+						);
+					} catch (error) {
+						console.error(
+							`[WindowSync] Kunde inte applicera fönstertillstånd för ${winId}:`,
+							error,
+						);
+					}
 					return;
 				}
 
@@ -434,6 +508,21 @@ export class WindowSync {
 			stopEffect,
 			unsubscribe,
 		});
+	}
+
+	async sendStateUpdate(
+		winId: WindowId,
+		updates: Partial<WindowState>,
+	): Promise<void> {
+		this.assertAlive();
+
+		const message: WindowStateUpdateMessage = {
+			type: "window-state-update",
+			winId,
+			updates: snapshot(updates),
+		};
+
+		await this.backend.sendRaw(winId, message);
 	}
 
 	/**

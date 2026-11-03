@@ -52,6 +52,8 @@ import debug from "./debug.svelte";
 
 import WindowATitlebar from "./window_A_titlebar.svelte";
 
+import brodcastChannelMonitor from "./BroadcastChannelMonitor.svelte";
+
 import MouseCords from "./MouseCords.svelte";
 
 // const wManager = initializeWindowManager();
@@ -76,13 +78,23 @@ const wManager = initializeWindowManager({
 // );
 
 onMount(() => {
+	wManager.open(debug, {
+		title: "🪟 debug",
+		// Reparent this window to the window with ID 1 (Window A)
+		// parentId: "1",
+		width: 700,
+		height: 600,
+		left: 250,
+		top: 800,
+	});
+
 	wManager.open(WindowA, {
 		title: "🪟 Window A",
 		winId: "1",
 		width: 600,
 		height: 600,
 		left: 10,
-		top: 300,
+		top: 100,
 		titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
@@ -91,7 +103,7 @@ onMount(() => {
 		width: 600,
 		height: 700,
 		left: 650,
-		top: 300,
+		top: 100,
 	});
 
 	// wManager.open(WindowC, {
@@ -103,14 +115,15 @@ onMount(() => {
 	// 	top: 800,
 	// });
 
-	wManager.open(debug, {
-		title: "🪟 debug",
+	wManager.open(brodcastChannelMonitor, {
+		title: "🪟 BroadcastChannel Monitor",
 		// Reparent this window to the window with ID 1 (Window A)
-		parentId: "1",
+
 		width: 700,
 		height: 600,
 		left: 250,
 		top: 800,
+		props: { channelName: "svelte_winmanager_channel" },
 	});
 });
 
@@ -120,7 +133,7 @@ const allComponents = $derived(getAllRegisteredKeys());
 // });
 </script>
 
-<MouseCords></MouseCords>
+<!-- <MouseCords></MouseCords> -->
 
 	  {#snippet desktopContent()}  
 

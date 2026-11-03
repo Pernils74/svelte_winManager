@@ -43,7 +43,11 @@ import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
-import { getWindowManager, ROOT_WIN_ID } from "./windowManager.svelte";
+import {
+	getWindowManager,
+	ROOT_WIN_ID,
+	type WindowState,
+} from "./windowManager.svelte";
 import { getComponentByKey } from "./windowRegistry";
 
 // import { registerComponents } from "./windowRegistry";
@@ -134,6 +138,7 @@ $effect(() => {
 						isMinimized: false,
 						isMaximized: true,
 						transparency: 1,
+						isFocused: false,
 					},
 					storedState: null,
 					zIndex: 1,
@@ -170,6 +175,12 @@ $effect(() => {
 			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
 			// Denna ersätter din gamla `wManager.backend.onMessage`
 			unsubscribe = wManager.setupStandaloneSync(targetWinId);
+			publishStandaloneStateUpdate({
+				width: window.innerWidth,
+				height: window.innerHeight,
+				isMinimized: document.hidden,
+				isFocused: document.hasFocus(),
+			});
 		} catch (error) {
 			if (cancelled) return;
 
@@ -217,40 +228,42 @@ onMount(() => {
 });
 
 const onFocus = () => {
-	console.log("focus");
+	publishStandaloneStateUpdate({ isFocused: true });
 };
 
 const onBlur = () => {
-	console.log("blur");
+	publishStandaloneStateUpdate({ isFocused: false });
 };
 
 const onResize = () => {
 	if (!isStandalone) return;
-	wManager.updateState(
-		standaloneWinId,
-		{
-			top: 0,
-			left: 0,
-			width: window.innerWidth,
-			height: window.innerHeight,
-		},
-	);
+	publishStandaloneStateUpdate({
+		width: window.innerWidth,
+		height: window.innerHeight,
+	});
 };
 
 const onVisibility = () => {
-	if (!isStandalone) return;
-	wManager.updateState(
-		standaloneWinId,
-		{
-			isMinimized: document.hidden,
-		},
-	);
-	console.log(
-		"visibility",
-		document.visibilityState,
-		document.hidden,
-	);
+	publishStandaloneStateUpdate({
+		isMinimized: document.hidden,
+	});
 };
+
+function publishStandaloneStateUpdate(
+	updates: Partial<WindowState>,
+): void {
+	if (!isStandalone || !standaloneWinId) return;
+
+	wManager.updateState(standaloneWinId, updates);
+	void wManager
+		.sendWindowStateUpdate(standaloneWinId, updates)
+		.catch((error) => {
+			console.error(
+				`[WindowHost] Kunde inte synka fönstertillstånd för ${standaloneWinId}:`,
+				error,
+			);
+		});
+}
 </script>
 
 <!-- Vi sätter en CSS-klass på layouten om vi är standalone så vi kan dölja topbar/taskbar via CSS eller villkor -->

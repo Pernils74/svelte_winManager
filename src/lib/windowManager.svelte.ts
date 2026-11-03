@@ -140,12 +140,6 @@ export interface WindowComponentProps<TPayload = any> {
 	parentId: WindowId | null;
 }
 
-// type WindowViewPortType =
-// 	| "workspace"
-// 	| "browser-tab"
-// 	| "browser-window"
-// 	| "tauri-window";
-
 import { type WindowViewPortType } from "./windowBackend.ts";
 
 interface WindowViewPort {
@@ -259,6 +253,7 @@ export class WindowManager {
 				isMinimized: false,
 				isMaximized: false,
 				transparency: 1,
+				isFocused: false,
 			},
 			storedState: null,
 			zIndex: 0,
@@ -398,6 +393,7 @@ export class WindowManager {
 				isMinimized: false,
 				isMaximized: false,
 				transparency: options.transparency ?? 1,
+				isFocused: false,
 			},
 
 			metrics: {
@@ -427,18 +423,38 @@ export class WindowManager {
 		return win;
 	}
 
-	/**
-	 * Skapar en fristående kopia av ett fönster.
-	 * Kopian behåller förälder, komponent, props och utseende,
-	 * men får ett nytt ID och en egen position.
-	 */
+	duplicateWindow(
+		source: WindowInstance,
+		offset = 24,
+		parentId?: WindowId,
+	): WindowInstance | undefined {
+		const copy = this.open(source.component, {
+			title: `${source.title} (copy)`,
+			parentId: parentId ?? source.parentId,
+			props: { ...source.props },
+			payload: structuredClone(
+				$state.snapshot(source.payload),
+			),
 
-	/**
-	 * Creates a standalone copy of a window instance.
-	 * The duplicate retains components, props, parentage, and styles,
-	 * but receives a unique ID and an offset position.
-	 */
-	duplicate(source: WindowInstance, offset = 24): WindowInstance | undefined {
+			left: source.state.left + offset,
+			top: source.state.top + offset,
+			width: source.state.width,
+			height: source.state.height,
+			transparency: source.state.transparency,
+		});
+
+		for (const child of this.getChildren(source.winId)) {
+			this.duplicateWindow(
+				child,
+				0,
+				copy.winId,
+			);
+		}
+
+		return copy;
+	}
+
+	duplicate_old(source: WindowInstance, offset = 24): WindowInstance | undefined {
 		if (!source || source.winId === ROOT_WIN_ID || !source.component) {
 			return undefined;
 		}
@@ -664,13 +680,45 @@ export class WindowManager {
 		if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) return;
 		win.storedState = rectOf(win);
 		win.state.isMinimized = true; // Du kan skriva direkt till statet eftersom det är en runa!
+		this.publishDetachedStateUpdate(win, {
+			isMinimized: true,
+		});
 	}
 
 	restore(win: WindowInstance): void {
 		if (!win || win.winId === ROOT_WIN_ID) return;
 		if (win.storedState) Object.assign(win.state, win.storedState);
 		win.state.isMinimized = false;
+		win.state.isFocused = true;
 		this.focus(win); // Skicka vidare objektet till nästa metod
+		this.publishDetachedStateUpdate(win, {
+			...(win.storedState ?? {}),
+			isMinimized: false,
+			isFocused: true,
+		});
+	}
+
+	private publishDetachedStateUpdate(
+		win: WindowInstance,
+		updates: Partial<WindowState>,
+	): void {
+		if (win.viewPort.type === "workspace") return;
+
+		void this.sendWindowStateUpdate(win.winId, updates).catch(
+			(error) => {
+				console.error(
+					`[WindowManager] Kunde inte synka state för ${win.winId}:`,
+					error,
+				);
+			},
+		);
+	}
+
+	async sendWindowStateUpdate(
+		winId: WindowId,
+		updates: Partial<WindowState>,
+	): Promise<void> {
+		await this.sync.sendStateUpdate(winId, updates);
 	}
 
 	/**
@@ -846,7 +894,6 @@ export class WindowManager {
 			winId,
 			() => {
 				const win = this.find(winId);
-
 				if (!win) {
 					return {
 						payload: undefined,
@@ -888,6 +935,9 @@ export class WindowManager {
 
 				this.updatePayload(winId, state.payload);
 				this.updateProps(winId, state.props ?? {});
+			},
+			(updates) => {
+				this.updateState(winId, updates);
 			},
 		);
 
