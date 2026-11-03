@@ -88,12 +88,6 @@ let minimizedWindows = $derived(
 	),
 );
 
-let rootWindows = $derived(
-	wManager.getChildren(ROOT_WIN_ID).filter(
-		(win) => win.viewPort.type == "workspace",
-	),
-);
-
 // Ladda komponenten och skapa fristående fönsterinstans.
 $effect(() => {
 	if (
@@ -185,33 +179,14 @@ $effect(() => {
 	};
 });
 
-// onMount(() => {
-// 	// If start of root window
-// 	if (!contentEl) return;
-// 	const updateBounds = () => {
-// 		if (!contentEl) return;
-// 		wManager.setRootBounds(
-// 			contentEl.clientWidth,
-// 			contentEl.clientHeight,
-// 		);
-// 	};
-
-// 	updateBounds();
-// 	const observer = new ResizeObserver(updateBounds);
-// 	observer.observe(contentEl);
-// 	return () => observer.disconnect();
-// });
-
 onMount(() => {
 	if (!rootContentEl) {
 		console.warn("[WindowHost] contentEl is undefined on mount. Cannot set root bounds.");
 		return;
 	}
 	wManager.setBoundingEl(ROOT_WIN_ID, rootContentEl);
-
 	const updateBounds = () => {
 		if (!contentEl) return;
-
 		wManager.setRootBounds(
 			contentEl.clientWidth,
 			contentEl.clientHeight,
@@ -219,7 +194,6 @@ onMount(() => {
 	};
 
 	updateBounds();
-
 	const observer = new ResizeObserver(updateBounds);
 	observer.observe(rootContentEl);
 
@@ -229,23 +203,114 @@ onMount(() => {
 	};
 });
 
-// Hämta ALLA aktiva fönster i ett platt format (både föräldrar och barn)
-// Vi ser till att activeWindows vet om vi är i standalone eller workspace
-// let activeWindows = $derived(
-// 	wManager.windows.filter((win) => {
-// 		if (win.winId === ROOT_WIN_ID || win.state.isMinimized) return false;
+// $effect(() => {
+// 	if (!isStandalone) return;
 
-// 		// We are inside a standalone tab/window/tauri, We just want to render this actual window
-// 		if (isStandalone) {
-// 			return win.winId === standaloneWinId;
-// 		}
-// 		// Else render all windows that is not detached (regular mdi windows)
-// 		return !win.isDetached;
-// 	}),
-// );
+// 	const onResize = () => {
+// 		wManager.updateState(
+// 			standaloneWinId,
+// 			{
+// 				top: 0,
+// 				left: 0,
+// 				width: window.innerWidth,
+// 				height: window.innerHeight,
+// 			},
+// 		);
+// 	};
+
+// 	window.addEventListener("resize", onResize);
+
+// 	return () => {
+// 		window.removeEventListener(
+// 			"resize",
+// 			onResize,
+// 		);
+// 	};
+// });
+
+// $effect(() => {
+// 	if (!isStandalone) return;
+
+// 	const onFocus = () => {
+// 		console.log("focus");
+// 	};
+
+// 	const onBlur = () => {
+// 		console.log("blur");
+// 	};
+
+// 	const onVisibility = () => {
+// 		console.log(
+// 			"visibility",
+// 			document.visibilityState,
+// 			document.hidden,
+// 		);
+// 	};
+
+// 	window.addEventListener("focus", onFocus);
+// 	window.addEventListener("blur", onBlur);
+
+// 	document.addEventListener(
+// 		"visibilitychange",
+// 		onVisibility,
+// 	);
+
+// 	return () => {
+// 		window.removeEventListener("focus", onFocus);
+// 		window.removeEventListener("blur", onBlur);
+// 		document.removeEventListener(
+// 			"visibilitychange",
+// 			onVisibility,
+// 		);
+// 	};
+// });
+
+const onFocus = () => {
+	console.log("focus");
+};
+
+const onBlur = () => {
+	console.log("blur");
+};
+
+const onResize = () => {
+	if (!isStandalone) return;
+	wManager.updateState(
+		standaloneWinId,
+		{
+			top: 0,
+			left: 0,
+			width: window.innerWidth,
+			height: window.innerHeight,
+		},
+	);
+};
+
+const onVisibility = () => {
+	if (!isStandalone) return;
+	wManager.updateState(
+		standaloneWinId,
+		{
+			isMinimized: document.hidden,
+		},
+	);
+	console.log(
+		"visibility",
+		document.visibilityState,
+		document.hidden,
+	);
+};
 </script>
 
 <!-- Vi sätter en CSS-klass på layouten om vi är standalone så vi kan dölja topbar/taskbar via CSS eller villkor -->
+
+<svelte:window
+	onresize={onResize}
+	onfocus={onFocus}
+	onblur={onBlur}
+	onvisibilitychange={onVisibility}
+/>
+
 <div class="layout" class:standalone-host={isStandalone}>
 	{#if !isStandalone}
 		<header class="topbar">
@@ -262,14 +327,12 @@ onMount(() => {
 			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
 			{@const parentInstance = wManager.find(win.parentId)}
 
-
-{@const x = console.log(
+<!-- {@const x = console.log(
 	"RENDER",
 	win.winId,
 	win.title,
 	win.viewPort.type
-)}
-
+)} -->
 
 			<WindowFrame
 				{win}
@@ -287,36 +350,41 @@ onMount(() => {
 						{@render renderWindow(child)}  // Anropar sig själv rekursivt
 					{:else}
 						{console.log(`Child window ${child.winId} is minimized or detached, skipping render.`)}
-					
 					{/if}
-
-
 				{/each}
 			</WindowFrame>
 		{/if}
 	{/snippet}
 
-	<main class="workspace" bind:this={rootContentEl}>
-		{#if rootContentEl}
 
+
+
+
+
+	<main class="workspace" bind:this={rootContentEl}>
+		{#if rootContentEl }
 			{#if isStandalone}
 				{#if standaloneLoading}
 					<div class="loading">
 						Laddar...
 					</div>
-
-					<!-- {@const standaloneWin = wManager.find(standaloneWinId)}
-						{#if standaloneWin}
-							{@render renderWindow(standaloneWin)}
-						{/if}	 -->
 				{:else}
-					{@render renderWindow(wManager.find(standaloneWinId))}
+					{@const standaloneWin = wManager.find(standaloneWinId)}
+					{#if standaloneWin && !standaloneWin.state.isMinimized}
+						{@render renderWindow(standaloneWin)}
+					{/if}	 
 				{/if}
-			{:else}
-				{#each wManager.getRenderableRoots("workspace") as win (win.winId)}
-					{@render renderWindow(win)}
+
+  			{:else}
+				{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
+					{#if !win.state.isMinimized && win.viewPort.type == "workspace"}
+						{@render renderWindow(win)}
+					{/if}
 				{/each}
-				
+
+				<!-- {#each wManager.getRenderableRoots("workspace") as win (win.winId)}
+					{@render renderWindow(win)}
+				{/each} -->
 				{#if desktopContent}
 					{@render desktopContent()}
 				{/if}
@@ -325,7 +393,8 @@ onMount(() => {
 		{/if}
 	</main>
 
-	{#if !isStandalone && minimizedWindows.length > 0}
+	<!-- {#if !isStandalone && minimizedWindows.length > 0} -->
+	{#if minimizedWindows.length > 0}
 		<footer class="taskbar">
 			<span class="taskbar-label">
 				Minimerade fönster
@@ -338,7 +407,18 @@ onMount(() => {
 						aria-label={`Återställ ${win.title}`}
 						onclick={() => wManager.restore(win)}
 					>
-						<span class="task-icon"> ◫ </span>
+						<span class="task-icon"> 
+							{#if win.viewPort.type === "workspace"}
+								🪟
+							{:else if win.viewPort.type === "browser-tab"}
+								🌐
+							{:else if win.viewPort.type === "tauri"}
+								🖥️
+							{/if}
+
+						 ◫ </span>
+
+						<!-- <span class="task-icon"> ◫ </span> -->
 						<span class="task-title"> {win.title} </span>
 					</button>
 

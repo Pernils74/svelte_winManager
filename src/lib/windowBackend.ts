@@ -1,3 +1,40 @@
+// ┌───────────────────┐
+// │   WindowManager   │
+// ├───────────────────┤
+// │ open()            │
+// │ close()           │
+// │ move()            │
+// │ resize()          │
+// │ reparent()        │
+// │ detach()          │
+// └─────────┬─────────┘
+//           │
+//           ▼
+// ┌───────────────────┐
+// │     WindowRpc     │
+// ├───────────────────┤
+// │ call()            │
+// │ notify()          │
+// │ register()        │
+// │ timeout           │
+// │ requestId         │
+// │ promise tracking  │
+// └─────────┬─────────┘
+//           │
+//           ▼
+// ┌───────────────────┐
+// │  WindowTransport  │
+// ├───────────────────┤
+// │ BroadcastChannel  │
+// │ postMessage       │
+// │ Tauri Events      │
+// │ WebSocket?        │
+// └──────┬──────┬─────┘
+//        │      │
+//        ▼      ▼
+//  Workspace   Detached
+//  Runtime     Runtime
+
 // src/lib/windowBackend.ts
 
 // Längst upp i din fil (eller i funktionen) kan du importera SvelteKits base path:

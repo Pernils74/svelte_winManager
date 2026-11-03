@@ -603,13 +603,10 @@ async function minimize() {
 			ignoreElements: (element: Element) => element.classList.contains("resize-handle"),
 		});
 
-		manager.setThumbnail(
-			win.winId,
-			canvas.toDataURL("image/jpeg", 0.72),
-		);
+		manager.setThumbnail(win, canvas.toDataURL("image/jpeg", 0.72));
 	} catch (error) {
 		console.warn("Kunde inte skapa fönstrets miniatyrbild:", error);
-		manager.setThumbnail(win.winId, null);
+		manager.setThumbnail(win, null);
 	}
 
 	// Minimera först när bildtagningen är färdig.
@@ -628,28 +625,6 @@ $effect(() => {
 		manager.setBoundingEl(win.winId, contentEl);
 	}
 });
-
-// $effect(() => {
-// 	if (!frameEl || !win) return;
-
-// 	const style = getComputedStyle(frameEl);
-// 	const offsetParent = frameEl.offsetParent;
-
-// 	console.log("[WINDOW POSITIONING]", {
-// 		winId: win.winId,
-// 		parentId: win.parentId,
-// 		position: style.position,
-// 		offsetParent: offsetParent?.className,
-// 		boundingEl: win.boundingEl?.className,
-// 		frameRect: frameEl.getBoundingClientRect(),
-// 		offsetLeft: frameEl.offsetLeft,
-// 		offsetTop: frameEl.offsetTop,
-// 	});
-//});
-
-// $effect(() => {
-// 	console.count(`Frame ${win.winId}`);
-// });
 </script>
 
 <div
@@ -665,7 +640,6 @@ $effect(() => {
 	style:opacity={transparency}
 	in:receive={{ key: win.winId }}
 	out:send={{ key: win.winId }}
-	// onmousedown={() => manager.focus(win.winId)}
 	onmousedown={() => manager.focus(win)}
 	onwheel={changeTransparency}
 	role="dialog"
@@ -756,27 +730,6 @@ $effect(() => {
 
 	{@render children()}     
 </div>
-	<!-- {#each manager.getChildren(win.winId) as child (child.winId)}
-	  {#if child.component && !child.state.isMinimized && !child.isDetached}
-		
-		<WindowFrame win={child} bounds={contentEl}>
-		  {@const ChildComponent = child.component}
-		  
-		  {@const globalIdx = manager.windows.findIndex(w => w.winId === child.winId)}
-	
-		  <ChildComponent
-			bind:win={manager.windows[globalIdx]}
-			winId={child.winId}
-			parentId={child.parentId}
-			{...child.props}
-		  />
-		</WindowFrame> 
-	
-	  {/if}
-	{/each}
-  </div> -->
-
-
 
 
   <!-- 🌟 VARJE FÖNSTERS EGNA LOKALA TASKBAR 🌟 -->

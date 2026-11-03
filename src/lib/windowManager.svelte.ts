@@ -113,8 +113,8 @@ export interface WindowState extends WindowRect {
 	isMinimized: boolean;
 	isMaximized: boolean;
 	transparency: number;
+	isFocused: boolean;
 }
-
 /**
  * Core properties automatically passed down to every application component
  * rendered inside a window frame. Import this to type-safe your Svelte 5 props.
@@ -159,7 +159,7 @@ export interface WindowInstance<TPayload = unknown> {
 	title: string;
 	thumbnail: string | null;
 	component: Component<any>;
-	componentKey?: string; // component as string, needed for browsertab and tauri backend
+	componentKey: string; // component as string, needed for browsertab and tauri backend
 	props: Record<string, unknown>;
 	parentId: WindowId | null;
 	boundingEl: HTMLElement | null;
@@ -320,18 +320,6 @@ export class WindowManager {
 		);
 	}
 
-	// getRenderableChildren(
-	// 	parentId: WindowId,
-	// 	viewPort: WindowViewPort["type"],
-	// ): WindowInstance[] {
-	// 	return this.windows.filter(
-	// 		(win) =>
-	// 			win.parentId === parentId &&
-	// 			!win.state.isMinimized &&
-	// 			win.viewPort.type === viewPort,
-	// 	);
-	// }
-
 	/**
 	 * Frikopplar ett fönster till browser-tab,
 	 * browser-popup eller Tauri.
@@ -403,10 +391,6 @@ export class WindowManager {
 			parentId,
 			boundingEl: options.boundingEl ?? null,
 			state: {
-				// left: options.left ?? currentOffset,
-				// top: options.top ?? currentOffset,
-				// width: options.width ?? 400,
-				// height: options.height ?? 300,
 				left: geometry.left,
 				top: geometry.top,
 				width: geometry.width,
@@ -564,16 +548,8 @@ export class WindowManager {
 		Object.assign(win.state, updates);
 	}
 
-	updateMetrics(id: WindowId, updates: Partial<WindowMetrics>): void {
-		const win = this.find(id);
-
-		if (!win || win.winId === ROOT_WIN_ID) {
-			if (win?.winId === ROOT_WIN_ID) {
-				Object.assign(win.metrics, updates);
-			}
-			return;
-		}
-
+	updateMetrics(win: WindowInstance, updates: Partial<WindowMetrics>): void {
+		if (win.winId === ROOT_WIN_ID) return;
 		Object.assign(win.metrics, updates);
 	}
 
@@ -618,21 +594,42 @@ export class WindowManager {
 	 *
 	 * For shared reactive data, use `payload` instead of props.
 	 */
+	// updateProps(
+	// 	props: Record<string, unknown>,
+	// 	id?: WindowId,
+	// ): void {
+	// 	if (id) {
+	// 		const win = this.find(id);
+	// 		if (!win) return;
+	// 		Object.assign(win.props, props);
+	// 		return;
+	// 	}
+	// 	for (const win of this.windows) {
+	// 		for (const key of Object.keys(props)) {
+	// 			if (key in win.props) {
+	// 				win.props[key] = props[key];
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	updateProps(
 		props: Record<string, unknown>,
-		id?: WindowId,
+		win: WindowInstance,
 	): void {
-		if (id) {
-			const win = this.find(id);
-			if (!win) return;
-			Object.assign(win.props, props);
-			return;
+		if (!win) return;
+		const key = getComponentKey(win.component);
+		for (const w of this.windows) {
+			if (getComponentKey(w.component) === key) {
+				Object.assign(w.props, props);
+			}
 		}
+	}
+
+	updatePropsByKey(key: string, props: Record<string, unknown>): void {
 		for (const win of this.windows) {
-			for (const key of Object.keys(props)) {
-				if (key in win.props) {
-					win.props[key] = props[key];
-				}
+			if (getComponentKey(win.component) === key) {
+				Object.assign(win.props, props);
 			}
 		}
 	}
@@ -659,8 +656,7 @@ export class WindowManager {
 
 	// focus(id: WindowId): void {
 	focus(win: WindowInstance): void {
-		// const win = this.find(id);
-		if (win && win.winId !== ROOT_WIN_ID) {
+		if (win.winId !== ROOT_WIN_ID) {
 			win.zIndex = ++this.zCounter;
 		}
 	}
@@ -681,12 +677,8 @@ export class WindowManager {
 	/**
 	 * Resizes a window while proportionally expanding or shrinking adjacent docked sibling windows.
 	 */
-	resizeDockedWindow(
-		win: WindowInstance,
-		mode: ResizeMode | string,
-		proposed: Partial<WindowRect>,
-	): void {
-		if (!win || win.winId === ROOT_WIN_ID) return;
+	resizeDockedWindow(win: WindowInstance, mode: ResizeMode | string, proposed: Partial<WindowRect>): void {
+		if (win.winId === ROOT_WIN_ID) return;
 
 		const old = rectOf(win);
 		const next: WindowRect = { ...old, ...proposed };
@@ -892,15 +884,11 @@ export class WindowManager {
 		if (!win) {
 			throw new Error(`Window ${win} hittades inte.`);
 		}
-
-		const componentKey = getComponentKey(win.component);
-		if (!componentKey) {
-			return; // Early exit
-		}
+		// const componentKey = win.componentKey;
 		const descriptor: ExternalWindowDescriptor = {
 			winId: win.winId,
 			title: win.title,
-			componentKey, //: getComponentKey(win.component), //   win.componentKey,
+			componentKey: win.componentKey, //: getComponentKey(win.component), //   win.componentKey,
 			payload: win.payload,
 			props: win.props ?? {},
 			width: win.state?.width,
@@ -916,49 +904,13 @@ export class WindowManager {
 			type: target === "tab" ? "browser-tab" : target === "window" ? "browser-window" : "tauri-window",
 		};
 
-		this.setupStandaloneSync(win.winId);
+		// this.setupStandaloneSync(win.winId);
 	}
 	/**
 	 * Stänger ett frikopplat fönster.
 	 */
 	async closeDetached(id: WindowId): Promise<boolean> {
 		return this.sync.closeDetached(id);
-	}
-
-	// closeWin(win: WindowInstance): void {
-	// 	if (!win || win.winId === ROOT_WIN_ID) return;
-
-	// 	// 🌟 1. Rensa bort alla lagrade funktions-callbacks för detta fönster
-	// 	cleanupWindowCallbacks(win.winId);
-
-	// 	// 2. Om fönstret är frikopplat (tab/tauri), säg till backend att stänga det fysiska fönstret
-	// 	if (win.isDetached) {
-	// 		this.backend.close(win.winId);
-	// 	}
-
-	// 	// 3. Ta bort fönstret från din reaktiva array
-	// 	this.windows = this.windows.filter((w) => w.winId !== win.winId);
-	// }
-
-	closeWin_old(win: WindowInstance): void {
-		if (!win || win.winId === ROOT_WIN_ID) return;
-
-		// Skapa ett Set med ID:t för fönstret vi vill stänga samt alla dess underfönster
-		const ids = new Set([
-			win.winId,
-			...this.getDescendants(win.winId).map((w) => w.winId),
-		]);
-
-		// Filtrera bort alla dessa fönster från den reaktiva arrayen i en enda stöt
-		this.windows = this.windows.filter((w) => !ids.has(w.winId));
-
-		// 🟢 Kör städningen ifall fönstret stängdes inifrån MDI-miljön
-		cleanupWindowCallbacks(win.winId);
-
-		// Skicka signal till backend om det var frikopplat
-		if (win.viewPort.type !== "workspace") {
-			this.backend.close(win.winId);
-		}
 	}
 
 	closeWin(win: WindowInstance): void {
@@ -993,11 +945,8 @@ export class WindowManager {
 		}
 	}
 
-	setThumbnail(id: WindowId, thumbnail: string | null): void {
-		const win = this.find(id);
-		if (win) {
-			win.thumbnail = thumbnail;
-		}
+	setThumbnail(win: WindowInstance, thumbnail: string | null): void {
+		win.thumbnail = thumbnail;
 	}
 }
 

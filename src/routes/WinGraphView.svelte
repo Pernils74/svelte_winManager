@@ -94,10 +94,8 @@ function loadPlotly(): Promise<void> {
 			plotlyLoadPromise = undefined;
 			reject(new Error("Could not load Plotly"));
 		};
-
 		document.head.appendChild(script);
 	});
-
 	return plotlyLoadPromise;
 }
 
@@ -130,13 +128,9 @@ async function render(snapshot: Point3D[]) {
 	);
 
 	if (disposed) return;
-
 	const elapsed = performance.now() - t0;
-
 	renderMs = elapsed;
-
 	updateFps();
-
 	// Rapportera verklig Plotly-tid till B
 	onRenderMs?.(elapsed);
 }
@@ -147,9 +141,7 @@ async function render(snapshot: Point3D[]) {
 
 async function renderLoop() {
 	if (renderBusy || disposed || !plotlyReady) return;
-
 	renderBusy = true;
-
 	try {
 		while (dirty && !disposed) {
 			// Markera att aktuell data tas om hand
@@ -178,14 +170,10 @@ async function renderLoop() {
 
 function requestRender() {
 	if (disposed || frameQueued || !plotlyReady) return;
-
 	frameQueued = true;
-
 	requestAnimationFrame(() => {
 		frameQueued = false;
-
 		if (disposed) return;
-
 		void renderLoop();
 	});
 }
@@ -196,9 +184,7 @@ function requestRender() {
 
 $effect(() => {
 	latestPoints = points ?? [];
-
 	dirty = true;
-
 	requestRender();
 });
 
@@ -208,15 +194,11 @@ $effect(() => {
 
 onMount(() => {
 	disposed = false;
-
 	const init = async () => {
 		try {
 			await loadPlotly();
-
 			if (disposed) return;
-
 			const Plotly = (window as any).Plotly;
-
 			await Plotly.newPlot(
 				plotEl,
 				[

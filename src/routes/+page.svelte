@@ -16,6 +16,7 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowManage
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowBackend.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowSync.svelte.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRpc.ts
 
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/+page.svelte
 
@@ -121,7 +122,8 @@ const allComponents = $derived(getAllRegisteredKeys());
 
 <MouseCords></MouseCords>
 
-	  {#snippet desktopContent()}
+	  {#snippet desktopContent()}  
+
 		<div class="welcome-container">
 	<h1>Welcome to Svelte Window Manager</h1>
 	<p>Visit <a href="https://github.com/Pernils74/svelte_winManager">Pernils74/svelte_winManager</a> to read the official documentation.</p>

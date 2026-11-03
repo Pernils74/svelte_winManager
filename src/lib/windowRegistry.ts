@@ -57,6 +57,8 @@ export function registerComponents(
 export function getComponentKey(
 	component: Component<any>,
 ): string | undefined {
+	// console.log("{[windowregistry] getcomponentkey", loadedKeys.get(component));
+
 	return loadedKeys.get(component);
 }
 
@@ -121,6 +123,10 @@ export async function preloadAllComponents(): Promise<void> {
 	);
 }
 
+// export function getAllRegisteredKeys(): string[] {
+// 	return Object.keys(windowLoaders);
+// }
+
 export function getAllRegisteredKeys(): string[] {
-	return Object.keys(windowLoaders);
+	return [...loadedComponents.keys()];
 }

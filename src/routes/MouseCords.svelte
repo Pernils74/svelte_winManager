@@ -2,6 +2,8 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 
+import { getComponentKey } from "#lib/windowRegistry.ts";
+
 const wManager = getWindowManager();
 
 let showPopup = $state(true);
@@ -22,6 +24,8 @@ let winY = $state(0);
 // Runtime information
 let runtimeType = $state("");
 let runtimeId = $state("");
+
+let componentKey = $state("");
 
 function inspect(target: HTMLElement) {
 	// Ignore the inspector itself
@@ -58,6 +62,8 @@ function inspect(target: HTMLElement) {
 
 	runtimeType = win.runtime?.type ?? "unknown";
 	runtimeId = win.runtime?.id ?? "";
+
+	componentKey = win.componentKey;
 }
 
 function resetWindow() {
@@ -190,6 +196,26 @@ function togglePopup() {
 						</div>
 					{/if}
 				</section>
+
+				<section>
+					<h4>📦 ComponentKey</h4>
+				
+					{#if winId}
+						<div class="grid">
+							<span>Component Key</span>
+							<b class="blue wrap">
+								{componentKey || "—"}
+							</b>
+						</div>
+					{:else}
+						<div class="empty">
+							No component selected
+						</div>
+					{/if}
+				</section>
+
+
+
 			</div>
 		{/if}
 	</div>

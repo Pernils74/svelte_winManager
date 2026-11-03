@@ -103,16 +103,12 @@ function startPerformanceMonitor() {
 
 function regulateBatch(actualMs: number) {
 	const targetMs = config.updateMs;
-
 	if (actualMs <= 0) return;
-
 	const current = config.pointsPerBatch;
-
 	const estimated = Math.round(
 		current *
 			(targetMs / actualMs),
 	);
-
 	config.pointsPerBatch = Math.max(
 		1,
 		Math.min(
