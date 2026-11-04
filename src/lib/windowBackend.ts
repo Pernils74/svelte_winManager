@@ -3,12 +3,11 @@
 import type { WindowId, WindowState } from "./windowManager.svelte";
 
 export interface DetachedWindowState {
-	payload: unknown;
 	props: Record<string, unknown>;
 }
 
 export type WindowMessage =
-	| { type: "sync:payload"; winId: WindowId; state: DetachedWindowState }
+	| { type: "sync:props"; winId: WindowId; state: DetachedWindowState }
 	| { type: "sync:state-update"; winId: WindowId; updates: Partial<WindowState> }
 	| {
 		type: "rpc:request";
@@ -50,7 +49,7 @@ export interface ExternalWindowDescriptor {
 	title: string;
 	componentKey: string;
 	parentId?: WindowId | null;
-	payload: unknown;
+
 	props: Record<string, unknown>;
 	width?: number;
 	height?: number;
@@ -169,16 +168,18 @@ function isTransportPacket(
 
 	const packet = value as Record<string, unknown>;
 
-	if (!(
-		typeof packet.winId === "string" &&
-		typeof packet.sourceId === "string" &&
-		!!packet.message &&
-		typeof packet.message === "object" &&
-		"winId" in packet.message &&
-		packet.message.winId === packet.winId &&
-		"type" in packet.message &&
-		typeof packet.message.type === "string"
-	)) {
+	if (
+		!(
+			typeof packet.winId === "string" &&
+			typeof packet.sourceId === "string" &&
+			!!packet.message &&
+			typeof packet.message === "object" &&
+			"winId" in packet.message &&
+			packet.message.winId === packet.winId &&
+			"type" in packet.message &&
+			typeof packet.message.type === "string"
+		)
+	) {
 		return false;
 	}
 
@@ -790,7 +791,7 @@ export class WindowBackendManager implements WindowBackend {
 		if (
 			value.message.type === "system:close" &&
 			new URLSearchParams(globalThis.location.search)
-				.get("winId") === value.winId
+					.get("winId") === value.winId
 		) {
 			globalThis.close();
 			return;

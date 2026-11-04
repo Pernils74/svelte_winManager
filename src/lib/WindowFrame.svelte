@@ -30,6 +30,16 @@
 //  ├─ colors
 //  └─ layout
 
+// $effect(() => {
+//     if (!shouldBroadcast(win)) return;
+
+//     const props = $state.snapshot(win.props);
+
+//     manager.sync.send(win.winId, {
+//         props
+//     });
+// });
+
 import { onDestroy, onMount, type Snippet } from "svelte";
 import { tick } from "svelte";
 
@@ -370,38 +380,6 @@ function handleMouseUp(event: MouseEvent) {
 	}
 }
 
-function handleMouseUp_old(event: MouseEvent) {
-	const id = dragWinId;
-
-	try {
-		if (reparentDrag && id) {
-			const targetId = findDropParent(
-				event.clientX,
-				event.clientY,
-				id,
-			);
-
-			const frame = document.querySelector<HTMLElement>(
-				`[data-window-id="${CSS.escape(id)}"]`,
-			);
-
-			const rect = frame?.getBoundingClientRect();
-
-			if (rect) {
-				manager.reparent(id, targetId, {
-					left: rect.left,
-					top: rect.top,
-					width: rect.width,
-					height: rect.height,
-				});
-			}
-		}
-	} finally {
-		reparentDrag = false;
-		endInteraction();
-	}
-}
-
 function onMouseMove(event: MouseEvent) {
 	if (!dragMode || !dragWinId) return;
 
@@ -625,6 +603,65 @@ $effect(() => {
 		manager.setBoundingEl(win.winId, contentEl);
 	}
 });
+
+function shouldBroadcast(win: WindowInstance): boolean {
+	const parent = win.parentId ? manager.find(win.parentId) : null;
+
+	return (
+		win.viewPort.type !== "workspace" ||
+		parent?.viewPort.type !== "workspace"
+	);
+}
+
+$effect(() => {
+	const props = $state.snapshot(win.props);
+
+	console.log(
+		`[SYNC TEST] ${win.title}`,
+		props,
+	);
+
+	console.log(
+		`[OBSERVE] ${win.winId}`,
+		structuredClone(props),
+	);
+});
+
+$effect(() => {
+	if (!shouldBroadcast(win)) return;
+
+	// const payload = $state.snapshot(win.payload);
+	const props = $state.snapshot(win.props);
+
+	void manager.sync.send(win.winId, {
+		props,
+	});
+});
+
+// function isSyncRequired(win: WindowInstance) {
+//     const parent = win.parentId
+//         ? manager.find(win.parentId)
+//         : null;
+
+//     return (
+//         win.viewPort.type !== "workspace" ||
+//         parent?.viewPort.type !== "workspace"
+//     );
+// }
+
+// $effect(() => {
+//     const payload = $state.snapshot(win.payload);
+//     const props = $state.snapshot(win.props);
+
+//     if (!isSyncRequired(win)) {
+//         return;
+//     }
+
+//     void sync.send({
+//         payload,
+//         props
+//     });
+// });
 
 // ... dina importer och befintlig logik
 

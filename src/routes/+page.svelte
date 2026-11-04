@@ -1,5 +1,21 @@
 
 
+<!-- Samma runtime?
+    -> direkt mutation
+
+Annan runtime?
+    -> sync kanal
+
+Tauri?
+    -> event transport
+
+Web?
+    -> BroadcastChannel
+
+Framtida transport?
+    -> annat backend -->
+
+
 <!-- https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts

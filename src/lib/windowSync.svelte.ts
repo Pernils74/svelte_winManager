@@ -1,5 +1,3 @@
-// src/lib/windowSync.svelte.ts
-
 import type {
 	DetachedWindowState,
 	ExternalWindowDescriptor,
@@ -8,7 +6,12 @@ import type {
 	WindowTransportPacket,
 	WindowViewPortType,
 } from "./windowBackend";
+
 import type { WindowId, WindowState } from "./windowManager.svelte";
+
+// --------------------------------------------------
+// TYPES
+// --------------------------------------------------
 
 type ReadState = () => DetachedWindowState;
 
@@ -19,16 +22,24 @@ interface SyncSession {
 	unsubscribe: () => void;
 }
 
-function snapshot<T>(value: T) {
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
+
+function snapshot<T>(value: T): T {
 	return $state.snapshot(value);
 }
 
 /**
  * Jämför strukturerade värden utan JSON.stringify.
  *
- * Optimerad för JSON-kompatibla payloads och props.
+ * Optimerad för JSON-kompatibla props.
  */
-function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<object>>()): boolean {
+function deepEqual(
+	a: unknown,
+	b: unknown,
+	seen = new WeakMap<object, WeakSet<object>>(),
+): boolean {
 	if (Object.is(a, b)) return true;
 
 	if (
@@ -63,10 +74,12 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 
 	paired.add(objectB);
 
+	// Date
 	if (a instanceof Date && b instanceof Date) {
 		return a.getTime() === b.getTime();
 	}
 
+	// RegExp
 	if (a instanceof RegExp && b instanceof RegExp) {
 		return (
 			a.source === b.source &&
@@ -74,22 +87,28 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 		);
 	}
 
+	// ArrayBuffer
 	if (
 		a instanceof ArrayBuffer &&
 		b instanceof ArrayBuffer
 	) {
-		if (a.byteLength !== b.byteLength) return false;
+		if (a.byteLength !== b.byteLength) {
+			return false;
+		}
 
 		const bytesA = new Uint8Array(a);
 		const bytesB = new Uint8Array(b);
 
 		for (let i = 0; i < bytesA.length; i++) {
-			if (bytesA[i] !== bytesB[i]) return false;
+			if (bytesA[i] !== bytesB[i]) {
+				return false;
+			}
 		}
 
 		return true;
 	}
 
+	// TypedArrays / DataView
 	if (
 		ArrayBuffer.isView(a) &&
 		ArrayBuffer.isView(b)
@@ -102,17 +121,19 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 			length?: number;
 			[index: number]: number;
 			byteLength: number;
+			buffer: ArrayBufferLike;
+			byteOffset: number;
 		};
 
 		const viewB = b as unknown as {
 			length?: number;
 			[index: number]: number;
 			byteLength: number;
+			buffer: ArrayBufferLike;
+			byteOffset: number;
 		};
 
-		if (
-			viewA.byteLength !== viewB.byteLength
-		) {
+		if (viewA.byteLength !== viewB.byteLength) {
 			return false;
 		}
 
@@ -120,33 +141,29 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 			viewA.length !== undefined &&
 			viewB.length !== undefined
 		) {
-			for (
-				let i = 0;
-				i < viewA.length;
-				i++
-			) {
+			for (let i = 0; i < viewA.length; i++) {
 				if (viewA[i] !== viewB[i]) {
 					return false;
 				}
 			}
+
+			return true;
 		}
 
-		return true;
-	}
+		const bytesA = new Uint8Array(
+			viewA.buffer,
+			viewA.byteOffset,
+			viewA.byteLength,
+		);
 
-	if (a instanceof Map && b instanceof Map) {
-		if (a.size !== b.size) return false;
+		const bytesB = new Uint8Array(
+			viewB.buffer,
+			viewB.byteOffset,
+			viewB.byteLength,
+		);
 
-		for (const [key, value] of a) {
-			if (!b.has(key)) return false;
-
-			if (
-				!deepEqual(
-					value,
-					b.get(key),
-					seen,
-				)
-			) {
+		for (let i = 0; i < bytesA.length; i++) {
+			if (bytesA[i] !== bytesB[i]) {
 				return false;
 			}
 		}
@@ -154,6 +171,22 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 		return true;
 	}
 
+	// Map
+	if (a instanceof Map && b instanceof Map) {
+		if (a.size !== b.size) return false;
+
+		for (const [key, value] of a) {
+			if (!b.has(key)) return false;
+
+			if (!deepEqual(value, b.get(key), seen)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	// Set
 	if (a instanceof Set && b instanceof Set) {
 		if (a.size !== b.size) return false;
 
@@ -164,6 +197,7 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 		return true;
 	}
 
+	// Arrays / Objects
 	const keysA = Reflect.ownKeys(objectA);
 	const keysB = Reflect.ownKeys(objectB);
 
@@ -195,11 +229,23 @@ function deepEqual(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<ob
 	return true;
 }
 
+// --------------------------------------------------
+// MESSAGE VALIDATION
+// --------------------------------------------------
+
 function isWindowStateUpdateMessage(
 	value: WindowMessage,
 	winId: string,
-): value is Extract<WindowMessage, { type: "sync:state-update" }> {
-	if (value.type !== "sync:state-update" || value.winId !== winId) return false;
+): value is Extract<
+	WindowMessage,
+	{ type: "sync:state-update" }
+> {
+	if (
+		value.type !== "sync:state-update" ||
+		value.winId !== winId
+	) {
+		return false;
+	}
 
 	const numericKeys = new Set([
 		"left",
@@ -208,57 +254,62 @@ function isWindowStateUpdateMessage(
 		"height",
 		"transparency",
 	]);
+
 	const booleanKeys = new Set([
 		"isMinimized",
 		"isMaximized",
 		"isFocused",
 	]);
 
+	if (
+		!value.updates ||
+		typeof value.updates !== "object"
+	) {
+		return false;
+	}
+
 	return Object.entries(
 		value.updates as Record<string, unknown>,
 	).every(([key, item]) => {
 		if (numericKeys.has(key)) {
-			return typeof item === "number" && Number.isFinite(item);
+			return (
+				typeof item === "number" &&
+				Number.isFinite(item)
+			);
 		}
-		return booleanKeys.has(key) && typeof item === "boolean";
+
+		return (
+			booleanKeys.has(key) &&
+			typeof item === "boolean"
+		);
 	});
 }
 
-// function targetToViewport(
-// 	target: WindowTarget,
-// ): WindowViewPortType {
-// 	switch (target) {
-// 		case "tab":
-// 			return "browser-tab";
-
-// 		case "window":
-// 			return "browser-window";
-
-// 		case "tauri":
-// 			return "tauri-window";
-
-// 		default: {
-// 			const exhaustiveCheck: never = target;
-
-// 			throw new Error(
-// 				`Okänd window target: ${exhaustiveCheck}`,
-// 			);
-// 		}
-// 	}
-// }
+// --------------------------------------------------
+// WINDOW SYNC
+// --------------------------------------------------
 
 export class WindowSync {
-	private readonly sessions = new Map<string, SyncSession>();
+	private readonly sessions = new Map<
+		string,
+		SyncSession
+	>();
 
 	private destroyed = false;
 
-	constructor(private readonly backend: WindowBackend) {}
+	constructor(
+		private readonly backend: WindowBackend,
+	) {}
+
+	// ----------------------------------------------
+	// OPEN
+	// ----------------------------------------------
 
 	/**
 	 * Öppnar ett externt fönster.
 	 *
 	 * Snapshot säkerställer att reaktiva proxies
-	 * inte lämnar den aktuella runtime-instansen.
+	 * inte lämnar aktuell runtime.
 	 */
 	async open(
 		descriptor: ExternalWindowDescriptor,
@@ -268,7 +319,6 @@ export class WindowSync {
 
 		const cleanDescriptor = snapshot({
 			...descriptor,
-			payload: descriptor.payload,
 			props: descriptor.props ?? {},
 		});
 
@@ -278,14 +328,21 @@ export class WindowSync {
 		);
 	}
 
+	// ----------------------------------------------
+	// START
+	// ----------------------------------------------
+
 	/**
-	 * Startar dubbelriktad state-synkronisering.
+	 * Startar dubbelriktad props-synkronisering.
 	 *
 	 * readState:
-	 * Läser aktuell payload och props.
+	 * Läser aktuella reaktiva props.
 	 *
 	 * applyState:
-	 * Applicerar inkommande state.
+	 * Applicerar inkommande props.
+	 *
+	 * applyWindowStateUpdate:
+	 * Applicerar inkommande fönstergeometri/state.
 	 */
 	start(
 		winId: string,
@@ -303,6 +360,7 @@ export class WindowSync {
 			);
 		}
 
+		// Undvik dubbla sessioner.
 		this.stop(winId);
 
 		let stopped = false;
@@ -311,9 +369,9 @@ export class WindowSync {
 			| DetachedWindowState
 			| undefined;
 
-		// --------------------------------------------
-		// Incoming messages
-		// --------------------------------------------
+		// ------------------------------------------
+		// INCOMING MESSAGES
+		// ------------------------------------------
 
 		const unsubscribe = this.backend.onRawMessage(
 			winId,
@@ -331,7 +389,14 @@ export class WindowSync {
 				}
 
 				const message = packet.message;
-				if (message.winId !== winId) return;
+
+				if (message.winId !== winId) {
+					return;
+				}
+
+				// ----------------------------------
+				// WINDOW STATE
+				// ----------------------------------
 
 				if (
 					isWindowStateUpdateMessage(
@@ -349,11 +414,16 @@ export class WindowSync {
 							error,
 						);
 					}
+
 					return;
 				}
 
+				// ----------------------------------
+				// PROPS
+				// ----------------------------------
+
 				if (
-					message.type !== "sync:payload" ||
+					message.type !== "sync:props" ||
 					!message.state ||
 					typeof message.state.props !== "object" ||
 					message.state.props === null ||
@@ -363,72 +433,83 @@ export class WindowSync {
 				}
 
 				const incoming = snapshot({
-					payload: message.state.payload,
 					props: message.state.props,
 				});
 
 				// Identiskt state behöver inte appliceras.
 				if (
 					lastSnapshot &&
-					deepEqual(
-						lastSnapshot,
-						incoming,
-					)
+					deepEqual(lastSnapshot, incoming)
 				) {
 					return;
 				}
 
-				// Uppdatera referensen FÖRE state-mutation.
-				//
-				// När applyState ändrar Svelte-state
-				// kommer effekten att köras igen.
-				// Då kan den upptäcka att state redan
-				// har skickats och undvika en loop.
+				/**
+				 * Uppdatera snapshot FÖRE mutation.
+				 *
+				 * När applyState ändrar Svelte-state
+				 * körs effekten igen.
+				 *
+				 * Den kan då upptäcka att state redan
+				 * finns lokalt och undvika en loop.
+				 */
 				lastSnapshot = incoming;
 
 				try {
 					applyState(incoming);
 				} catch (error) {
 					console.error(
-						`[WindowSync] Kunde inte applicera state för ${winId}:`,
+						`[WindowSync] Kunde inte applicera props för ${winId}:`,
 						error,
 					);
 				}
 			},
 		);
 
-		// --------------------------------------------
-		// Outgoing reactive synchronization
-		// --------------------------------------------
+		// ------------------------------------------
+		// OUTGOING REACTIVE SYNCHRONIZATION
+		// ------------------------------------------
 
 		const stopEffect = $effect.root(() => {
 			$effect(() => {
-				if (stopped || this.destroyed) return;
+				if (stopped || this.destroyed) {
+					return;
+				}
 
-				// readState måste läsa reaktiva värden.
+				/**
+				 * readState måste läsa reaktiva värden
+				 * så att Svelte kan spåra förändringar.
+				 */
 				const current = readState();
 
-				// Skapa en clone-safe snapshot.
+				// Skapa clone-safe snapshot.
 				const currentSnapshot = snapshot({
-					payload: current.payload,
 					props: current.props ?? {},
 				});
 
-				// Ingen förändring: inget nätverksmeddelande.
-				if (lastSnapshot && deepEqual(lastSnapshot, currentSnapshot)) {
+				// Ingen förändring.
+				if (
+					lastSnapshot &&
+					deepEqual(
+						lastSnapshot,
+						currentSnapshot,
+					)
+				) {
 					return;
 				}
 
 				lastSnapshot = currentSnapshot;
 
-				const message: Extract<WindowMessage, { type: "sync:payload" }> = {
-					type: "sync:payload",
+				const message: Extract<
+					WindowMessage,
+					{ type: "sync:props" }
+				> = {
+					type: "sync:props",
 					winId,
 					state: currentSnapshot,
 				};
 
-				// Transportfel hanteras utan att förstöra
-				// den reaktiva effekten.
+				// Skicka till transporten.
 				void this.backend
 					.sendRaw(message)
 					.catch((error) => {
@@ -445,6 +526,10 @@ export class WindowSync {
 			unsubscribe,
 		});
 	}
+
+	// ----------------------------------------------
+	// SEND STATE UPDATE
+	// ----------------------------------------------
 
 	async sendStateUpdate(
 		winId: WindowId,
@@ -464,8 +549,15 @@ export class WindowSync {
 		await this.backend.sendRaw(message);
 	}
 
+	// ----------------------------------------------
+	// SEND PROPS MANUALLY
+	// ----------------------------------------------
+
 	/**
-	 * Skickar state manuellt.
+	 * Skickar props manuellt.
+	 *
+	 * Används exempelvis när manager.updateProps()
+	 * anropas i ett detached fönster.
 	 */
 	async send(
 		winId: string,
@@ -474,21 +566,25 @@ export class WindowSync {
 		this.assertAlive();
 
 		const cleanState = snapshot({
-			payload: state.payload,
 			props: state.props ?? {},
 		});
 
-		await this.backend.sendRaw({
-			type: "sync:payload",
+		const message: Extract<
+			WindowMessage,
+			{ type: "sync:props" }
+		> = {
+			type: "sync:props",
 			winId,
 			state: cleanState,
-		});
+		};
+
+		await this.backend.sendRaw(message);
 	}
 
-	/**
-	 * Stoppar synkronisering och stänger
-	 * det externa fönstret.
-	 */
+	// ----------------------------------------------
+	// CLOSE
+	// ----------------------------------------------
+
 	async close(winId: string): Promise<void> {
 		this.stop(winId);
 
@@ -504,6 +600,10 @@ export class WindowSync {
 		await this.close(winId);
 	}
 
+	// ----------------------------------------------
+	// STOP
+	// ----------------------------------------------
+
 	/**
 	 * Stoppar en specifik synksession.
 	 *
@@ -515,27 +615,29 @@ export class WindowSync {
 		if (!session) return;
 
 		session.unsubscribe();
+
 		session.stopEffect();
 
 		this.sessions.delete(winId);
 	}
 
-	/**
-	 * Stoppar samtliga sessioner.
-	 */
+	// ----------------------------------------------
+	// DESTROY
+	// ----------------------------------------------
+
 	destroy(): void {
 		if (this.destroyed) return;
 
 		this.destroyed = true;
 
-		for (
-			const winId of [
-				...this.sessions.keys(),
-			]
-		) {
+		for (const winId of [...this.sessions.keys()]) {
 			this.stop(winId);
 		}
 	}
+
+	// ----------------------------------------------
+	// INTERNAL
+	// ----------------------------------------------
 
 	private assertAlive(): void {
 		if (this.destroyed) {

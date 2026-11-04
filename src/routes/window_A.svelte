@@ -1,74 +1,51 @@
+<!-- window_A.svelte -->
 <script lang="ts">
-import { getWindowManager } from "#lib/windowManager.svelte.ts";
+import { getWindowManager, type WindowInstance } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
 import Window_B from "./window_B.svelte";
-import Wallpaper from "#lib/Wallpaper.svelte";
-import WindowATitlebar from "./window_A_titlebar.svelte";
+import { type WindowBProps } from "./window_B.svelte";
 
-let { winId, parentId }: WindowComponentProps = $props();
+import Wallpaper from "#lib/Wallpaper.svelte";
+
+let { win, winId, parentId }: WindowComponentProps = $props();
 
 const wManager = getWindowManager();
 
+// let message = $statederived(win.props.msg);
 let message = $state("Hello from A");
 
-// används för updateProps-demo
+let win_B = $state<WindowInstance | null>(null);
 
-function spawnStatic() {
-	wManager.open(Window_B, {
-		// parentId: winId,
-
-		title: "📸 Window_B (Static)",
-		width: 550,
-		height: 600,
-		top: 300,
-		left: 650,
-		titlebar: WindowATitlebar,
-		props: {
-			myNoneReactiveProp: message,
-		},
-	});
-}
-
-function spawnReactive() {
-	const child = wManager.open(Window_B, {
-		// parentId: winId,
-		// winId: "Window_B_prop",
-		title: "🔗 Window_B (Reactive Props)",
-		width: 550,
-		height: 600,
-		top: 300,
-		left: 650,
-		props: {
-			myNoneReactiveProp: message,
-		},
-	});
-}
-
-// Demo example for the recative payload
-const myPayload = $state({
-	text: "",
+const shared = $state({
+	msg2: "Hello from A",
 	counter: 0,
 });
 
-function spawnPayload() {
-	wManager.open(Window_B, {
-		// parentId: winId,
-		// winId: "Window_B_payload",
-		title: "📦 Window_B (Payload)",
+function spawnReactive() {
+	// Om wManager.open stöder generiska typer (kika i ditt fönster-bibliotek)
+	win_B = wManager.open(Window_B, {
+		title: "🔗 Window_B (Props)",
 		width: 550,
-		height: 800,
-		top: 100,
+		height: 600,
+		top: 300,
 		left: 650,
-		payload: myPayload,
+		props: { // <--- Ta bort <WindowBProps> härifrån
+			msg: message,
+			counter: 0,
+			shared,
+		},
 	});
 }
 
+// Uppdatera props i det öppnade fönstret
 $effect(() => {
-	myPayload.text = message;
+	console.log("prop: ", message);
+	if (!win_B) return;
+
 	wManager.updateProps({
-		myNoneReactiveProp: message,
-	});
+		msg: message,
+	}, win_B);
 });
 </script>
 
@@ -76,39 +53,37 @@ $effect(() => {
 
 <div class="window-container">
 	<h3>Window A</h3>
-	<p>Parent: <strong>{parentId ?? "root"}</strong></p>
+
+	<p>
+		Parent: <strong>{parentId ?? "root"}</strong>
+	</p>
 
 	<input
 		type="text"
 		bind:value={message}
 		placeholder="Type text..."
 	/>
+	<input
+		type="text"
+		bind:value={shared.msg2}
+		placeholder="Type text..."
+	/>
 
 	<p>
-    Current prop value:
-    <strong><code>{message}</code></strong>
-  </p>
+		Current prop value:
+		<strong><code>{message}</code></strong>
+	</p>
 	<p>
-    Current myPayload.text value:
-    <strong><code>{myPayload.text}</code></strong>
-  </p>
-	<button onclick={() => myPayload.counter++}>
-  ➕ Increment Shared Payload .. {myPayload.counter}
-  </button>
+		Current prop value (win.props.msg):
+		<strong><code>{win.props.msg}</code></strong>
+	</p>
 
-	<hr>
+	<hr />
+
 	<div class="buttons">
-		<button onclick={spawnStatic}>
-      📸 Spawn Static
-    </button>
-
 		<button onclick={spawnReactive}>
-      🔗 Spawn Reactive Props
-    </button>
-
-		<button onclick={spawnPayload}>
-      📦 Spawn Payload
-    </button>
+			🔗 Spawn Reactive Props
+		</button>
 	</div>
 </div>
 
@@ -116,9 +91,8 @@ $effect(() => {
 .window-container {
 	display: flex;
 	flex-direction: column;
-	/* gap: 0.25rem; */
 	background: white;
-	padding: 1.0rem;
+	padding: 1rem;
 	background-color: antiquewhite;
 	width: 100%;
 	height: 100%;

@@ -147,7 +147,7 @@ $effect(() => {
 					},
 					showButtons: false,
 					docking: {},
-					payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
+					// payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
 
 					viewPort: {
 						id: targetWinId,

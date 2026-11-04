@@ -49,6 +49,85 @@
 //       ├─ Window C1
 //       └─ Window C2
 
+// interface WindowRegistryEntry {
+//     winId: WindowId;
+//     parentId?: WindowId;
+
+//     componentKey: string;
+
+//     hostId: string;
+
+//     isDetached: boolean;
+// }
+
+// vid
+// open()
+// close()
+// detach()
+// attach()
+// reparent()
+
+// Runtime 1
+//  ├─ lokala windows
+//  └─ global topologi
+
+// Runtime 2
+//  ├─ lokala windows
+//  └─ global topologi
+
+// Runtime 3
+//  ├─ lokala windows
+//  └─ global topologi
+
+// interface BinaryPayload {
+//     buffer: ArrayBuffer;
+//     transferOwnership?: boolean;
+// }
+// om transporten ser
+
+// Float32Array
+// Float64Array
+// Uint8Array
+// ArrayBuffer
+
+// så
+
+// postMessage(
+//     buffer,
+//     [buffer]
+// );
+
+// manager.updateBinaryData(win, {
+//     rayResult
+// });
+
+// kanske göra
+
+// <WindowComponent
+//     bind:win={...}
+//     winId={win.winId}
+//     parentId={win.parentId}
+// />
+// (ingen ...win.props)
+
+// sedan i komponent
+
+// let {
+//     win
+// }: WindowComponentProps<MyProps> = $props();
+// och
+// win.props.counter++;
+
+// typning
+// interface WindowBProps {
+//     counter: number;
+//     text: string;
+// }
+
+// let {
+//     win
+// }: WindowComponentProps<WindowBProps> = $props();
+
 import { type Component, createContext } from "svelte";
 import { getComponentKey } from "./windowRegistry.ts";
 
@@ -59,7 +138,6 @@ import {
 	type DetachedWindowState,
 	type ExternalWindowDescriptor,
 	type WindowBackend,
-	type WindowTarget,
 } from "./windowBackend.ts";
 
 export const ROOT_WIN_ID = "root";
@@ -141,12 +219,6 @@ export interface WindowComponentProps<TPayload = any> {
 	parentId: WindowId | null;
 }
 
-// type WindowViewPortType =
-// 	| "workspace"
-// 	| "browser-tab"
-// 	| "browser-window"
-// 	| "tauri-window";
-
 import { type WindowViewPortType } from "./windowBackend.ts";
 
 interface WindowViewPort {
@@ -158,7 +230,7 @@ export interface WindowInstance<TPayload = unknown> {
 	winId: WindowId;
 	title: string;
 	thumbnail: string | null;
-	component: Component<any>;
+	component: Component<any> | null;
 	componentKey: string; // component as string, needed for browsertab and tauri backend
 	props: Record<string, unknown>;
 	parentId: WindowId | null;
@@ -172,7 +244,7 @@ export interface WindowInstance<TPayload = unknown> {
 	// useMonitor: boolean;
 	showButtons: boolean;
 	docking: WindowDocking;
-	payload: TPayload;
+	payload: TPayload | null;
 	titlebar?: WindowTiltlebarComponent;
 	// isDetached: boolean;
 	viewPort: WindowViewPort;
@@ -186,8 +258,6 @@ export interface OpenWindowOptions<TPayload = unknown> {
 	parentId?: WindowId | null;
 	boundingEl?: HTMLElement | null;
 	tileOffset?: number;
-	// noTile?: boolean;
-	setId?: WindowId;
 	props?: Record<string, unknown>;
 	payload?: TPayload;
 
@@ -238,7 +308,7 @@ export class WindowManager {
 
 	// private readonly backend: WindowBackend;
 	private readonly backend: WindowBackend;
-	private readonly sync: WindowSync;
+	public readonly sync: WindowSync;
 
 	constructor(options: WindowManagerOptions = {}) {
 		this.backend = options.backend ?? createWindowBackend();
@@ -249,6 +319,7 @@ export class WindowManager {
 			title: "Root Workspace",
 			thumbnail: null,
 			component: null,
+			componentKey: "",
 			props: {},
 			parentId: null,
 			boundingEl: null,
@@ -260,6 +331,7 @@ export class WindowManager {
 				isMinimized: false,
 				isMaximized: false,
 				transparency: 1,
+				isFocused: false,
 			},
 			storedState: null,
 			zIndex: 0,
@@ -277,12 +349,6 @@ export class WindowManager {
 				renderBusy: false,
 			},
 		});
-
-		if (typeof window !== "undefined") {
-			// Vi kan tjuvlyssna på backend-managerns interna meddelandehantering.
-			// Eftersom du har BroadcastChannel instansierad i din backend, modifierar vi
-			// handleBrowserMessage i windowBackend.ts så att huvudappen också reagerar!
-		}
 	}
 
 	get winCount(): number {
@@ -305,7 +371,9 @@ export class WindowManager {
 	) {
 		return this.getChildren(ROOT_WIN_ID)
 			.filter(
-				(w) => w.viewPort.type === runtimeType,
+				(w) =>
+					!w.state.isMinimized &&
+					w.viewPort.type === runtimeType,
 			);
 	}
 
@@ -324,6 +392,33 @@ export class WindowManager {
 	 * Frikopplar ett fönster till browser-tab,
 	 * browser-popup eller Tauri.
 	 */
+
+	// src/lib/windowManager.svelte.ts
+
+	/**
+	 * Hämtar alla fönster som har en förälder, men där föräldern INTE
+	 * befinner sig i det lokala skrivbordet (workspace).
+	 */
+	getOrphanWorkspaceWindows(): WindowInstance[] {
+		return this.windows.filter((win) => {
+			// 1. Hoppa över rooten och fönster som inte ska renderas i workspace överhuvudtaget
+			if (win.winId === ROOT_WIN_ID || win.state.isMinimized || win.viewPort.type !== "workspace") {
+				return false;
+			}
+
+			// 2. Om fönstret inte har en förälder (eller är kopplat till root), är det inget orphan-fönster
+			if (!win.parentId || win.parentId === ROOT_WIN_ID) {
+				return false;
+			}
+
+			// 3. Leta efter föräldern i registret
+			const parent = this.find(win.parentId);
+
+			// 4. Om föräldern saknas HELT, eller om föräldern har flyttats ut till en extern flik/vy:
+			// Då är detta fönster föräldralöst på det lokala skrivbordet!
+			return !parent || parent.viewPort.type !== "workspace";
+		});
+	}
 
 	getChildren(parentId: WindowId): WindowInstance[] {
 		return this.windows.filter((win) => win.parentId === parentId);
@@ -356,22 +451,22 @@ export class WindowManager {
 			if (existing) return existing as WindowInstance<TPayload>;
 		}
 
-		// const requestedParent = options.parentId ?? ROOT_WIN_ID;
-		// const parent = this.find(requestedParent);
-		// const parentId = parent ? parent.winId : ROOT_WIN_ID;
-
 		const parent = this.find(options.parentId ?? ROOT_WIN_ID) ?? this.find(ROOT_WIN_ID)!;
 		const parentId = parent.winId;
 
 		const tileOffset = options.tileOffset ?? 20;
 		const siblingCount = this.getChildren(parentId).length;
-		// const offset = options.noTile ? 0 : siblingCount * 20;
 
 		const currentOffset = siblingCount * tileOffset;
 		const compKey = options.componentKey ?? getComponentKey(component);
 
-		// console.log("[open] component.name", component.name);
-		// console.log("[open] componentKey", compKey);
+		if (!compKey) {
+			throw new Error(
+				`Komponenten "${
+					component.name ?? "unknown"
+				}" är inte registrerad. Ange componentKey eller registrera komponenten först.`,
+			);
+		}
 
 		const geometry = this.fitToParent(parent, {
 			left: options.left ?? currentOffset,
@@ -399,6 +494,7 @@ export class WindowManager {
 				isMinimized: false,
 				isMaximized: false,
 				transparency: options.transparency ?? 1,
+				isFocused: false,
 			},
 
 			metrics: {
@@ -412,7 +508,7 @@ export class WindowManager {
 			tileOffset,
 			showButtons: options.showButtons ?? true,
 			docking: options.docking ?? {},
-			payload: (options.payload ?? null) as TPayload,
+			payload: options.payload ?? null,
 			// payload: options.payload ? $state(options.payload) : (null as any),
 			titlebar: options.titlebar,
 			// isDetached: false,
@@ -425,31 +521,34 @@ export class WindowManager {
 		});
 
 		this.windows.push(win);
+		// 🟢 STARTA SYNK DIREKT VID FÖDELSELN:
+		// Detta sätter upp BroadcastChannel-lyssnaren i bakgrunden direkt,
+		// oavsett om fönstret renderas på skärmen eller inte!
+		// this.setupStandaloneSync(win.winId);
+
 		return win;
 	}
 
-	/**
-	 * Skapar en fristående kopia av ett fönster.
-	 * Kopian behåller förälder, komponent, props och utseende,
-	 * men får ett nytt ID och en egen position.
-	 */
-
-	/**
-	 * Creates a standalone copy of a window instance.
-	 * The duplicate retains components, props, parentage, and styles,
-	 * but receives a unique ID and an offset position.
-	 */
-	duplicate(source: WindowInstance, offset = 24): WindowInstance | undefined {
-		if (!source || source.winId === ROOT_WIN_ID || !source.component) {
+	duplicateWindow(
+		source: WindowInstance,
+		offset = 24,
+		parentId?: WindowId,
+	): WindowInstance | undefined {
+		if (
+			source.winId === ROOT_WIN_ID ||
+			!source.component
+		) {
 			return undefined;
 		}
 
-		const wincopy = this.open(source.component, {
-			title: `${source.title} (kopia)`,
-			parentId: source.parentId ?? ROOT_WIN_ID,
-			boundingEl: source.boundingEl,
+		const copy = this.open(source.component, {
+			title: `${source.title} (copy)`,
+			parentId: parentId ?? source.parentId,
+			componentKey: source.componentKey,
 			props: { ...source.props },
-			payload: source.payload,
+			payload: structuredClone(
+				$state.snapshot(source.payload),
+			),
 
 			left: source.state.left + offset,
 			top: source.state.top + offset,
@@ -457,12 +556,18 @@ export class WindowManager {
 			height: source.state.height,
 			transparency: source.state.transparency,
 			showButtons: source.showButtons,
-			docking: {},
 			titlebar: source.titlebar,
 		});
 
-		this.focus(wincopy);
-		return wincopy;
+		for (const child of this.getChildren(source.winId)) {
+			this.duplicateWindow(
+				child,
+				0,
+				copy.winId,
+			);
+		}
+
+		return copy;
 	}
 
 	private fitToParent(
@@ -553,8 +658,57 @@ export class WindowManager {
 		Object.assign(win.metrics, updates);
 	}
 
+	/**
+	 * Kollar om ett fönster ELLER någon av dess föräldrar i rakt uppstigande led är detached.
+	 */
+	isWindowOrParentDetached(id: WindowId): boolean {
+		const win = this.find(id);
+		if (!win || win.winId === ROOT_WIN_ID) return false;
+
+		// 1. Om fönstret självt är utflyttat, returnera true
+		if (win.viewPort.type !== "workspace") return true;
+
+		// 2. Om fönstret har en förälder, kolla förälderns status rekursivt
+		if (win.parentId && win.parentId !== ROOT_WIN_ID) {
+			return this.isWindowOrParentDetached(win.parentId);
+		}
+
+		return false;
+	}
+
 	updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
 		const win = this.find(id);
+		console.log("Updating payload for window: ");
+		if (!win) return;
+
+		// 1. Mutera det reaktiva objektet lokalt i minnet
+		if (win.payload !== payload) {
+			if (
+				win.payload && typeof win.payload === "object" &&
+				typeof payload === "object"
+			) {
+				Object.assign(win.payload, payload);
+			} else {
+				win.payload = payload;
+			}
+		}
+
+		// 🟢 2. SÄKRA RPC-KANALEN: Om fönstret inte är ett rent internt workspace-fönster,
+		// skjut ut ändringen på kanalen direkt. Detta lagar "detach parent till detached child"
+		// och alla andra kombinationer oavsett om svelte har avregistrerat DOM-trädet!
+		if (win.viewPort.type !== "workspace") {
+			console.log(`🚀 [RPC Transport] Tvingar synk för fönster ${id} (${win.title})`);
+
+			void this.sync.send(id, {
+				payload: $state.snapshot(win.payload),
+				props: $state.snapshot(win.props ?? {}),
+			}).catch((err) => console.error("[WindowManager] RPC-synk misslyckades:", err));
+		}
+	}
+
+	updatePayload_old<TPayload>(id: WindowId, payload: TPayload): void {
+		const win = this.find(id);
+		console.log("hittades win ?", win);
 		if (!win) return;
 
 		// 🟢 Skydd mot eviga loopar: Jämför strängifierad data
@@ -563,6 +717,7 @@ export class WindowManager {
 		const newPayloadStr = JSON.stringify(payload);
 		console.timeEnd("updatePayload");
 
+		console.log("[WindowManager] Kollar om det skall uppdateras:");
 		if (oldPayloadStr !== newPayloadStr) {
 			// Om det är ett existerande reaktivt objekt vill vi helst inte skriva över
 			// referensen helt om det går, men för enkelhetens skull skriver vi över
@@ -575,60 +730,67 @@ export class WindowManager {
 			} else {
 				win.payload = payload;
 			}
+
+			// 🟢 Tvinga ut ett nätverkspaket till BroadcastChannel DIREKT!
+			// Det gör att alla fristående flikar omedelbart tar emot ändringen.
+			// 	if (win.viewPort.type !== "workspace") {
+			// 		void this.sync.send(id, {
+			// 			payload: $state.snapshot(win.payload),
+			// 			props: $state.snapshot(win.props ?? {}),
+			// 		}).catch((err) => console.error("[WindowManager] Manuellt synkfel:", err));
+			// 	}
+			console.log("[WindowManager] Updated window:");
+			void this.sync.send(id, {
+				payload: $state.snapshot(win.payload),
+				props: $state.snapshot(win.props ?? {}),
+			}).catch;
 		}
 	}
 
 	/**
 	 * Updates props on a window.
 	 *
-	 * If `id` is provided, only that window is updated.
+	 * If `win` is provided, only that window is updated.
 	 *
-	 * If `id` is omitted, all windows containing the specified
-	 * prop key(s) are updated.
+	 * Otherwise, all windows already containing at least one of the
+	 * specified prop keys are updated.
 	 *
 	 * Example:
 	 *
-	 * 	updateProps({ text: "Hello" }, winId);
+	 * 	updateProps({ text: "Hello" }, win);
 	 *
 	 * 	updateProps({ theme: "dark" });
 	 *
 	 * For shared reactive data, use `payload` instead of props.
 	 */
-	// updateProps(
-	// 	props: Record<string, unknown>,
-	// 	id?: WindowId,
-	// ): void {
-	// 	if (id) {
-	// 		const win = this.find(id);
-	// 		if (!win) return;
-	// 		Object.assign(win.props, props);
-	// 		return;
-	// 	}
-	// 	for (const win of this.windows) {
-	// 		for (const key of Object.keys(props)) {
-	// 			if (key in win.props) {
-	// 				win.props[key] = props[key];
-	// 			}
-	// 		}
-	// 	}
-	// }
-
 	updateProps(
 		props: Record<string, unknown>,
-		win: WindowInstance,
+		win?: WindowInstance,
 	): void {
-		if (!win) return;
-		const key = getComponentKey(win.component);
+		if (win) {
+			Object.assign(win.props, props);
+			return;
+		}
+
+		const keys = Object.keys(props);
 		for (const w of this.windows) {
-			if (getComponentKey(w.component) === key) {
+			if (keys.some((key) => key in w.props)) {
 				Object.assign(w.props, props);
 			}
 		}
+
+		// Lägg till detta i slutet av din updateProps-metod om fönstret är detached:
+		// if (win && win.viewPort.type !== "workspace") {
+		// 	void this.sync.send(win.winId, {
+		// 		payload: $state.snapshot(win.payload),
+		// 		props: $state.snapshot(win.props ?? {}),
+		// 	});
+		// }
 	}
 
 	updatePropsByKey(key: string, props: Record<string, unknown>): void {
 		for (const win of this.windows) {
-			if (getComponentKey(win.component) === key) {
+			if (win.componentKey === key) {
 				Object.assign(win.props, props);
 			}
 		}
@@ -665,19 +827,51 @@ export class WindowManager {
 		if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) return;
 		win.storedState = rectOf(win);
 		win.state.isMinimized = true; // Du kan skriva direkt till statet eftersom det är en runa!
+		this.publishDetachedStateUpdate(win, {
+			isMinimized: true,
+		});
 	}
 
 	restore(win: WindowInstance): void {
 		if (!win || win.winId === ROOT_WIN_ID) return;
 		if (win.storedState) Object.assign(win.state, win.storedState);
 		win.state.isMinimized = false;
+		win.state.isFocused = true;
 		this.focus(win); // Skicka vidare objektet till nästa metod
+		this.publishDetachedStateUpdate(win, {
+			...(win.storedState ?? {}),
+			isMinimized: false,
+			isFocused: true,
+		});
+	}
+
+	private publishDetachedStateUpdate(
+		win: WindowInstance,
+		updates: Partial<WindowState>,
+	): void {
+		if (win.viewPort.type === "workspace") return;
+
+		void this.sendWindowStateUpdate(win.winId, updates).catch(
+			(error) => {
+				console.error(
+					`[WindowManager] Kunde inte synka state för ${win.winId}:`,
+					error,
+				);
+			},
+		);
+	}
+
+	async sendWindowStateUpdate(
+		winId: WindowId,
+		updates: Partial<WindowState>,
+	): Promise<void> {
+		await this.sync.sendStateUpdate(winId, updates);
 	}
 
 	/**
 	 * Resizes a window while proportionally expanding or shrinking adjacent docked sibling windows.
 	 */
-	resizeDockedWindow(win: WindowInstance, mode: ResizeMode | string, proposed: Partial<WindowRect>): void {
+	resizeDockedWindow(win: WindowInstance, mode: ResizeMode, proposed: Partial<WindowRect>): void {
 		if (win.winId === ROOT_WIN_ID) return;
 
 		const old = rectOf(win);
@@ -841,56 +1035,102 @@ export class WindowManager {
 		this.focus(win);
 	}
 
-	// Inuti setupStandaloneSync(winId: WindowId) i windowManager.svelte.ts
-	private setupStandaloneSync_old(winId: string): void {
+	// src/lib/windowManager.svelte.ts
+
+	// src/lib/windowManager.svelte.ts
+
+	// setupStandaloneSync(winId: WindowId): () => void {
+	// 	// när vi nu sätter upp sync redan i WindowManager.open
+	// 	this.sync.start(
+	// 		winId,
+	// 		() => {
+	// 			const win = this.find(winId);
+	// 			if (!win) return { payload: null, props: {} };
+
+	// 			// Leta upp föräldern i hierarkin för att kunna kontrollera dess viewport
+	// 			const parent = win.parentId ? this.find(win.parentId) : null;
+
+	// 			// 🟢 DIN LOGIK: Kontrollera om fönstret självt ELLER dess förälder är detached
+	// 			const isSelfDetached = win.viewPort.type !== "workspace";
+	// 			const isParentDetached = parent ? parent.viewPort.type !== "workspace" : false;
+
+	// 			console.log("Detected detached state: Self: ${isSelf");
+	// 			// Om vi ska skicka (någon av oss är detached), returnera de levande runorna
+	// 			// så att WindowSyncs $effect kan spåra dem automatiskt i bakgrunden! [1.21]
+	// 			if (isSelfDetached || isParentDetached) {
+	// 				return {
+	// 					payload: win.payload,
+	// 					props: win.props ?? {},
+	// 				};
+	// 			}
+
+	// 			// Annars returnerar vi bara en statisk tom struktur så att ingen nätverkstrafik skickas i onödan
+	// 			return { payload: null, props: {} };
+	// 		},
+	// 		(state: DetachedWindowState) => {
+	// 			const win = this.find(winId);
+	// 			if (!win) return;
+
+	// 			// Ta emot och uppdatera lokalt tillstånd reaktivt
+	// 			this.updatePayload(winId, state.payload);
+	// 			this.updateProps(state.props ?? {}, win);
+	// 		},
+	// 		(updates) => {
+	// 			this.updateState(winId, updates);
+	// 		},
+	// 	);
+
+	// 	return () => this.sync.stop(winId);
+	// }
+
+	setupStandaloneSync(winId: WindowId): () => void {
 		this.sync.start(
 			winId,
 			() => {
 				const win = this.find(winId);
+				console.log("win ");
 
-				if (!win) {
-					return {
-						payload: undefined,
-						props: {},
-					};
-				}
+				if (!win) return { payload: null, props: {} };
 
-				return {
-					payload: win.payload,
-					props: win.props ?? {},
-				};
-			},
-			(state: DetachedWindowState) => {
-				const win = this.find(winId);
-
-				if (!win) return;
-
-				this.updatePayload(winId, state.payload);
-				this.updateProps(winId, state.props ?? {});
-			},
-		);
-	}
-
-	private setupStandaloneSync(winId: string): void {
-		this.sync.start(
-			winId,
-			() => {
-				const win = this.find(winId);
+				// 自由 1. Genom att köra $state.snapshot() inuti denna funktion
+				// tvingar vi Svelte 5 att läsa av ALLA reaktiva proxies djupt.
+				// Detta gör att effekten vaknar så fort något inuti payload eller props muteras!
+				// return {
+				// 	payload: win.payload,
+				// 	props: win.props ?? {},
+				// };
 
 				return {
-					payload: win?.payload,
-					props: win?.props ?? {},
+					payload: win.payload ? $state.snapshot(win.payload) : null,
+					props: win.props ? $state.snapshot(win.props) : {},
 				};
+
+				// return {
+				// 	payload: $state.snapshot(win.payload),
+				// 	props: $state.snapshot(win.props ?? {}),
+				// };
 			},
 			(state: DetachedWindowState) => {
-				const win = this.find(winId);
+				console.log("detached ");
 
+				const win = this.find(winId);
 				if (!win) return;
 
+				// 🟢 Om du har serialize/deserialize-funktioner från din gamla kod,
+				// kör dem här i mottagaren:
+				// const processedProps = deserializePropsWithFunctions(state.props, winId, this);
+				// this.updateProps(processedProps, winId);
 				this.updatePayload(winId, state.payload);
-				this.updateProps(winId, state.props ?? {});
+				this.updateProps(state.props ?? {}, win);
+			},
+			(updates) => {
+				this.updateState(winId, updates);
 			},
 		);
+
+		return () => this.sync.stop(winId);
+		// 🟢 Om du vill behålla din gamla städning för fönster-callbacks:
+		// cleanupWindowCallbacks(winId);
 	}
 
 	/**
@@ -900,16 +1140,34 @@ export class WindowManager {
 
 	async detachWindow(
 		win: WindowInstance,
-		target: WindowViewPortType,
+		target: Exclude<WindowViewPortType, "workspace">,
 	): Promise<void> {
 		if (!win) {
 			throw new Error(`Window ${win} hittades inte.`);
+		}
+
+		// 🟢 RÄDDA BARNEN: Om det här fönstret har barn som fortfarande är kvar i "workspace",
+		// flytta upp dem till skrivbordsroten så de inte försvinner i tomma intet!
+		const children = this.getChildren(win.winId);
+		for (const child of children) {
+			if (child.viewPort.type === "workspace") {
+				// Hämta skärmpositionen så de inte hoppar till konstiga ställen vid reparenting
+				const bounds = child.boundingEl?.getBoundingClientRect() ?? { left: 100, top: 100, width: 400, height: 300 };
+
+				this.reparent(child.winId, ROOT_WIN_ID, {
+					left: child.state.left + win.state.left, // Gör om till absoluta koordinater på rooten
+					top: child.state.top + win.state.top,
+					width: child.state.width,
+					height: child.state.height,
+				});
+			}
 		}
 
 		const descriptor: ExternalWindowDescriptor = {
 			winId: win.winId,
 			title: win.title,
 			componentKey: win.componentKey,
+			parentId: win.parentId,
 			payload: $state.snapshot(win.payload),
 			props: $state.snapshot(win.props ?? {}),
 			width: win.state?.width,
@@ -933,8 +1191,11 @@ export class WindowManager {
 	/**
 	 * Stänger ett frikopplat fönster.
 	 */
-	async closeDetached(id: WindowId): Promise<boolean> {
-		return this.sync.closeDetached(id);
+	async closeDetached(id: WindowId): Promise<void> {
+		const win = this.find(id);
+		if (!win || win.viewPort.type === "workspace") return;
+
+		this.closeWin(win);
 	}
 
 	closeWin(win: WindowInstance): void {
@@ -952,7 +1213,12 @@ export class WindowManager {
 			this.sync.stop(id);
 
 			if (child && child.viewPort.type !== "workspace") {
-				void this.backend.close(id);
+				void this.backend.close(id).catch((error) => {
+					console.error(
+						`[WindowManager] Kunde inte stänga fönster ${id}:`,
+						error,
+					);
+				});
 			}
 		}
 
@@ -1004,9 +1270,9 @@ export function initializeWindowManager(
 	try {
 		return getContextManager();
 	} catch {
-		const manager = new WindowManager(
-			options?.backend,
-		);
+		const manager = new WindowManager({
+			backend: options?.backend,
+		});
 
 		if (options?.modules) {
 			registerComponents(options.modules);

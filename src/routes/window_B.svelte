@@ -3,23 +3,31 @@ import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
 export interface WindowBProps {
-	myNoneReactiveProp?: string;
+	msg?: string;
+	counter?: number;
+	shared?: {};
 }
 
 let {
 	win = $bindable(),
 	winId,
 	parentId,
-	myNoneReactiveProp,
 }: WindowComponentProps & WindowBProps = $props();
 
 const wManager = getWindowManager();
 
-let localText = $state("");
+function updateCounter() {
+	wManager.updateProps({
+		counter: (win.props.counter as number ?? 0) + 1,
+	}, win);
+}
 
-$effect(() => {
-	localText = (win.props.myNoneReactiveProp as string) ?? "";
-});
+function updateTextFromB(value: string) {
+	return;
+	wManager.updateProps({
+		myNoneReactiveProp: value,
+	}, win);
+}
 
 function reparentToRoot() {
 	const bounds = win.boundingEl?.getBoundingClientRect();
@@ -40,80 +48,95 @@ function detachToTab() {
 function detachToWindow() {
 	wManager.detachWindow(win, "browser-window");
 }
+
+$effect(() => {
+	console.log("prop i B: ", win.props);
+});
 </script>
 
 <div class="window-container">
-  <h3>{win.title}</h3>
+	<h3>{win.title}</h3>
 
-  <p>
-    Parent: <strong>{parentId ?? "root"}</strong>
-  </p>
-  <p>
-    WinId:
-    <small>{winId}</small>
-  </p>
-  <!-- <hr /> -->
+	<p>
+		Parent: <strong>{parentId ?? "root"}</strong>
+	</p>
 
-  <!-- <h4>Props Demo</h4> -->
+	<p>
+		WinId:
+		<small>{winId}</small>
+	</p>
 
-  <p>
-    Original prop:
-    <code>{myNoneReactiveProp}</code>
-  </p>
+	<hr />
+
+	<h4>Props Demo</h4>
+
+	<p>
+		Received prop:
+		<code>{String(win.props.msg ?? "")}</code>
+	</p>
 
 
-  {#if win.payload}
-    <h4>Payload Demo</h4>
-    {@const payloadText =JSON.stringify($state.snapshot(win.payload), null, 2)}
-    <pre>{payloadText}</pre>
-    <p>
-    <input
-      type="text"
-      bind:value={win.payload.text}
-      placeholder="Type text..."
-    />
-    </p>
-      <button onclick={() => win.payload.counter++}  >
-        ➕ Increment Payload Counter ({win.payload.counter})
-    </button>
-    <hr>
+	<input
+		type="text"
+		value={String(win.props.msg ?? "")}
+		oninput={(event) =>
+			updateTextFromB(event.currentTarget.value)}
+		placeholder="Update prop from Window B..."
+	/>
+
+
+	<input
+		type="text"
+		bind:value={win.props.shared.msg2}
+		placeholder="Type text..."
+	/>
+
+
+	<hr />
+
+	<h4>Counter Demo</h4>
+
+	<p>
+		Counter:
+		<strong>{Number(win.props.counter ?? 0)}</strong>
+	</p>
+
+	<button onclick={updateCounter}>
+		➕ Increment Counter
+	</button>
+	<hr />
+
+{#if win.props}
+  {@const propText =JSON.stringify($state.snapshot(win.props), null, 2)}
+    <pre>{propText}</pre>
   {:else}
-    <p>
-      Updated via updateProps:
-      <code>{localText}</code>
-    </p>
-  {/if}
+    <p> inget</p>
+{/if}
 
+	<div class="actions">
+		<button
+			onclick={reparentToRoot}
+			disabled={parentId === "root"}
+		>
+			🖥️ Reparent To Root
+		</button>
 
+		<button onclick={detachToTab}>
+			📑 Detach To Tab
+		</button>
 
-
-  <hr />
-
-  <div class="actions">
-    <button
-      onclick={reparentToRoot}
-      disabled={parentId === "root"}
-    >
-      🖥️ Reparent To Root
-    </button>
-
-    <button onclick={detachToTab}>
-      📑 Detach To Tab
-    </button>
-
-    <button onclick={detachToWindow}>
-      🪟 Detach To Window
-    </button>
-  </div>
+		<button onclick={detachToWindow}>
+			🪟 Detach To Window
+		</button>
+	</div>
 </div>
 
 <style>
 .window-container {
 	display: flex;
 	flex-direction: column;
-	/* gap: 0.25rem; */
 	background: white;
-	padding: 1.0rem;
+	padding: 1rem;
 	background-color: rgb(243, 245, 247);
 	width: 100%;
 	height: 100%;
