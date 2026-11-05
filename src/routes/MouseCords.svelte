@@ -2,7 +2,7 @@
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 
-import { getComponentKey } from "#lib/windowRegistry.ts";
+import { getComponentKey } from "#lib/windowComponentRegistry.ts";
 
 const wManager = getWindowManager();
 

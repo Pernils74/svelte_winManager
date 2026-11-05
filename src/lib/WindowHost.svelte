@@ -44,7 +44,7 @@ import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
 import { getWindowManager, ROOT_WIN_ID, type WindowInstance, type WindowState } from "./windowManager.svelte";
-import { getComponentByKey } from "./windowRegistry";
+import { getComponentByKey } from "./windowComponentRegistry";
 
 // import { registerComponents } from "./windowRegistry";
 

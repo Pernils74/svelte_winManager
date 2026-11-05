@@ -23,9 +23,9 @@ function updateCounter() {
 }
 
 function updateTextFromB(value: string) {
-	return;
+	
 	wManager.updateProps({
-		myNoneReactiveProp: value,
+		msg: value,
 	}, win);
 }
 

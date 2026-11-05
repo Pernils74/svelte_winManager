@@ -129,7 +129,7 @@
 // }: WindowComponentProps<WindowBProps> = $props();
 
 import { type Component, createContext } from "svelte";
-import { getComponentKey } from "./windowRegistry.ts";
+import { getComponentKey } from "./windowComponentRegistry.ts";
 
 import { WindowSync } from "./windowSync.svelte.ts";
 
@@ -1262,7 +1262,7 @@ export interface WindowManagerOptions {
 // 	}
 // }
 
-import { registerComponents } from "./windowRegistry";
+import { registerComponents } from "./windowComponentRegistry.ts";
 
 export function initializeWindowManager(
 	options?: WindowManagerOptions,

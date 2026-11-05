@@ -5,7 +5,9 @@
     "npm:@sveltejs/adapter-static@4": "4.0.0_@sveltejs+kit@3.0.1",
     "npm:@sveltejs/kit@3": "3.0.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.2_typescript@6.0.3_vite@8.3.4",
     "npm:@sveltejs/vite-plugin-svelte@^7.2.0": "7.3.1_svelte@5.57.2_vite@8.3.4",
+    "npm:create-playwright@latest": "1.17.139",
     "npm:html2canvas@^1.4.1": "1.4.1",
+    "npm:playwright@*": "1.64.1",
     "npm:svelte-check@^4.6.0": "4.7.6_svelte@5.57.2_typescript@6.0.3",
     "npm:svelte@^5.57.1": "5.57.2",
     "npm:typescript@^6.0.3": "6.0.3",
@@ -207,6 +209,10 @@
     "cookie@2.0.1": {
       "integrity": "sha512-yuToqVvRrj6pfDXREyQAAv8SkAEk/8GS3jQRTiUMm66TVtBYmqQeoEjL2Lmq8Rpo6271vH76InTChTitEAm65w=="
     },
+    "create-playwright@1.17.139": {
+      "integrity": "sha512-be59wywAD7GxnTqCCc2T0Ujps9t4MYpVWxbP9hT2tOBRrRKBwMcU1HhLzhT70FiaLPqxuImqQQFp5s5yO9Qp3A==",
+      "bin": true
+    },
     "css-line-break@2.1.0": {
       "integrity": "sha512-FHcKFCZcAha3LwfVBhCQbW2nCNbkZXn7KVUJcsT5/P8YmfsVja0FMPJr0B903j/E69HUphKiV9iQArX8SDYA4w==",
       "dependencies": [
@@ -365,6 +371,17 @@
     },
     "picomatch@4.0.7": {
       "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="
+    },
+    "playwright-core@1.64.1": {
+      "integrity": "sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==",
+      "bin": true
+    },
+    "playwright@1.64.1": {
+      "integrity": "sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==",
+      "dependencies": [
+        "playwright-core"
+      ],
+      "bin": true
     },
     "postcss@8.5.29": {
       "integrity": "sha512-49cGhUbXj8Qenv0iTMxA1cFBzxXoctpC9Ujd77t1WcbJIr6nF/eI7g/8MgxrYldFRuAXvja7xQRwavoW7kgrxQ==",

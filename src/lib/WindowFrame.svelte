@@ -35,7 +35,7 @@
 
 //     const props = $state.snapshot(win.props);
 
-//     manager.sync.send(win.winId, {
+//     wManager.sync.send(win.winId, {
 //         props
 //     });
 // });
@@ -55,6 +55,7 @@ import {
 	type ResizeMode,
 	ROOT_WIN_ID,
 	type WindowInstance,
+	WindowManager,
 	type WindowRect,
 } from "./windowManager.svelte";
 
@@ -68,7 +69,7 @@ interface Props {
 
 let { win = $bindable(), bounds, children }: Props = $props();
 
-const manager = getWindowManager();
+const wManager = getWindowManager();
 
 let frameEl: HTMLDivElement;
 // let contentEl: HTMLDivElement;
@@ -112,17 +113,6 @@ const resizeHandles: ResizeMode[] = [
 	"left",
 ];
 
-// $effect(() => {
-// 	measure();
-// });
-// async function measure() {
-// 	const t0 = performance.now();
-// 	await tick();
-// 	// wManager.updateMetrics({ renderMs: performance.now() - t0 });
-
-// 	win.metrics.renderMs = performance.now() - t0;
-// }
-
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), Math.max(min, max));
 }
@@ -164,7 +154,7 @@ onMount(() => {
 	const rect = frameEl.getBoundingClientRect();
 
 	if (win.state.width <= 0 || win.state.height <= 0) {
-		manager.updateState(win.winId, {
+		wManager.updateState(win.winId, {
 			width: win.state.width || rect.width,
 			height: win.state.height || rect.height,
 		});
@@ -210,7 +200,7 @@ function getSnapTargets(axis: "x" | "y"): number[] {
 
 	// Bara fönster i samma koordinatsystem deltar i dockningen.
 	for (
-		const other of manager.getChildren(
+		const other of wManager.getChildren(
 			win.parentId ?? ROOT_WIN_ID,
 		)
 	) {
@@ -280,15 +270,15 @@ function beginInteraction(
 	let activeWin = win;
 
 	if (event.ctrlKey && mode === "move") {
-		const copy = manager.duplicateWindow(win);
+		const copy = wManager.duplicateWindow(win);
 		if (!copy) return;
 		activeWin = copy;
 	}
 
 	reparentDrag = event.shiftKey && mode === "move";
 
-	// manager.focus(activeWin.winId);
-	manager.focus(activeWin);
+	// wManager.focus(activeWin.winId);
+	wManager.focus(activeWin);
 
 	dragWinId = activeWin.winId;
 	dragMode = mode;
@@ -317,7 +307,7 @@ function findDropParent(
 
 	// Hämta alla barn/underfönster till det dragna fönstret (de är ogiltiga mål)
 	const descendants = new Set(
-		manager.getDescendants(draggedId).map((child) => child.winId),
+		wManager.getDescendants(draggedId).map((child) => child.winId),
 	);
 
 	for (const element of elements) {
@@ -366,7 +356,7 @@ function handleMouseUp(event: MouseEvent) {
 			if (rect) {
 				// 3. Vi skickar ALLTID med skärmkoordinaterna!
 				// Managern tar hand om att räkna om dem rätt oavsett drop-mål.
-				manager.reparent(id, targetId, {
+				wManager.reparent(id, targetId, {
 					left: rect.left,
 					top: rect.top,
 					width: rect.width,
@@ -416,7 +406,7 @@ function onMouseMove(event: MouseEvent) {
 				previous: number | null,
 			) => snapPosition(raw, targets, previous);
 
-			const children = manager
+			const children = wManager
 				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
 				.filter(
 					(other) =>
@@ -502,11 +492,11 @@ function onMouseMove(event: MouseEvent) {
 	};
 
 	if (dragMode === "move") {
-		// manager.update(activeWin.winId, nextRect);
-		manager.updateState(activeWin.winId, { ...nextRect, transparency: 0.65 });
+		// wManager.update(activeWin.winId, nextRect);
+		wManager.updateState(activeWin.winId, { ...nextRect, transparency: 0.65 });
 	} else {
-		manager.resizeDockedWindow(activeWin, dragMode, nextRect);
-		manager.updateState(activeWin.winId, { transparency: 0.75 });
+		wManager.resizeDockedWindow(activeWin, dragMode, nextRect);
+		wManager.updateState(activeWin.winId, { transparency: 0.75 });
 	}
 }
 
@@ -519,7 +509,7 @@ function cleanupInteraction() {
 function endInteraction() {
 	// 🌟 ÅTERSTÄLL TRANSPARENSEN HÄR:
 	if (dragWinId) {
-		manager.updateState(dragWinId, { transparency: startTransparency });
+		wManager.updateState(dragWinId, { transparency: startTransparency });
 	}
 	dragMode = null;
 	dragWinId = null;
@@ -544,7 +534,7 @@ function interaction(node: HTMLElement, mode: InteractionMode) {
 
 function toggleMaximize() {
 	endInteraction();
-	manager.toggleMaximize(win, bounds);
+	wManager.toggleMaximize(win, bounds);
 }
 
 function changeTransparency(event: WheelEvent) {
@@ -555,7 +545,7 @@ function changeTransparency(event: WheelEvent) {
 
 	const delta = event.deltaY < 0 ? 0.05 : -0.05;
 
-	manager.updateState(win.winId, {
+	wManager.updateState(win.winId, {
 		transparency: clamp(
 			Number((win.state.transparency + delta).toFixed(2)),
 			0.2,
@@ -581,31 +571,31 @@ async function minimize() {
 			ignoreElements: (element: Element) => element.classList.contains("resize-handle"),
 		});
 
-		manager.setThumbnail(win, canvas.toDataURL("image/jpeg", 0.72));
+		wManager.setThumbnail(win, canvas.toDataURL("image/jpeg", 0.72));
 	} catch (error) {
 		console.warn("Kunde inte skapa fönstrets miniatyrbild:", error);
-		manager.setThumbnail(win, null);
+		wManager.setThumbnail(win, null);
 	}
 
 	// Minimera först när bildtagningen är färdig.
-	// manager.minimize(win.winId);
-	manager.minimize(win);
+	// wManager.minimize(win.winId);
+	wManager.minimize(win);
 }
 
 function close() {
 	endInteraction();
-	manager.closeWin(win);
+	wManager.closeWin(win);
 }
 
 // Spara fönstrets lokala innehållsyta till managern så dess barn kan hitta den!
-$effect(() => {
-	if (contentEl) {
-		manager.setBoundingEl(win.winId, contentEl);
-	}
-});
+//  $effect(() => {
+//  	if (contentEl) {
+//  		wManager.setBoundingEl(win.winId, contentEl);
+//  	}
+//  });
 
 function shouldBroadcast(win: WindowInstance): boolean {
-	const parent = win.parentId ? manager.find(win.parentId) : null;
+	const parent = win.parentId ? wManager.find(win.parentId) : null;
 
 	return (
 		win.viewPort.type !== "workspace" ||
@@ -615,32 +605,28 @@ function shouldBroadcast(win: WindowInstance): boolean {
 
 $effect(() => {
 	const props = $state.snapshot(win.props);
-
-	console.log(
-		`[SYNC TEST] ${win.title}`,
-		props,
-	);
-
 	console.log(
 		`[OBSERVE] ${win.winId}`,
 		structuredClone(props),
 	);
+
+	wManager.debugBroadcast(win.winId, props);
 });
 
-$effect(() => {
-	if (!shouldBroadcast(win)) return;
+// $effect(() => {
+// 	if (!shouldBroadcast(win)) return;
 
-	// const payload = $state.snapshot(win.payload);
-	const props = $state.snapshot(win.props);
+// 	// const payload = $state.snapshot(win.payload);
+// 	const props = $state.snapshot(win.props);
 
-	void manager.sync.send(win.winId, {
-		props,
-	});
-});
+// 	void wManager.sync.send(win.winId, {
+// 		props,
+// 	});
+// });
 
 // function isSyncRequired(win: WindowInstance) {
 //     const parent = win.parentId
-//         ? manager.find(win.parentId)
+//         ? wManager.find(win.parentId)
 //         : null;
 
 //     return (
@@ -667,8 +653,8 @@ $effect(() => {
 
 // // 🟢 Lokal, helautomatisk synkbevakare för denna specifika fönsterram
 // $effect(() => {
-// 	// 1. Hämta fönstrets förälder (om den finns) direkt från din manager
-// 	const parent = win.parentId ? manager.find(win.parentId) : null;
+// 	// 1. Hämta fönstrets förälder (om den finns) direkt från din wManager
+// 	const parent = win.parentId ? wManager.find(win.parentId) : null;
 
 // 	// 2. Kontrollera om fönstret självt ELLER dess förälder är detached
 // 	const isSelfDetached = win.viewPort.type !== "workspace";
@@ -685,7 +671,7 @@ $effect(() => {
 
 // 		// Skicka ut på kanalen via din sync-motor
 
-// 		void manager.sync.send(win.winId, {
+// 		void wManager.sync.send(win.winId, {
 // 			payload: currentPayload,
 // 			props: currentProps ?? {},
 // 		}).catch((err) => console.error(`[WindowFrame Sync] Fel vid utskick för ${win.winId}:`, err));
@@ -706,7 +692,7 @@ $effect(() => {
 	style:opacity={transparency}
 	in:receive={{ key: win.winId }}
 	out:send={{ key: win.winId }}
-	onmousedown={() => manager.focus(win)}
+	onmousedown={() => wManager.focus(win)}
 	onwheel={changeTransparency}
 	role="dialog"
 	tabindex="0"
@@ -754,14 +740,14 @@ $effect(() => {
         <button 
           type="button" 
           title="Frikoppla till skrivbordsfönster" 
-          onclick={() => manager.detachWindow(win, "tauri-window")}>
+          onclick={() => wManager.detachWindow(win, "tauri-window")}>
           🗔
         </button>
       {:else}
         <button 
           type="button" 
           title="Frikoppla till ny webbfönster" 
-          onclick={() => manager.detachWindow(win, "browser-window")}>
+          onclick={() => wManager.detachWindow(win, "browser-window")}>
           🗗🪟
         </button>
       {/if}
@@ -799,16 +785,16 @@ $effect(() => {
 
 
   <!-- 🌟 VARJE FÖNSTERS EGNA LOKALA TASKBAR 🌟 -->
-  {#if manager.windows.some(w => w.parentId === win.winId && w.state.isMinimized)}
-    {@const localMinimized = manager.windows.filter(w => w.parentId === win.winId && w.state.isMinimized)}
+  {#if wManager.windows.some(w => w.parentId === win.winId && w.state.isMinimized)}
+    {@const localMinimized = wManager.windows.filter(w => w.parentId === win.winId && w.state.isMinimized)}
     <footer class="local-taskbar">
       {#each localMinimized as subWin (subWin.winId)}
         <div class="task-item">
           <button
             type="button"
             class="task-btn"
-            // onclick={() => manager.restore(subWin.winId)}
-            onclick={() => manager.restore(subWin)}
+            // onclick={() => wManager.restore(subWin.winId)}
+            onclick={() => wManager.restore(subWin)}
           >
             <span class="task-icon">◫</span>
             <span class="task-title">{subWin.title}</span>

@@ -12,12 +12,13 @@ const loadedComponents = new Map<string, Component<any>>();
 // component -> key
 const loadedKeys = new WeakMap<Component<any>, string>();
 
-// registry.ts
-
 export function registerComponents(
 	modules: Record<string, any>,
 ): void {
-	const debugLog: Record<string, { "Original Path": string; "Component Found": boolean }> = {};
+	const debugLog: Record<
+		string,
+		{ "Original Path": string; "Component Found": boolean }
+	> = {};
 
 	for (const path in modules) {
 		const cleanPath = path
@@ -45,7 +46,9 @@ export function registerComponents(
 		if (Object.keys(debugLog).length > 0) {
 			console.table(debugLog);
 		} else {
-			console.warn("Inga komponenter matchade sökvägen i import.meta.glob!");
+			console.warn(
+				"Inga komponenter matchade sökvägen i import.meta.glob!",
+			);
 		}
 		console.groupEnd();
 	}

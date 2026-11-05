@@ -1,5 +1,5 @@
 import { type Component, createContext } from "svelte";
-import { getComponentKey, registerComponents } from "./windowRegistry.ts";
+import { getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
 
 import { WindowSync } from "./windowSync.svelte.ts";
 
@@ -101,11 +101,8 @@ export interface WindowInstance<
 	 * This object is reactive and synchronized between runtimes.
 	 */
 	props: TProps & Record<string, unknown>;
-
 	parentId: WindowId | null;
-
 	boundingEl: HTMLElement | null;
-
 	state: WindowState;
 	storedState: WindowRect | null;
 
@@ -113,11 +110,8 @@ export interface WindowInstance<
 	tileOffset: number;
 
 	showButtons: boolean;
-
 	docking: WindowDocking;
-
 	titlebar?: WindowTiltlebarComponent;
-
 	viewPort: WindowViewPort;
 
 	metrics: WindowMetrics;
@@ -127,29 +121,22 @@ export interface OpenWindowOptions<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
 > {
 	winId?: WindowId;
-
 	title?: string;
 	parentId?: WindowId | null;
 
 	boundingEl?: HTMLElement | null;
-
 	tileOffset?: number;
 
 	props?: TProps;
-
 	left?: number;
 	top?: number;
 	width?: number;
 	height?: number;
 
 	transparency?: number;
-
 	showButtons?: boolean;
-
 	docking?: WindowDocking;
-
 	titlebar?: WindowTiltlebarComponent;
-
 	componentKey?: string;
 }
 
@@ -176,60 +163,45 @@ function overlaps(
 
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
-
 	private zCounter = 1;
-
 	private readonly backend: WindowBackend;
-
 	public readonly sync: WindowSync;
+	// private registry: WindowRegistry;
 
 	constructor(options: WindowManagerOptions = {}) {
+		// startar backend och lyssning på broadcastchannel
 		this.backend = options.backend ?? createWindowBackend();
-
 		this.sync = new WindowSync(this.backend);
+		// this.register=
 
 		this.windows.push({
 			winId: ROOT_WIN_ID,
-
 			title: "Root Workspace",
 			thumbnail: null,
-
 			component: null,
 			componentKey: "",
-
 			props: {},
-
 			parentId: null,
-
 			boundingEl: null,
-
 			state: {
 				left: 0,
 				top: 0,
 				width: 1920,
 				height: 1080,
-
 				isMinimized: false,
 				isMaximized: false,
-
 				transparency: 1,
 				isFocused: false,
 			},
-
 			storedState: null,
-
 			zIndex: 0,
 			tileOffset: 0,
-
 			showButtons: false,
-
 			docking: {},
-
 			viewPort: {
 				id: "",
 				type: "workspace",
 			},
-
 			metrics: {
 				renderMs: 0,
 				renderStrategy: "immediate",
@@ -246,6 +218,10 @@ export class WindowManager {
 		return this.windows.filter(
 			(win) => win.winId !== ROOT_WIN_ID,
 		).length;
+	}
+
+	debugBroadcast(winId: string, props: Record<string, unknown>): void {
+		void this.sync.send(winId, { props });
 	}
 
 	find(id: WindowId | null | undefined): WindowInstance | undefined {
@@ -597,25 +573,6 @@ export class WindowManager {
 		}
 	}
 
-	updateProps_old(
-		props: Record<string, unknown>,
-		id?: WindowId,
-	): void {
-		if (id) {
-			const win = this.find(id);
-			if (!win) return;
-			Object.assign(win.props, props);
-			return;
-		}
-		for (const win of this.windows) {
-			for (const key of Object.keys(props)) {
-				if (key in win.props) {
-					win.props[key] = props[key];
-				}
-			}
-		}
-	}
-
 	// updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
 	// 	const win = this.find(id);
 	// 	if (!win) return;
@@ -752,9 +709,7 @@ export class WindowManager {
 
 	focus(win: WindowInstance): void {
 		if (win.winId === ROOT_WIN_ID) return;
-
 		win.zIndex = ++this.zCounter;
-
 		win.state.isFocused = true;
 	}
 
@@ -833,18 +788,14 @@ export class WindowManager {
 		proposed: Partial<WindowRect>,
 	): void {
 		if (win.winId === ROOT_WIN_ID) return;
-
 		const old = rectOf(win);
-
 		const next: WindowRect = {
 			...old,
 			...proposed,
 		};
-
 		const siblings = this.getChildren(
 			win.parentId ?? ROOT_WIN_ID,
 		);
-
 		const neighbors = siblings.filter((other) => {
 			if (
 				other.winId === win.winId ||
@@ -858,16 +809,36 @@ export class WindowManager {
 			return (
 				(mode.includes("left") &&
 					Math.abs(b.left + b.width - old.left) <= EPSILON &&
-					overlaps(old.top, old.top + old.height, b.top, b.top + b.height)) ||
+					overlaps(
+						old.top,
+						old.top + old.height,
+						b.top,
+						b.top + b.height,
+					)) ||
 				(mode.includes("right") &&
 					Math.abs(b.left - (old.left + old.width)) <= EPSILON &&
-					overlaps(old.top, old.top + old.height, b.top, b.top + b.height)) ||
+					overlaps(
+						old.top,
+						old.top + old.height,
+						b.top,
+						b.top + b.height,
+					)) ||
 				(mode.includes("top") &&
 					Math.abs(b.top + b.height - old.top) <= EPSILON &&
-					overlaps(old.left, old.left + old.width, b.left, b.left + b.width)) ||
+					overlaps(
+						old.left,
+						old.left + old.width,
+						b.left,
+						b.left + b.width,
+					)) ||
 				(mode.includes("bottom") &&
 					Math.abs(b.top - (old.top + old.height)) <= EPSILON &&
-					overlaps(old.left, old.left + old.width, b.left, b.left + b.width))
+					overlaps(
+						old.left,
+						old.left + old.width,
+						b.left,
+						b.left + b.width,
+					))
 			);
 		});
 
@@ -948,9 +919,7 @@ export class WindowManager {
 				}
 			}
 		}
-
 		Object.assign(win.state, next);
-
 		this.publishDetachedStateUpdate(win, next);
 	}
 
@@ -1073,20 +1042,16 @@ export class WindowManager {
 			winId,
 			() => {
 				const win = this.find(winId);
-
 				if (!win) {
 					return { props: {} };
 				}
-
 				return {
 					props: $state.snapshot(win.props),
 				};
 			},
 			(state: DetachedWindowState) => {
 				const win = this.find(winId);
-
 				if (!win) return;
-
 				this.updateProps(
 					state.props ?? {},
 					win,
@@ -1096,7 +1061,6 @@ export class WindowManager {
 				this.updateState(winId, updates);
 			},
 		);
-
 		return () => this.sync.stop(winId);
 	}
 
@@ -1113,10 +1077,8 @@ export class WindowManager {
 		}
 
 		const children = this.getChildren(win.winId);
-
 		for (const child of children) {
 			if (child.viewPort.type !== "workspace") continue;
-
 			this.reparent(
 				child.winId,
 				ROOT_WIN_ID,
@@ -1133,11 +1095,9 @@ export class WindowManager {
 			winId: win.winId,
 
 			title: win.title,
-
 			componentKey: win.componentKey,
 
 			parentId: win.parentId,
-
 			props: $state.snapshot(win.props),
 
 			width: win.state.width,
@@ -1146,14 +1106,11 @@ export class WindowManager {
 			left: win.state.left,
 			top: win.state.top,
 		};
-
 		await this.sync.open(descriptor, target);
-
 		win.viewPort = {
 			id: win.winId,
 			type: target,
 		};
-
 		this.setupStandaloneSync(win.winId);
 	}
 
@@ -1231,14 +1188,10 @@ export class WindowManager {
 // CONTEXT
 // --------------------------------------------------
 
-const [
-	getContextManager,
-	setContextManager,
-] = createContext<WindowManager>();
+const [getContextManager, setContextManager] = createContext<WindowManager>();
 
 export interface WindowManagerOptions {
 	modules?: Record<string, () => Promise<any>>;
-
 	backend?: WindowBackend;
 }
 

@@ -8,7 +8,11 @@ export interface DetachedWindowState {
 
 export type WindowMessage =
 	| { type: "sync:props"; winId: WindowId; state: DetachedWindowState }
-	| { type: "sync:state-update"; winId: WindowId; updates: Partial<WindowState> }
+	| {
+		type: "sync:state-update";
+		winId: WindowId;
+		updates: Partial<WindowState>;
+	}
 	| {
 		type: "rpc:request";
 		winId: WindowId;
@@ -27,7 +31,12 @@ export type WindowMessage =
 		result?: unknown;
 		error?: string;
 	}
-	| { type: "system:close"; winId: WindowId };
+	| { type: "system:close"; winId: WindowId }
+	| {
+		type: "registry:snapshot";
+		version: number;
+		entries: WindowRegistryEntry[];
+	};
 
 export interface WindowTransportPacket {
 	winId: WindowId;
@@ -62,47 +71,23 @@ export interface ExternalWindowDescriptor {
  *
  * Broker tolkar aldrig data.
  */
-export type RawMessageCallback = (
-	packet: WindowTransportPacket,
-) => void;
+export type RawMessageCallback = (packet: WindowTransportPacket) => void;
 
 export interface WindowBackend {
-	readonly target: Exclude<
-		WindowViewPortType,
-		"workspace"
-	>;
-
+	readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId: string;
 
-	open(
-		descriptor: ExternalWindowDescriptor,
-		target: WindowViewPortType,
-	): Promise<void>;
-
+	open(descriptor: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
 	close(winId: string): Promise<void>;
-
 	sendRaw(message: WindowMessage): Promise<void>;
 
-	onRawMessage(
-		winId: string,
-		callback: RawMessageCallback,
-	): () => void;
-
+	onRawMessage(winId: string, callback: RawMessageCallback): () => void;
 	destroy(): void;
 }
 
 interface TauriEventApi {
-	emit(
-		event: string,
-		payload: unknown,
-	): Promise<void>;
-
-	listen(
-		event: string,
-		handler: (event: {
-			payload: unknown;
-		}) => void,
-	): Promise<() => void>;
+	emit(event: string, payload: unknown): Promise<void>;
+	listen(event: string, handler: (event: { payload: unknown }) => void): Promise<() => void>;
 }
 
 interface TauriWebviewWindow {
@@ -111,10 +96,7 @@ interface TauriWebviewWindow {
 }
 
 interface TauriWebviewWindowApi {
-	WebviewWindow: new (
-		label: string,
-		options: Record<string, unknown>,
-	) => {
+	WebviewWindow: new (label: string, options: Record<string, unknown>) => {
 		once(
 			event: string,
 			callback: (event: {
@@ -135,6 +117,74 @@ const STORAGE_MESSAGE_PREFIX = "svelte_winmanager_message_";
 const STORAGE_INIT_PREFIX = "win_payload_init_";
 
 const TAURI_EVENT_PREFIX = "svelte-winmanager:";
+
+interface WindowRegistryEntry {
+	winId: WindowId;
+	parentId: WindowId | null;
+	wManagerId: string;
+	componentKey: string;
+	viewPortType: WindowViewPortType;
+}
+
+export class WindowsRegistryService {
+	windows = new Map<
+		WindowId,
+		WindowRegistryEntry
+	>();
+
+	version = 0;
+
+	add(entry: WindowRegistryEntry): void {
+		this.windows.set(entry.winId, structuredClone(entry));
+		this.version++;
+	}
+
+	remove(winId: WindowId): void {
+		if (this.windows.delete(winId)) {
+			this.version++;
+		}
+	}
+
+	replace(
+		version: number,
+		entries: WindowRegistryEntry[],
+	): void {
+		this.windows.clear();
+		for (const entry of entries) {
+			this.windows.set(
+				entry.winId,
+				structuredClone(entry),
+			);
+		}
+
+		this.version = version;
+	}
+
+	snapshot() {
+		return {
+			version: this.version,
+			entries: [...this.windows.values()],
+		};
+	}
+
+	get(winId: WindowId): WindowRegistryEntry | undefined {
+		return this.windows.get(winId);
+	}
+
+	getChildren(parentId: WindowId): WindowRegistryEntry[] {
+		return [...this.windows.values()]
+			.filter(
+				(entry) => entry.parentId === parentId,
+			);
+	}
+
+	update(winId: WindowId, updates: Partial<WindowRegistryEntry>): void {
+		const entry = this.windows.get(winId);
+		if (!entry) return;
+		Object.assign(entry, updates);
+		this.version++;
+	}
+}
 
 function createId(): string {
 	return crypto.randomUUID();
@@ -186,79 +236,68 @@ function isTransportPacket(
 	const message = packet.message as Record<string, unknown>;
 
 	switch (message.type) {
-		case "sync:payload":
-			return isDetachedState(message.state);
+		case "sync:props":
+			return true;
+
 		case "sync:state-update":
-			return !!message.updates &&
+			return (
+				!!message.updates &&
 				typeof message.updates === "object" &&
-				!Array.isArray(message.updates);
+				!Array.isArray(message.updates)
+			);
+
 		case "rpc:request":
-			return typeof message.requestId === "string" &&
+			return (
+				typeof message.requestId === "string" &&
 				typeof message.sourceId === "string" &&
 				typeof message.method === "string" &&
 				Array.isArray(message.args) &&
-				(message.targetEndpointId === undefined ||
-					typeof message.targetEndpointId === "string");
+				(
+					message.targetEndpointId === undefined ||
+					typeof message.targetEndpointId === "string"
+				)
+			);
+
 		case "rpc:response":
-			return typeof message.requestId === "string" &&
+			return (
+				typeof message.requestId === "string" &&
 				typeof message.sourceId === "string" &&
 				typeof message.targetEndpointId === "string" &&
-				(message.error === undefined ||
-					typeof message.error === "string");
+				(
+					message.error === undefined ||
+					typeof message.error === "string"
+				)
+			);
+
 		case "system:close":
 			return true;
+
+		case "registry:snapshot":
+			return (
+				typeof message.version === "number" &&
+				Array.isArray(message.entries)
+			);
+
 		default:
 			return false;
 	}
 }
 
-function isDetachedState(
-	value: unknown,
-): value is DetachedWindowState {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-
-	const state = value as Record<string, unknown>;
-
-	return (
-		"payload" in state &&
-		"props" in state &&
-		typeof state.props === "object" &&
-		state.props !== null &&
-		!Array.isArray(state.props)
-	);
-}
-
 export class WindowBackendManager implements WindowBackend {
-	readonly target: Exclude<
-		WindowViewPortType,
-		"workspace"
-	>;
+	public readonly winRegistry = new WindowsRegistryService();
 
+	readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId = createId();
-
 	private channel: BroadcastChannel | null = null;
-
-	private listeners = new Map<
-		string,
-		Set<RawMessageCallback>
-	>();
+	private listeners = new Map<string, Set<RawMessageCallback>>();
 
 	private initialMessages = new Map<
 		string,
 		WindowTransportPacket
 	>();
 
-	private openedWindows = new Map<
-		string,
-		Window | null
-	>();
-
-	private tauriListeners = new Map<
-		string,
-		Promise<() => void>
-	>();
+	private openedWindows = new Map<string, Window | null>();
+	private tauriListeners = new Map<string, Promise<() => void>>();
 
 	private storageListener:
 		| ((event: StorageEvent) => void)
@@ -271,6 +310,7 @@ export class WindowBackendManager implements WindowBackend {
 
 		if (!isBrowser()) return;
 
+		// startar lyssnaren på broadcasy channel
 		if (this.target === "browser-tab") {
 			this.initializeBrowserTransport();
 		}
@@ -282,7 +322,8 @@ export class WindowBackendManager implements WindowBackend {
 
 	private initializeBrowserTransport(): void {
 		if (
-			typeof BroadcastChannel !== "undefined"
+			typeof BroadcastChannel !==
+				"undefined"
 		) {
 			this.channel = new BroadcastChannel(
 				CHANNEL_NAME,
@@ -342,31 +383,30 @@ export class WindowBackendManager implements WindowBackend {
 
 			try {
 				const key = initStorageKey(winId);
+
 				const raw = localStorage.getItem(key);
 
 				if (!raw) return;
 
-				const state: unknown = JSON.parse(raw);
+				const state = JSON.parse(raw) as DetachedWindowState;
 
 				localStorage.removeItem(key);
-
-				if (!isDetachedState(state)) {
-					console.error(
-						"[WindowBackend] Invalid initial state.",
-					);
-					return;
-				}
 
 				const packet: WindowTransportPacket = {
 					winId,
 					sourceId: "initial-state",
 					message: {
-						type: "sync:payload",
+						type: "sync:props",
 						winId,
 						state,
 					},
 				};
-				this.initialMessages.set(winId, packet);
+
+				this.initialMessages.set(
+					winId,
+					packet,
+				);
+
 				this.notifyListeners(packet);
 			} catch (error) {
 				console.error(
@@ -388,24 +428,34 @@ export class WindowBackendManager implements WindowBackend {
 		this.assertAlive();
 
 		if (!descriptor.winId) {
-			throw new Error("winId saknas.");
+			throw new Error(
+				"winId saknas.",
+			);
 		}
 
 		if (!descriptor.componentKey) {
-			throw new Error("componentKey saknas.");
+			throw new Error(
+				"componentKey saknas.",
+			);
 		}
 
 		switch (target) {
 			case "browser-tab":
-				this.openBrowserTab(descriptor);
+				this.openBrowserTab(
+					descriptor,
+				);
 				return;
 
 			case "browser-window":
-				this.openBrowserWindow(descriptor);
+				this.openBrowserWindow(
+					descriptor,
+				);
 				return;
 
 			case "tauri-window":
-				await this.openTauriWindow(descriptor);
+				await this.openTauriWindow(
+					descriptor,
+				);
 				return;
 
 			case "workspace":
@@ -418,28 +468,16 @@ export class WindowBackendManager implements WindowBackend {
 	private buildDetachedUrl(
 		descriptor: ExternalWindowDescriptor,
 	): URL {
-		const url = new URL(
-			globalThis.location.href,
-		);
-
-		url.searchParams.set(
-			"winId",
-			descriptor.winId,
-		);
-
-		url.searchParams.set(
-			"componentKey",
-			descriptor.componentKey,
-		);
-
-		url.searchParams.set(
-			"title",
-			descriptor.title,
-		);
+		const url = new URL(globalThis.location.href);
+		url.searchParams.set("winId", descriptor.winId);
+		url.searchParams.set("componentKey", descriptor.componentKey);
+		url.searchParams.set("title", descriptor.title);
 		if (descriptor.parentId) {
-			url.searchParams.set("parentId", descriptor.parentId);
+			url.searchParams.set(
+				"parentId",
+				descriptor.parentId,
+			);
 		}
-
 		return url;
 	}
 
@@ -447,13 +485,14 @@ export class WindowBackendManager implements WindowBackend {
 		descriptor: ExternalWindowDescriptor,
 	): void {
 		const state: DetachedWindowState = {
-			payload: descriptor.payload,
 			props: descriptor.props ?? {},
 		};
 
 		try {
 			localStorage.setItem(
-				initStorageKey(descriptor.winId),
+				initStorageKey(
+					descriptor.winId,
+				),
 				JSON.stringify(state),
 			);
 		} catch (error) {
@@ -466,18 +505,17 @@ export class WindowBackendManager implements WindowBackend {
 	private openBrowserTab(
 		descriptor: ExternalWindowDescriptor,
 	): void {
-		const url = this.buildDetachedUrl(descriptor);
-
-		this.saveInitialState(descriptor);
-
-		const tab = globalThis.open(
-			url.toString(),
-			`_blank_${descriptor.winId}`,
+		const url = this.buildDetachedUrl(
+			descriptor,
 		);
+		this.saveInitialState(descriptor);
+		const tab = globalThis.open(url.toString(), `_blank_${descriptor.winId}`);
 
 		if (!tab) {
 			localStorage.removeItem(
-				initStorageKey(descriptor.winId),
+				initStorageKey(
+					descriptor.winId,
+				),
 			);
 
 			throw new Error(
@@ -491,9 +529,7 @@ export class WindowBackendManager implements WindowBackend {
 		);
 	}
 
-	private openBrowserWindow(
-		descriptor: ExternalWindowDescriptor,
-	): void {
+	private openBrowserWindow(descriptor: ExternalWindowDescriptor): void {
 		const url = this.buildDetachedUrl(descriptor);
 
 		this.saveInitialState(descriptor);
@@ -557,8 +593,12 @@ export class WindowBackendManager implements WindowBackend {
 			componentKey,
 			title,
 		});
+
 		if (descriptor.parentId) {
-			params.set("parentId", descriptor.parentId);
+			params.set(
+				"parentId",
+				descriptor.parentId,
+			);
 		}
 
 		const webview = new api.WebviewWindow(
@@ -582,6 +622,7 @@ export class WindowBackendManager implements WindowBackend {
 					"tauri://created",
 					() => {
 						if (settled) return;
+
 						settled = true;
 						resolve();
 					},
@@ -591,6 +632,7 @@ export class WindowBackendManager implements WindowBackend {
 					"tauri://error",
 					(event) => {
 						if (settled) return;
+
 						settled = true;
 
 						reject(
@@ -607,19 +649,30 @@ export class WindowBackendManager implements WindowBackend {
 		);
 	}
 
-	async close(winId: string): Promise<void> {
+	async close(
+		winId: string,
+	): Promise<void> {
 		this.assertAlive();
 
-		if (this.target === "tauri-window") {
-			await this.closeTauriWindow(winId);
+		if (
+			this.target === "tauri-window"
+		) {
+			await this.closeTauriWindow(
+				winId,
+			);
 			return;
 		}
 
 		const opened = this.openedWindows.get(winId);
 
-		if (opened && !opened.closed) {
+		if (
+			opened &&
+			!opened.closed
+		) {
 			opened.close();
-			this.openedWindows.delete(winId);
+			this.openedWindows.delete(
+				winId,
+			);
 			return;
 		}
 
@@ -641,7 +694,9 @@ export class WindowBackendManager implements WindowBackend {
 		const windows = await api.getAllWebviewWindows();
 
 		const target = windows.find(
-			(item) => item.label === `detached-${winId}`,
+			(item) =>
+				item.label ===
+					`detached-${winId}`,
 		);
 
 		if (target) {
@@ -653,7 +708,9 @@ export class WindowBackendManager implements WindowBackend {
 	// Raw transport
 	// --------------------------------------------------
 
-	async sendRaw(message: WindowMessage): Promise<void> {
+	async sendRaw(
+		message: WindowMessage,
+	): Promise<void> {
 		this.assertAlive();
 
 		if (!message.winId) {
@@ -668,7 +725,9 @@ export class WindowBackendManager implements WindowBackend {
 			message,
 		};
 
-		if (this.target === "tauri-window") {
+		if (
+			this.target === "tauri-window"
+		) {
 			const modulePath = "@tauri-apps/api/event";
 
 			const api = await import(
@@ -676,7 +735,9 @@ export class WindowBackendManager implements WindowBackend {
 			) as TauriEventApi;
 
 			await api.emit(
-				tauriEventName(message.winId),
+				tauriEventName(
+					message.winId,
+				),
 				packet,
 			);
 
@@ -684,11 +745,15 @@ export class WindowBackendManager implements WindowBackend {
 		}
 
 		if (this.channel) {
-			this.channel.postMessage(packet);
+			this.channel.postMessage(
+				packet,
+			);
 			return;
 		}
 
-		this.sendStoragePacket(packet);
+		this.sendStoragePacket(
+			packet,
+		);
 	}
 
 	private sendStoragePacket(
@@ -702,7 +767,9 @@ export class WindowBackendManager implements WindowBackend {
 				JSON.stringify(packet),
 			);
 
-			localStorage.removeItem(key);
+			localStorage.removeItem(
+				key,
+			);
 		} catch (error) {
 			throw new Error(
 				`Transport misslyckades: ${String(error)}`,
@@ -720,18 +787,32 @@ export class WindowBackendManager implements WindowBackend {
 
 		if (!callbacks) {
 			callbacks = new Set();
-			this.listeners.set(winId, callbacks);
+
+			this.listeners.set(
+				winId,
+				callbacks,
+			);
 		}
 
 		callbacks.add(callback);
-		const initialMessage = this.initialMessages.get(winId);
+
+		const initialMessage = this.initialMessages.get(
+			winId,
+		);
+
 		if (initialMessage) {
 			callback(initialMessage);
-			this.initialMessages.delete(winId);
+			this.initialMessages.delete(
+				winId,
+			);
 		}
 
-		if (this.target === "tauri-window") {
-			void this.ensureTauriListener(winId);
+		if (
+			this.target === "tauri-window"
+		) {
+			void this.ensureTauriListener(
+				winId,
+			);
 		}
 
 		return () => {
@@ -742,7 +823,9 @@ export class WindowBackendManager implements WindowBackend {
 			current.delete(callback);
 
 			if (current.size === 0) {
-				this.listeners.delete(winId);
+				this.listeners.delete(
+					winId,
+				);
 			}
 		};
 	}
@@ -750,8 +833,12 @@ export class WindowBackendManager implements WindowBackend {
 	private async ensureTauriListener(
 		winId: string,
 	): Promise<void> {
-		if (this.tauriListeners.has(winId)) {
-			await this.tauriListeners.get(winId);
+		if (
+			this.tauriListeners.has(winId)
+		) {
+			await this.tauriListeners.get(
+				winId,
+			);
 			return;
 		}
 
@@ -763,19 +850,29 @@ export class WindowBackendManager implements WindowBackend {
 			) as TauriEventApi;
 
 			return api.listen(
-				tauriEventName(winId),
+				tauriEventName(
+					winId,
+				),
 				(event) => {
-					this.receivePacket(event.payload);
+					this.receivePacket(
+						event.payload,
+					);
 				},
 			);
 		})();
 
-		this.tauriListeners.set(winId, promise);
+		this.tauriListeners.set(
+			winId,
+			promise,
+		);
 
 		try {
 			await promise;
 		} catch (error) {
-			this.tauriListeners.delete(winId);
+			this.tauriListeners.delete(
+				winId,
+			);
+
 			console.error(
 				"[WindowBackend] Tauri listener error:",
 				error,
@@ -783,15 +880,22 @@ export class WindowBackendManager implements WindowBackend {
 		}
 	}
 
-	private receivePacket(value: unknown): void {
+	private receivePacket(
+		value: unknown,
+	): void {
 		if (this.destroyed) return;
 
-		if (!isTransportPacket(value)) return;
+		if (!isTransportPacket(value)) {
+			return;
+		}
 
 		if (
-			value.message.type === "system:close" &&
-			new URLSearchParams(globalThis.location.search)
-					.get("winId") === value.winId
+			value.message.type ===
+				"system:close" &&
+			new URLSearchParams(
+					globalThis.location.search,
+				).get("winId") ===
+				value.winId
 		) {
 			globalThis.close();
 			return;
@@ -803,11 +907,17 @@ export class WindowBackendManager implements WindowBackend {
 	private notifyListeners(
 		packet: WindowTransportPacket,
 	): void {
-		const callbacks = this.listeners.get(packet.winId);
+		const callbacks = this.listeners.get(
+			packet.winId,
+		);
 
 		if (!callbacks) return;
 
-		for (const callback of [...callbacks]) {
+		for (
+			const callback of [
+				...callbacks,
+			]
+		) {
 			try {
 				callback(packet);
 			} catch (error) {
@@ -848,7 +958,9 @@ export class WindowBackendManager implements WindowBackend {
 			this.storageListener = null;
 		}
 
-		for (const promise of this.tauriListeners.values()) {
+		for (
+			const promise of this.tauriListeners.values()
+		) {
 			void promise.then(
 				(unlisten) => unlisten(),
 			);
@@ -857,8 +969,13 @@ export class WindowBackendManager implements WindowBackend {
 		this.tauriListeners.clear();
 		this.listeners.clear();
 
-		for (const opened of this.openedWindows.values()) {
-			if (opened && !opened.closed) {
+		for (
+			const opened of this.openedWindows.values()
+		) {
+			if (
+				opened &&
+				!opened.closed
+			) {
 				opened.close();
 			}
 		}

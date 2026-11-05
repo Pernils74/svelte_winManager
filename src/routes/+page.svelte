@@ -57,7 +57,7 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 import WindowHost from "#lib/WindowHost.svelte";
 
 import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
-import { getAllRegisteredKeys, registerComponents } from "#lib/windowRegistry.ts";
+import { getAllRegisteredKeys, registerComponents } from "#lib/windowComponentRegistry.ts";
 
 import WindowA from "./window_A.svelte";
 import WinGraphA from "./WinGraph_A.svelte";
