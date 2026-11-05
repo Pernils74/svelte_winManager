@@ -1,7 +1,7 @@
 import { type Component, createContext } from "svelte";
 import { getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
-
 import { WindowSync } from "./windowSync.svelte.ts";
+import { createRpcTransport, WindowRpc } from "./windowRpc";
 
 import {
 	createWindowBackend,
@@ -1037,7 +1037,14 @@ export class WindowManager {
 	// DETACHED SYNC
 	// --------------------------------------------------
 
-	setupStandaloneSync(winId: WindowId): () => void {
+	setupStandaloneSync(winId: WindowId) {
+		const win = this.find(winId);
+		if (!win) return;
+
+		// 1. Skapa transport och RPC-instans för Slav-fönstret
+		const transport = createRpcTransport(this.backend);
+		const rpc = new WindowRpc(transport, winId);
+
 		this.sync.start(
 			winId,
 			() => {

@@ -59,6 +59,8 @@ import {
 	type WindowRect,
 } from "./windowManager.svelte";
 
+import { createRpcTransport, WindowRpc } from "./windowRpc";
+
 type InteractionMode = "move" | ResizeMode;
 
 interface Props {
@@ -70,6 +72,9 @@ interface Props {
 let { win = $bindable(), bounds, children }: Props = $props();
 
 const wManager = getWindowManager();
+
+const transport = createRpcTransport(wManager.backend);
+const rpc = new WindowRpc(transport, win.winId);
 
 let frameEl: HTMLDivElement;
 // let contentEl: HTMLDivElement;
@@ -602,11 +607,6 @@ function shouldBroadcast(win: WindowInstance): boolean {
 		parent?.viewPort.type !== "workspace"
 	);
 }
-
-import { createRpcTransport, WindowRpc } from "./windowRpc";
-
-const transport = createRpcTransport(wManager.backend);
-const rpc = new WindowRpc(transport, win.winId);
 
 /**
  * Går igenom props djupt. Om den hittar en funktion (callback),

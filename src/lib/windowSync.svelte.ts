@@ -361,9 +361,8 @@ export class WindowSync {
 		winId: string,
 		readState: ReadState,
 		applyState: ApplyState,
-		applyWindowStateUpdate?: (
-			updates: Partial<WindowState>,
-		) => void,
+		applyWindowStateUpdate?: (updates: Partial<WindowState>) => void,
+		rpc?: any, // 🌟 Lägg till rpc här!
 	): void {
 		this.assertAlive();
 
