@@ -164,7 +164,7 @@ function overlaps(
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
 	private zCounter = 1;
-	private readonly backend: WindowBackend;
+	public readonly backend: WindowBackend;
 	public readonly sync: WindowSync;
 	// private registry: WindowRegistry;
 
@@ -1201,7 +1201,7 @@ export function initializeWindowManager(
 	try {
 		return getContextManager();
 	} catch {
-		const manager = new WindowManager({
+		const wManager = new WindowManager({
 			backend: options?.backend,
 		});
 
@@ -1209,9 +1209,9 @@ export function initializeWindowManager(
 			registerComponents(options.modules);
 		}
 
-		setContextManager(manager);
+		setContextManager(wManager);
 
-		return manager;
+		return wManager;
 	}
 }
 

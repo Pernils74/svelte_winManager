@@ -381,10 +381,7 @@ export class WindowSync {
 				}
 
 				// Ignorera egna utskick.
-				if (
-					packet.sourceId ===
-						this.backend.endpointId
-				) {
+				if (packet.sourceId === this.backend.endpointId) {
 					return;
 				}
 
@@ -398,12 +395,7 @@ export class WindowSync {
 				// WINDOW STATE
 				// ----------------------------------
 
-				if (
-					isWindowStateUpdateMessage(
-						message,
-						winId,
-					)
-				) {
+				if (isWindowStateUpdateMessage(message, winId)) {
 					try {
 						applyWindowStateUpdate?.(
 							message.updates,
