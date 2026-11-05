@@ -206,21 +206,12 @@ function deepEqual(
 	}
 
 	for (const key of keysA) {
-		if (
-			!Object.prototype.hasOwnProperty.call(
-				objectB,
-				key,
-			)
-		) {
+		if (!Object.prototype.hasOwnProperty.call(objectB, key)) {
 			return false;
 		}
 
 		if (
-			!deepEqual(
-				(objectA as Record<PropertyKey, unknown>)[key],
-				(objectB as Record<PropertyKey, unknown>)[key],
-				seen,
-			)
+			!deepEqual((objectA as Record<PropertyKey, unknown>)[key], (objectB as Record<PropertyKey, unknown>)[key], seen)
 		) {
 			return false;
 		}
@@ -283,6 +274,28 @@ function isWindowStateUpdateMessage(
 			typeof item === "boolean"
 		);
 	});
+}
+
+function restoreRpcToCallbacks(obj: any): any {
+	if (!obj || typeof obj !== "object") return obj;
+
+	for (const key of Object.keys(obj)) {
+		const value = obj[key];
+
+		if (typeof value === "string" && value.startsWith("__RPC_CALLBACK__:")) {
+			const rpcMethodName = value.split("__RPC_CALLBACK__:")[1];
+
+			// 🌟 MAGIC: Ge komponenten en helt vanlig funktion tillbaka!
+			obj[key] = async (...args: unknown[]) => {
+				console.log(`📡 [Auto-RPC] Anropar master-callback: ${rpcMethodName}`);
+				// När fliken kör denna funktion, skickar vi det tyst som ett RPC-kommando
+				return rpc.call(`callback:${rpcMethodName}`, ...args);
+			};
+		} else if (typeof value === "object") {
+			restoreRpcToCallbacks(value);
+		}
+	}
+	return obj;
 }
 
 // --------------------------------------------------
@@ -429,10 +442,7 @@ export class WindowSync {
 				});
 
 				// Identiskt state behöver inte appliceras.
-				if (
-					lastSnapshot &&
-					deepEqual(lastSnapshot, incoming)
-				) {
+				if (lastSnapshot && deepEqual(lastSnapshot, incoming)) {
 					return;
 				}
 
@@ -448,6 +458,7 @@ export class WindowSync {
 				lastSnapshot = incoming;
 
 				try {
+					const restoredProps = restoreRpcToCallbacks(incoming.props);
 					applyState(incoming);
 				} catch (error) {
 					console.error(

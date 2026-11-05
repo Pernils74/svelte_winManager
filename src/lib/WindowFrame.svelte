@@ -603,28 +603,6 @@ function shouldBroadcast(win: WindowInstance): boolean {
 	);
 }
 
-function restoreRpcToCallbacks(obj: any): any {
-	if (!obj || typeof obj !== "object") return obj;
-
-	for (const key of Object.keys(obj)) {
-		const value = obj[key];
-
-		if (typeof value === "string" && value.startsWith("__RPC_CALLBACK__:")) {
-			const rpcMethodName = value.split("__RPC_CALLBACK__:")[1];
-
-			// 🌟 MAGIC: Ge komponenten en helt vanlig funktion tillbaka!
-			obj[key] = async (...args: unknown[]) => {
-				console.log(`📡 [Auto-RPC] Anropar master-callback: ${rpcMethodName}`);
-				// När fliken kör denna funktion, skickar vi det tyst som ett RPC-kommando
-				return rpc.call(`callback:${rpcMethodName}`, ...args);
-			};
-		} else if (typeof value === "object") {
-			restoreRpcToCallbacks(value);
-		}
-	}
-	return obj;
-}
-
 import { createRpcTransport, WindowRpc } from "./windowRpc";
 
 const transport = createRpcTransport(wManager.backend);
@@ -661,24 +639,27 @@ function transformCallbacksToRpc(obj: any, path = ""): any {
 			(result as any)[key] = value;
 		}
 	}
-
 	return result;
 }
 
-function stripFunctions(obj: any): any {
-	return JSON.parse(JSON.stringify(obj, (key, value) => {
-		if (typeof value === "function") {
-			return undefined; // Ta bort funktionen helt från nätverkspaketet!
-		}
-		return value;
-	}));
-}
+// function stripFunctions(obj: any): any {
+// 	return JSON.parse(JSON.stringify(obj, (key, value) => {
+// 		if (typeof value === "function") {
+// 			return undefined; // Ta bort funktionen helt från nätverkspaketet!
+// 		}
+// 		return value;
+// 	}));
+// }
 
-// Här reagera vi på ändringar i props
+// Här reagerar vi på ändringar i props och gör om funktioner till RPC-strängar
 $effect(() => {
 	if (shouldBroadcast(win)) {
-		// 🌟 Vi tar en snapshot, men rensar bort alla callbacks så att det inte kraschar!
-		const safeProps = stripFunctions($state.snapshot(win.props));
+		// 🌟 Ta en rå kopia av props
+		const rawProps = $state.snapshot(win.props);
+
+		// 🌟 Konvertera funktioner/callbacks till nätverkssäkra "__RPC_CALLBACK__:"-strängar
+		// och registrera samtidigt lyssnarna i rpc-instansen
+		const safeProps = transformCallbacksToRpc(rawProps);
 
 		void wManager.sync.send(win.winId, {
 			props: safeProps,

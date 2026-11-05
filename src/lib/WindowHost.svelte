@@ -177,6 +177,7 @@ $effect(() => {
 			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
 			// Denna ersätter din gamla `wManager.backend.onMessage`
 			unsubscribe = wManager.setupStandaloneSync(targetWinId);
+
 			publishStandaloneStateUpdate({
 				width: window.innerWidth,
 				height: window.innerHeight,
