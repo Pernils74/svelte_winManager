@@ -1,4 +1,8 @@
 
+<!-- sudo pacman -S icu alsa-lib at-spi2-core nss nspr dconf libxslt ttf-liberation
+
+npx playwright test -->
+
 
 <!-- Samma runtime?
     -> direkt mutation

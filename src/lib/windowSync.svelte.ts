@@ -276,23 +276,26 @@ function isWindowStateUpdateMessage(
 	});
 }
 
-function restoreRpcToCallbacks(obj: any): any {
+// windowSync.svelte.ts (Rad ~315)
+function restoreRpcToCallbacks(obj: any, rpc?: any): any {
 	if (!obj || typeof obj !== "object") return obj;
 
 	for (const key of Object.keys(obj)) {
 		const value = obj[key];
-
 		if (typeof value === "string" && value.startsWith("__RPC_CALLBACK__:")) {
 			const rpcMethodName = value.split("__RPC_CALLBACK__:")[1];
 
-			// 🌟 MAGIC: Ge komponenten en helt vanlig funktion tillbaka!
+			// 🌟 MAGIC: Ge komponenten en fungerande RPC-metod tillbaka!
 			obj[key] = async (...args: unknown[]) => {
+				if (!rpc) {
+					console.warn(`📡 [Auto-RPC] Kunde inte anropa master-callback "${rpcMethodName}" eftersom RPC saknas.`);
+					return;
+				}
 				console.log(`📡 [Auto-RPC] Anropar master-callback: ${rpcMethodName}`);
-				// När fliken kör denna funktion, skickar vi det tyst som ett RPC-kommando
 				return rpc.call(`callback:${rpcMethodName}`, ...args);
 			};
 		} else if (typeof value === "object") {
-			restoreRpcToCallbacks(value);
+			restoreRpcToCallbacks(value, rpc);
 		}
 	}
 	return obj;

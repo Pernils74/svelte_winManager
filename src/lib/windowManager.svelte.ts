@@ -1067,8 +1067,12 @@ export class WindowManager {
 			(updates) => {
 				this.updateState(winId, updates);
 			},
+			rpc,
 		);
-		return () => this.sync.stop(winId);
+		return () => {
+			this.sync.stop(winId);
+			rpc.destroy();
+		};
 	}
 
 	// --------------------------------------------------

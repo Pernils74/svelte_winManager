@@ -1,5 +1,6 @@
 <!-- window_A.svelte -->
 <script lang="ts">
+import { onMount } from "svelte";
 import { getWindowManager, type WindowInstance } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
@@ -37,6 +38,9 @@ function spawnReactive() {
 		},
 	});
 }
+onMount(() => {
+	spawnReactive();
+});
 
 // Uppdatera props i det öppnade fönstret
 $effect(() => {
