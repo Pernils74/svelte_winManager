@@ -1,3 +1,37 @@
+// Sändning
+// Frame
+//   │
+//   │ { value: 42, onSave: fn }
+//   ▼
+// WindowManager
+//   │
+//   ▼
+// WindowSync
+//   │
+//   ├── value → 42
+//   │
+//   ├── onSave → function
+//   │          │
+//   │          └── rpc.register(...)
+//   │
+//   └── onSave → { __rpc: "..." }
+//   │
+//   ▼
+// BroadcastChannel
+
+// andra sidan
+// BroadcastChannel
+//        │
+//        ▼
+// WindowSync
+//        │
+//        ├── { __rpc: "..." }
+//        │
+//        └── skapa lokal proxy:
+
+//            (...args) =>
+//                rpc.call(...)
+
 import type {
 	DetachedWindowState,
 	ExternalWindowDescriptor,
@@ -8,6 +42,7 @@ import type {
 } from "./windowBackend";
 
 import type { WindowId, WindowState } from "./windowManager.svelte";
+import { createRpcTransport, WindowRpc } from "./windowRpc";
 
 // --------------------------------------------------
 // TYPES
@@ -276,7 +311,6 @@ function isWindowStateUpdateMessage(
 	});
 }
 
-// windowSync.svelte.ts (Rad ~315)
 function restoreRpcToCallbacks(obj: any, rpc?: any): any {
 	if (!obj || typeof obj !== "object") return obj;
 
@@ -312,6 +346,20 @@ export class WindowSync {
 	>();
 
 	private destroyed = false;
+
+	private readonly rpcInstances = new Map<string, WindowRpc>();
+
+	private getRpc(winId: string): WindowRpc {
+		let rpc = this.rpcInstances.get(winId);
+
+		if (!rpc) {
+			const transport = createRpcTransport(this.backend);
+			rpc = new WindowRpc(transport, winId);
+			this.rpcInstances.set(winId, rpc);
+		}
+
+		return rpc;
+	}
 
 	constructor(
 		private readonly backend: WindowBackend,
@@ -365,7 +413,6 @@ export class WindowSync {
 		readState: ReadState,
 		applyState: ApplyState,
 		applyWindowStateUpdate?: (updates: Partial<WindowState>) => void,
-		rpc?: any, // 🌟 Lägg till rpc här!
 	): void {
 		this.assertAlive();
 
@@ -460,8 +507,16 @@ export class WindowSync {
 				lastSnapshot = incoming;
 
 				try {
-					const restoredProps = restoreRpcToCallbacks(incoming.props);
-					applyState(incoming);
+					const rpc = this.getRpc(winId);
+
+					const restoredProps = restoreRpcToCallbacks(
+						incoming.props,
+						rpc,
+					);
+
+					applyState({
+						props: restoredProps,
+					});
 				} catch (error) {
 					console.error(
 						`[WindowSync] Kunde inte applicera props för ${winId}:`,
@@ -488,9 +543,12 @@ export class WindowSync {
 				const current = readState();
 
 				// Skapa clone-safe snapshot.
-				const currentSnapshot = snapshot({
-					props: current.props ?? {},
-				});
+				const transportProps = this.prepareForTransport(
+					current.props ?? {},
+					winId,
+				);
+
+				const currentSnapshot = snapshot({ props: transportProps });
 
 				// Ingen förändring.
 				if (
@@ -558,13 +616,103 @@ export class WindowSync {
 	// SEND PROPS MANUALLY
 	// ----------------------------------------------
 
+	private readonly rpcHandlers = new Map<string, {
+		callback: Function;
+		unregister: () => void;
+	}>();
+
+	private prepareForTransport(
+		value: unknown,
+		winId: string,
+		path = "props",
+	): unknown {
+		const rpc = this.getRpc(winId);
+
+		if (typeof value === "function") {
+			const method = `${winId}:${path}`;
+
+			const existing = this.rpcHandlers.get(method);
+
+			if (existing?.callback === value) {
+				return `__RPC_CALLBACK__:${method}`;
+			}
+
+			existing?.unregister();
+
+			const unregister = rpc.register(
+				`callback:${method}`,
+				async (...args: unknown[]) => value(...args),
+			);
+
+			this.rpcHandlers.set(method, {
+				callback: value,
+				unregister,
+			});
+
+			return `__RPC_CALLBACK__:${method}`;
+		}
+
+		if (Array.isArray(value)) {
+			return value.map((item, index) =>
+				this.prepareForTransport(
+					item,
+					winId,
+					`${path}.${index}`,
+				)
+			);
+		}
+
+		if (value !== null && typeof value === "object") {
+			const result: Record<string, unknown> = {};
+
+			for (const [key, child] of Object.entries(value)) {
+				result[key] = this.prepareForTransport(
+					child,
+					winId,
+					`${path}.${key}`,
+				);
+			}
+
+			return result;
+		}
+
+		return value;
+	}
 	/**
 	 * Skickar props manuellt.
 	 *
 	 * Används exempelvis när manager.updateProps()
 	 * anropas i ett detached fönster.
 	 */
+
 	async send(
+		winId: string,
+		state: DetachedWindowState,
+	): Promise<void> {
+		this.assertAlive();
+
+		const rpc = this.getRpc(winId);
+
+		const cleanProps = this.prepareForTransport(
+			snapshot(state.props ?? {}),
+			winId,
+		);
+
+		const message: Extract<
+			WindowMessage,
+			{ type: "sync:props" }
+		> = {
+			type: "sync:props",
+			winId,
+			state: {
+				props: cleanProps as Record<string, unknown>,
+			},
+		};
+
+		await this.backend.sendRaw(message);
+	}
+
+	async send_old(
 		winId: string,
 		state: DetachedWindowState,
 	): Promise<void> {
@@ -608,6 +756,22 @@ export class WindowSync {
 	// ----------------------------------------------
 	// STOP
 	// ----------------------------------------------
+
+	private cleanupRpc(winId: string): void {
+		const prefix = `${winId}:`;
+
+		for (const [method, handler] of this.rpcHandlers) {
+			if (!method.startsWith(prefix)) continue;
+
+			handler.unregister();
+			this.rpcHandlers.delete(method);
+		}
+
+		const rpc = this.rpcInstances.get(winId);
+
+		rpc?.destroy();
+		this.rpcInstances.delete(winId);
+	}
 
 	/**
 	 * Stoppar en specifik synksession.

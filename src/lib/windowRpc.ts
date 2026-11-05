@@ -1,9 +1,6 @@
 // src/lib/windowRpc.ts
 
-import type {
-	WindowBackend,
-	WindowMessage,
-} from "./windowBackend";
+import type { WindowBackend, WindowMessage } from "./windowBackend";
 
 export interface RpcTransport {
 	readonly endpointId: string;
@@ -44,10 +41,7 @@ function toError(error: unknown): Error {
 export class WindowRpc {
 	private readonly handlers = new Map<string, RpcHandler>();
 
-	private readonly pending = new Map<
-		string,
-		PendingRequest
-	>();
+	private readonly pending = new Map<string, PendingRequest>();
 
 	private readonly sourceId: string;
 	private readonly targetEndpointId?: string;

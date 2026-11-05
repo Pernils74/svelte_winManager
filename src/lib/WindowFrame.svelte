@@ -613,34 +613,6 @@ function shouldBroadcast(win: WindowInstance): boolean {
  * registrerar den funktionen i RPC-registret och byter ut den
  * mot en speciell sträng-markör för nätverket.
  */
-function transformCallbacksToRpc(obj: any, path = ""): any {
-	if (!obj || typeof obj !== "object") return obj;
-
-	const result = Array.isArray(obj) ? [] : {};
-
-	for (const key of Object.keys(obj)) {
-		const value = obj[key];
-		const currentPath = path ? `${path}.${key}` : key;
-
-		if (typeof value === "function") {
-			// 🌟 MAGIC: Vi hittade en vanlig Svelte-callback!
-			// Registrera den i RPC-registret så den kan anropas utifrån flikarna
-			rpc.register(`callback:${currentPath}`, async (...args: unknown[]) => {
-				// Kör den RIKTIGA lokala Svelte-funktionen här i huvudfönstret
-				return value(...args);
-			});
-
-			// Ersätt funktionen med en nätverksvänlig markör i det paketet som skickas
-			(result as any)[key] = `__RPC_CALLBACK__:${currentPath}`;
-		} else if (typeof value === "object") {
-			// Sök vidare djupt i objekt/arrays
-			(result as any)[key] = transformCallbacksToRpc(value, currentPath);
-		} else {
-			(result as any)[key] = value;
-		}
-	}
-	return result;
-}
 
 // function stripFunctions(obj: any): any {
 // 	return JSON.parse(JSON.stringify(obj, (key, value) => {
@@ -655,14 +627,10 @@ function transformCallbacksToRpc(obj: any, path = ""): any {
 $effect(() => {
 	if (shouldBroadcast(win)) {
 		// 🌟 Ta en rå kopia av props
-		const rawProps = $state.snapshot(win.props);
-
-		// 🌟 Konvertera funktioner/callbacks till nätverkssäkra "__RPC_CALLBACK__:"-strängar
-		// och registrera samtidigt lyssnarna i rpc-instansen
-		const safeProps = transformCallbacksToRpc(rawProps);
+		const props = $state.snapshot(win.props);
 
 		void wManager.sync.send(win.winId, {
-			props: safeProps,
+			props: props,
 		});
 	}
 });
@@ -675,8 +643,43 @@ $effect(() => {
 		structuredClone(props),
 	);
 
-	wManager.debugBroadcast(win.winId, props);
+	// wManager.debugBroadcast(win.winId, props);
 });
+
+// ┌────────────────────┐
+// │    WindowFrame      │
+// │                    │
+// │ UI / interaction   │
+// │ props              │
+// └─────────┬──────────┘
+//           │
+//           │ wManager.sync...
+//           ▼
+// ┌────────────────────┐
+// │   WindowManager     │
+// │                    │
+// │ äger windows       │
+// │ äger sync           │
+// │ API/facade          │
+// └─────────┬──────────┘
+//           │
+//           ▼
+// ┌────────────────────┐
+// │    WindowSync       │
+// │                    │
+// │ props serialization │
+// │ callback detection  │
+// │ RPC                 │
+// │ state sync          │
+// └─────────┬──────────┘
+//           │
+//           ▼
+// ┌────────────────────┐
+// │   WindowBackend     │
+// │                    │
+// │ BroadcastChannel   │
+// │ popup/tab/tauri    │
+// └────────────────────┘
 
 // $effect(() => {
 // 	if (!shouldBroadcast(win)) return;
