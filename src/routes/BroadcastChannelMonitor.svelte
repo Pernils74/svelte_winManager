@@ -35,11 +35,11 @@ onMount(() => {
 	channel = new BroadcastChannel(channelName);
 
 	channel.onmessage = (event) => {
-		console.log(
-			"[BroadcastChannel]",
-			channelName,
-			event.data,
-		);
+		// 	console.log(
+		// 		"[BroadcastChannel]",
+		// 		channelName,
+		// 		event.data,
+		// 	);
 
 		addMessage(event.data);
 	};

@@ -241,21 +241,13 @@ function snapPosition(
 
 let reparentDrag = false;
 
-function beginInteraction(
-	event: MouseEvent,
-	mode: InteractionMode,
-) {
+function beginInteraction(event: MouseEvent, mode: InteractionMode) {
 	if (event.button !== 0) return;
 	if (win.winId === ROOT_WIN_ID) return;
 
 	const target = event.target;
 
-	if (
-		target instanceof Element &&
-		target.closest("button, input, select, textarea, a")
-	) {
-		return;
-	}
+	if (target instanceof Element && target.closest("button, input, select, textarea, a")) return;
 
 	// if (win.state.isMaximized) return;
 
@@ -339,15 +331,11 @@ function handleMouseUp(event: MouseEvent) {
 	try {
 		if (reparentDrag && id) {
 			// 1. Hitta vilket fönster (eller root) som ligger under muspekaren [1.10]
-			const targetId = findDropParent(
-				event.clientX,
-				event.clientY,
-				id,
-			);
+			const targetId = findDropParent(event.clientX, event.clientY, id);
 
 			// 2. Hämta fönstrets exakta position på skärmen precis när vi släpper musen [1.10]
 			const rect = frameEl?.getBoundingClientRect();
-
+			// console.log("frame  ", reparentDrag, wManager.find(targetId)?.title);
 			if (rect) {
 				// 3. Vi skickar ALLTID med skärmkoordinaterna!
 				// Managern tar hand om att räkna om dem rätt oavsett drop-mål.
@@ -468,7 +456,6 @@ function onMouseMove(event: MouseEvent) {
 			nextTop = startTop + startHeight - nextHeight;
 		}
 	}
-
 	// Clamp endast vid vanlig dragning och resize.
 	// Shift + drag får röra sig fritt utanför bounds.
 	if (dragMode !== "move" || !reparentDrag) {

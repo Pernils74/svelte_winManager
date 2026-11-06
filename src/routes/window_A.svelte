@@ -27,8 +27,8 @@ function spawnReactive() {
 	// Om wManager.open stöder generiska typer (kika i ditt fönster-bibliotek)
 	win_B = wManager.open(Window_B, {
 		title: "🔗 Window_B (Props)",
-		width: 550,
-		height: 600,
+		width: 600,
+		height: 850,
 		top: 300,
 		left: 650,
 		props: { // <--- Ta bort <WindowBProps> härifrån

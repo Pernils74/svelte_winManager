@@ -118,8 +118,11 @@ $effect(() => {
 
 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
 			const winInstance = wManager.find(targetWinId);
+			// om den inte finns gör en ny
 			if (!winInstance) {
 				const newWinInstance: WindowInstance = {
+					wManagerId: standaloneManagerId ?? wManager.wManagerId,
+
 					winId: targetWinId,
 					title,
 					componentKey,
@@ -161,7 +164,9 @@ $effect(() => {
 
 			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
 			// Denna ersätter din gamla `wManager.backend.onMessage`
-			unsubscribe = wManager.setupStandaloneSync(targetWinId);
+			// unsubscribe = wManager.setupStandaloneSync(targetWinId);
+
+			unsubscribe = wManager.sync.attachWindow(wManager.find(targetWinId)!, wManager);
 
 			publishStandaloneStateUpdate({
 				width: window.innerWidth,
@@ -279,12 +284,6 @@ function publishStandaloneStateUpdate(
 			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
 			{@const parentInstance = wManager.find(win.parentId)}
 
-<!-- {@const x = console.log(
-	"RENDER",
-	win.winId,
-	win.title,
-	win.viewPort.type
-)} -->
 
 			<WindowFrame
 				{win}

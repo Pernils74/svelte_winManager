@@ -559,7 +559,7 @@ export class WindowSync {
 		});
 	}
 
-	attachWindow(
+	attachWindow_old(
 		win: WindowInstance,
 		manager: WindowManager,
 	): void {
@@ -581,6 +581,34 @@ export class WindowSync {
 				);
 			},
 		);
+	}
+
+	attachWindow(
+		win: WindowInstance,
+		manager: WindowManager,
+	): () => void {
+		this.start(
+			win.winId,
+			() => ({
+				props: $state.snapshot(win.props),
+			}),
+			(state) => {
+				manager.updateProps(
+					state.props ?? {},
+					win,
+				);
+			},
+			(updates) => {
+				manager.updateState(
+					win.winId,
+					updates,
+				);
+			},
+		);
+
+		return () => {
+			this.stop(win.winId);
+		};
 	}
 
 	// ----------------------------------------------

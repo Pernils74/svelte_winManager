@@ -434,9 +434,11 @@ export class WindowManager {
 
 		const parent = this.find(newParentId) ??
 			this.find(ROOT_WIN_ID);
+		console.log("[wmanger-reparent]", win?.title, parent?.title);
 
 		if (!win || !parent) return false;
 		if (id === ROOT_WIN_ID) return false;
+
 		if (
 			id === newParentId ||
 			this.getDescendants(id).some(
@@ -622,7 +624,7 @@ export class WindowManager {
 		win: WindowInstance,
 		updates: Partial<WindowState>,
 	): void {
-		if (win.viewPort.type === "workspace") return;
+		if (win.wManagerId != this.wManagerId) return;
 
 		void this.sendWindowStateUpdate(
 			win.winId,
@@ -829,52 +831,20 @@ export class WindowManager {
 		);
 
 		for (const other of siblings) {
-			if (
-				other.winId === win.winId ||
-				other.state.isMinimized
-			) {
-				continue;
-			}
-
+			if (other.winId === win.winId || other.state.isMinimized) continue;
 			const b = other.state;
-
-			const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
-				a.top + a.height > b.top + MAXIMIZE_EPSILON;
-
-			const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
-				a.left + a.width > b.left + MAXIMIZE_EPSILON;
-
-			if (
-				overlapsY &&
-				Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON
-			) {
-				maxLeft = Math.max(
-					maxLeft,
-					b.left + b.width,
-				);
+			const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON && a.top + a.height > b.top + MAXIMIZE_EPSILON;
+			const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON && a.left + a.width > b.left + MAXIMIZE_EPSILON;
+			if (overlapsY && Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON) {
+				maxLeft = Math.max(maxLeft, b.left + b.width);
 			}
-
-			if (
-				overlapsY &&
-				Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON
-			) {
+			if (overlapsY && Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON) {
 				maxRight = Math.min(maxRight, b.left);
 			}
-
-			if (
-				overlapsX &&
-				Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON
-			) {
-				maxTop = Math.max(
-					maxTop,
-					b.top + b.height,
-				);
+			if (overlapsX && Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON) {
+				maxTop = Math.max(maxTop, b.top + b.height);
 			}
-
-			if (
-				overlapsX &&
-				Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON
-			) {
+			if (overlapsX && Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON) {
 				maxBottom = Math.min(maxBottom, b.top);
 			}
 		}
@@ -943,8 +913,11 @@ export class WindowManager {
 			top: win.state.top,
 		};
 
-		await this.sync.open(descriptor, target);
+		// detta för att förhindra att den renderas i nuvarande wManager.
+		win.wManagerId = detachedManagerId;
 
+		await this.sync.open(descriptor, target);
+		// this.setupStandaloneSync(win.winId);
 		this.sync.attachWindow(win, this);
 	}
 
@@ -984,7 +957,8 @@ export class WindowManager {
 	async closeDetached(id: WindowId): Promise<void> {
 		const win = this.find(id);
 
-		if (!win || win.viewPort.type === "workspace") {
+		// if (!win || win.viewPort.type === "workspace") {
+		if (!win || win.wManagerId == this.wManagerId) {
 			return;
 		}
 
@@ -1006,10 +980,8 @@ export class WindowManager {
 
 			this.sync.stop(id);
 
-			if (
-				child &&
-				child.viewPort.type !== "workspace"
-			) {
+			// if (child && child.viewPort.type !== "workspace") {
+			if (child) {
 				void this.backend.close(id).catch((error) => {
 					console.error(
 						`[WindowManager] Kunde inte stänga fönster ${id}:`,
