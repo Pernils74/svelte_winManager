@@ -632,16 +632,13 @@ export class WindowManager {
 		updates: Partial<WindowState>,
 	): void {
 		const win = this.find(id);
-
 		if (!win) return;
 
 		if (win.winId === ROOT_WIN_ID) {
 			Object.assign(win.state, updates);
 			return;
 		}
-
 		Object.assign(win.state, updates);
-
 		this.publishDetachedStateUpdate(win, updates);
 	}
 
@@ -1066,7 +1063,7 @@ export class WindowManager {
 			(updates) => {
 				this.updateState(winId, updates);
 			},
-			rpc,
+			// rpc,
 		);
 		return () => {
 			this.sync.stop(winId);
