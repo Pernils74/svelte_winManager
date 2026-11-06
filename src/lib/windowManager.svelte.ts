@@ -369,10 +369,69 @@ export class WindowManager {
 				renderBusy: false,
 			},
 		});
-
 		this.windows.push(win);
-
 		return win;
+	}
+
+	// --------------------------------------------------
+	// DETACH
+	// --------------------------------------------------
+
+	async detachWindow(
+		win: WindowInstance,
+		target: Exclude<WindowViewPortType, "workspace">,
+	): Promise<void> {
+		if (!win) {
+			throw new Error("Window hittades inte.");
+		}
+
+		const children = this.getChildren(win.winId);
+		for (const child of children) {
+			if (child.wManagerId != this.wManagerId) continue;
+			this.reparent(
+				child.winId,
+				ROOT_WIN_ID,
+				{
+					left: child.state.left + win.state.left,
+					top: child.state.top + win.state.top,
+					width: child.state.width,
+					height: child.state.height,
+				},
+			);
+		}
+
+		const detachedManagerId = crypto.randomUUID();
+
+		const descriptor: ExternalWindowDescriptor = {
+			wManagerId: detachedManagerId,
+			winId: win.winId,
+
+			title: win.title,
+			componentKey: win.componentKey,
+
+			// parentId: win.parentId,
+			parentId: null, // detached window blir root i nya runtime
+			props: $state.snapshot(win.props),
+
+			width: win.state.width,
+			height: win.state.height,
+
+			left: win.state.left,
+			top: win.state.top,
+		};
+
+		// detta för att förhindra att den renderas i nuvarande wManager.
+		// Dvs kommer vara ett ghost fönster
+		win.wManagerId = detachedManagerId;
+		await this.sync.open(descriptor, target);
+		// this.setupStandaloneSync(win.winId);
+
+		// 🌟 JACKA IN LYSSNAREN DIREKT HÄR:
+		// Detta gör att fönstret omedelbart börjar lyssna på globala props,
+		// state-uppdateringar och RPC-callbacks oavsett var det renderas.
+		if (win.winId !== ROOT_WIN_ID) {
+			this.sync.startToMonitor(win, this);
+		}
 	}
 
 	// --------------------------------------------------
@@ -754,12 +813,7 @@ export class WindowManager {
 					Math.abs(b.left + b.width - old.left) <= EPSILON
 				) {
 					const delta = next.left - old.left;
-
-					const allowed = Math.max(
-						delta,
-						MIN_WIDTH - b.width,
-					);
-
+					const allowed = Math.max(delta, MIN_WIDTH - b.width);
 					next.left = old.left + allowed;
 					next.width = old.width - allowed;
 
@@ -768,16 +822,9 @@ export class WindowManager {
 					mode.includes("right") &&
 					Math.abs(b.left - (old.left + old.width)) <= EPSILON
 				) {
-					const delta = next.left + next.width -
-						(old.left + old.width);
-
-					const allowed = Math.min(
-						delta,
-						b.width - MIN_WIDTH,
-					);
-
+					const delta = next.left + next.width - (old.left + old.width);
+					const allowed = Math.min(delta, b.width - MIN_WIDTH);
 					next.width = old.width + allowed;
-
 					other.state.left = b.left + allowed;
 					other.state.width = b.width - allowed;
 				}
@@ -793,27 +840,17 @@ export class WindowManager {
 					Math.abs(b.top + b.height - old.top) <= EPSILON
 				) {
 					const delta = next.top - old.top;
-
 					const allowed = Math.max(
 						delta,
 						MIN_HEIGHT - b.height,
 					);
-
 					next.top = old.top + allowed;
 					next.height = old.height - allowed;
 
 					other.state.height = b.height + allowed;
-				} else if (
-					mode.includes("bottom") &&
-					Math.abs(b.top - (old.top + old.height)) <= EPSILON
-				) {
-					const delta = next.top + next.height -
-						(old.top + old.height);
-
-					const allowed = Math.min(
-						delta,
-						b.height - MIN_HEIGHT,
-					);
+				} else if (mode.includes("bottom") && Math.abs(b.top - (old.top + old.height)) <= EPSILON) {
+					const delta = next.top + next.height - (old.top + old.height);
+					const allowed = Math.min(delta, b.height - MIN_HEIGHT);
 
 					next.height = old.height + allowed;
 
@@ -852,17 +889,12 @@ export class WindowManager {
 
 			return;
 		}
-
 		win.storedState = rectOf(win);
-
 		let maxLeft = 0;
 		let maxTop = 0;
-
 		let maxRight = bounds.clientWidth;
 		let maxBottom = bounds.clientHeight;
-
 		const a = win.state;
-
 		const siblings = this.getChildren(
 			win.parentId ?? ROOT_WIN_ID,
 		);
@@ -903,62 +935,6 @@ export class WindowManager {
 			isMaximized: true,
 		});
 	}
-
-	// --------------------------------------------------
-	// DETACH
-	// --------------------------------------------------
-
-	async detachWindow(
-		win: WindowInstance,
-		target: Exclude<WindowViewPortType, "workspace">,
-	): Promise<void> {
-		if (!win) {
-			throw new Error("Window hittades inte.");
-		}
-
-		const children = this.getChildren(win.winId);
-		for (const child of children) {
-			if (child.wManagerId != this.wManagerId) continue;
-			this.reparent(
-				child.winId,
-				ROOT_WIN_ID,
-				{
-					left: child.state.left + win.state.left,
-					top: child.state.top + win.state.top,
-					width: child.state.width,
-					height: child.state.height,
-				},
-			);
-		}
-
-		const detachedManagerId = crypto.randomUUID();
-
-		const descriptor: ExternalWindowDescriptor = {
-			wManagerId: detachedManagerId,
-			winId: win.winId,
-
-			title: win.title,
-			componentKey: win.componentKey,
-
-			// parentId: win.parentId,
-			parentId: null, // detached window blir root i nya runtime
-			props: $state.snapshot(win.props),
-
-			width: win.state.width,
-			height: win.state.height,
-
-			left: win.state.left,
-			top: win.state.top,
-		};
-
-		// detta för att förhindra att den renderas i nuvarande wManager.
-		win.wManagerId = detachedManagerId;
-
-		await this.sync.open(descriptor, target);
-		// this.setupStandaloneSync(win.winId);
-		this.sync.attachWindow(win, this);
-	}
-
 	// --------------------------------------------------
 	// DETACHED SYNC
 	// --------------------------------------------------
@@ -1032,6 +1008,7 @@ export class WindowManager {
 		this.windows = this.windows.filter(
 			(item) => !ids.has(item.winId),
 		);
+		this.sync.stop(win.winId);
 	}
 
 	// --------------------------------------------------

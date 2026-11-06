@@ -565,7 +565,7 @@ export class WindowSync {
 		});
 	}
 
-	attachWindow(
+	startToMonitor(
 		win: WindowInstance,
 		manager: WindowManager,
 	): () => void {

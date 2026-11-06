@@ -603,27 +603,27 @@ function shouldBroadcast(win: WindowInstance): boolean {
 }
 
 // Här reagerar vi på ändringar i props och gör om funktioner till RPC-strängar
-$effect(() => {
-	const props = $state.snapshot(win.props);
-	if (shouldBroadcast(win)) {
-		// 🌟 Ta en rå kopia av props
-		// console.log("skickar syn")
-		void wManager.sync.send(win.winId, {
-			props: props,
-		});
-	}
-});
+// $effect(() => {
+// 	const props = $state.snapshot(win.props);
+// 	if (shouldBroadcast(win)) {
+// 		// 🌟 Ta en rå kopia av props
+// 		// console.log("skickar syn")
+// 		void wManager.sync.send(win.winId, {
+// 			props: props,
+// 		});
+// 	}
+// });
 
 // för tillfällig debugg
-$effect(() => {
-	const props = $state.snapshot(win.props);
-	// console.log(
-	// 	`[OBSERVE] ${win.winId}`,
-	// 	structuredClone(props),
-	// );
+// $effect(() => {
+// 	const props = $state.snapshot(win.props);
+// 	// console.log(
+// 	// 	`[OBSERVE] ${win.winId}`,
+// 	// 	structuredClone(props),
+// 	// );
 
-	// wManager.debugBroadcast(win.winId, props);
-});
+// 	// wManager.debugBroadcast(win.winId, props);
+// });
 </script>
 
 <div
