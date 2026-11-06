@@ -21,7 +21,7 @@ let message = $state("Hello from A");
 let win_B = $state<WindowInstance | null>(null);
 
 const shared = $state({
-	msg2: "Hello from A",
+	msg2: "Hello from A shared.msg2",
 	counter: 0,
 });
 
@@ -41,7 +41,7 @@ function spawnReactive() {
 	});
 }
 onMount(() => {
-	// spawnReactive();
+	spawnReactive();
 });
 
 // Uppdatera props i det öppnade fönstret
@@ -76,12 +76,13 @@ $effect(() => {
 	<p>
 		wManagerId: <strong>{win.wManagerId ?? "root"}</strong>
 	</p>
-
+	envägs	
 	<input
 		type="text"
 		bind:value={message}
 		placeholder="Type text..."
 	/>
+	2 vägs
 	<input
 		type="text"
 		bind:value={shared.msg2}

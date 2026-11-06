@@ -6,7 +6,7 @@ import type {
 	WindowTransportPacket,
 } from "./windowBackend";
 
-import type { WindowId, WindowState } from "./windowManager.svelte";
+import type { WindowId, WindowInstance, WindowManager, WindowState } from "./windowManager.svelte";
 import { createRpcTransport, WindowRpc } from "./windowRpc";
 
 // --------------------------------------------------

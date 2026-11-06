@@ -221,6 +221,10 @@ export class WindowManager {
 		void this.sync.send(winId, { props });
 	}
 
+	findAll(winId: WindowId): WindowInstance[] {
+		return this.windows.filter((win) => win.winId === winId);
+	}
+
 	find(id: WindowId | null | undefined): WindowInstance | undefined {
 		if (!id) return undefined;
 
@@ -503,11 +507,36 @@ export class WindowManager {
 		props: Partial<TProps>,
 		win?: WindowInstance<TProps>,
 	): void {
-		if (win) {
-			console.log("[UPDATE PROPS]", win.winId, props);
+		console.log("updateprops");
+		const targets = win
+			? win.parentId === null ? [win] : this.windows.filter((current) =>
+				current.parentId === win.parentId &&
+				current.wManagerId === this.wManagerId &&
+				current.componentKey === win.componentKey
+			)
+			: this.windows.filter((current) =>
+				Object.keys(props).some(
+					(key) => key in current.props,
+				)
+			);
 
-			Object.assign(win.props, props);
-			this.publishDetachedProps(win);
+		for (const current of targets) {
+			Object.assign(current.props, props);
+			this.publishDetachedProps(current);
+		}
+	}
+
+	updateProps_old<TProps extends Record<string, unknown>>(
+		props: Partial<TProps>,
+		win?: WindowInstance<TProps>,
+	): void {
+		if (win) {
+			// Hämtar alla med samma parentId i aktuell js wManger runtime
+			const targets = win.parentId ? this.windows.filter((current) => current.parentId === win.parentId) : [win];
+			for (const current of targets) {
+				Object.assign(current.props, props);
+				this.publishDetachedProps(current);
+			}
 			return;
 		}
 		const keys = Object.keys(props);
@@ -911,7 +940,8 @@ export class WindowManager {
 			title: win.title,
 			componentKey: win.componentKey,
 
-			parentId: win.parentId,
+			// parentId: win.parentId,
+			parentId: null, // detached window blir root i nya runtime
 			props: $state.snapshot(win.props),
 
 			width: win.state.width,

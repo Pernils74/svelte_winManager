@@ -85,7 +85,7 @@ function detachToWindow() {
 		<code>{String(win.props.msg ?? "")}</code>
 	</p>
 
-
+	envägs 
 	<input
 		type="text"
 		value={String(win.props.msg ?? "")}
@@ -94,10 +94,10 @@ function detachToWindow() {
 		placeholder="Update prop from Window B..."
 	/>
 
-
+    2 vägs
 	<input
 		type="text"
-		bind:value={win.props.msg2}
+		bind:value={win.props.shared.msg2}
 		placeholder="Type text..."
 	/>
 

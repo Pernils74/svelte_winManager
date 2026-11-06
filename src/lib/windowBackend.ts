@@ -1,5 +1,11 @@
 // src/lib/windowBackend.ts
 
+// winId identifierar en specifik fönsterinstans.
+
+// parentId identifierar gruppen/sammanhanget som ska få samma props.
+
+// wManagerId identifierar vilken runtime som äger instanserna.
+
 import type { WindowId, WindowState } from "./windowManager.svelte";
 
 import type { WindowTarget } from "./windowSync.svelte";
