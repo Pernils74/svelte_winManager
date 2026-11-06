@@ -20,12 +20,7 @@ Framtida transport?
     -> annat backend -->
 
 
-<!-- https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts
-
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.ts
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
+<!-- 
 
 
 
@@ -33,7 +28,7 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/WindowFrame.
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowManager.svelte.ts
 
-https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRegistry.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowComponentRegistry.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowBackend.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowSync.svelte.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRpc.ts
@@ -43,12 +38,9 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/+page.sve
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_B.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_A.svelte
 
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/window_C.svelte
 
 
-https://github.com/Pernils74/svelte_winManager/blob/dev/README.md
-
-https://github.com/Pernils74/svelte_winManager/blob/main/src/lib/Wallpaper.svelte -->
+-->
 
 
 

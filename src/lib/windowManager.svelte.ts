@@ -163,7 +163,7 @@ function overlaps(
 
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
-	readonly wMangerId = crypto.randomUUID();
+	readonly wManagerId = crypto.randomUUID();
 	private zCounter = 1;
 	public readonly backend: WindowBackend;
 	public readonly sync: WindowSync;
@@ -176,7 +176,7 @@ export class WindowManager {
 		// this.register=
 
 		this.windows.push({
-			wMangerId: this.wMangerId,
+			wManagerId: this.wManagerId,
 			winId: ROOT_WIN_ID,
 			title: "Root Workspace",
 			thumbnail: null,
@@ -943,7 +943,7 @@ export class WindowManager {
 		const detachedManagerId = crypto.randomUUID();
 
 		const descriptor: ExternalWindowDescriptor = {
-			wMangerId: detachedManagerId,
+			wManagerId: detachedManagerId,
 			winId: win.winId,
 
 			title: win.title,

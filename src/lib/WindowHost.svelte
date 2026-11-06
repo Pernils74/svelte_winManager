@@ -314,7 +314,7 @@ function publishStandaloneStateUpdate(
 				/>
 
 				{#each wManager.getChildren(win.winId) as child (child.winId)}
-					{#if !child.state.isMinimized && child.viewPort.type == "workspace"}
+					{#if !child.state.isMinimized && win.wManagerId === wManager.wManagerId}
 						{@render renderWindow(child)}  // Anropar sig själv rekursivt
 					{:else}
 						{console.log(`Child window ${child.winId} is minimized or detached, skipping render.`)}

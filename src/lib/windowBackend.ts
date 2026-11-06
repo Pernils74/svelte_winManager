@@ -54,7 +54,7 @@ export type WindowViewPortType =
 	| "tauri-window";
 
 export interface ExternalWindowDescriptor {
-	wMangerId: string;
+	wManagerId: string;
 	winId: string;
 	title: string;
 	componentKey: string;
@@ -121,6 +121,7 @@ const TAURI_EVENT_PREFIX = "svelte-winmanager:";
 
 interface WindowRegistryEntry {
 	winId: WindowId;
+	wMangerId: string;
 	parentId: WindowId | null;
 	wManagerId: string;
 	componentKey: string;
@@ -429,34 +430,24 @@ export class WindowBackendManager implements WindowBackend {
 		this.assertAlive();
 
 		if (!descriptor.winId) {
-			throw new Error(
-				"winId saknas.",
-			);
+			throw new Error("winId saknas.");
 		}
 
 		if (!descriptor.componentKey) {
-			throw new Error(
-				"componentKey saknas.",
-			);
+			throw new Error("componentKey saknas.");
 		}
 
 		switch (target) {
 			case "browser-tab":
-				this.openBrowserTab(
-					descriptor,
-				);
+				this.openBrowserTab(descriptor);
 				return;
 
 			case "browser-window":
-				this.openBrowserWindow(
-					descriptor,
-				);
+				this.openBrowserWindow(descriptor);
 				return;
 
 			case "tauri-window":
-				await this.openTauriWindow(
-					descriptor,
-				);
+				await this.openTauriWindow(descriptor);
 				return;
 
 			case "workspace":
@@ -473,7 +464,7 @@ export class WindowBackendManager implements WindowBackend {
 		url.searchParams.set("winId", descriptor.winId);
 		url.searchParams.set("componentKey", descriptor.componentKey);
 		url.searchParams.set("title", descriptor.title);
-		url.searchParams.set("wMangerId", descriptor.wMangerId);
+		url.searchParams.set("wManagerId", descriptor.wManagerId);
 
 		if (descriptor.parentId) {
 			url.searchParams.set("parentId", descriptor.parentId);
@@ -574,6 +565,7 @@ export class WindowBackendManager implements WindowBackend {
 		) as TauriWebviewWindowApi;
 
 		const {
+			wManagerId,
 			winId,
 			title,
 			componentKey,
@@ -587,6 +579,7 @@ export class WindowBackendManager implements WindowBackend {
 			winId,
 			componentKey,
 			title,
+			wManagerId,
 		});
 
 		if (descriptor.parentId) {
