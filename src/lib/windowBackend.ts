@@ -54,11 +54,11 @@ export type WindowViewPortType =
 	| "tauri-window";
 
 export interface ExternalWindowDescriptor {
+	wMangerId: string;
 	winId: string;
 	title: string;
 	componentKey: string;
 	parentId?: WindowId | null;
-	wMangerId: string;
 
 	props: Record<string, unknown>;
 	width?: number;

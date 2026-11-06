@@ -590,6 +590,30 @@ export class WindowSync {
 		});
 	}
 
+	attachWindow(
+		win: WindowInstance,
+		manager: WindowManager,
+	): void {
+		this.start(
+			win.winId,
+			() => ({
+				props: $state.snapshot(win.props),
+			}),
+			(state) => {
+				manager.updateProps(
+					state.props ?? {},
+					win,
+				);
+			},
+			(updates) => {
+				manager.updateState(
+					win.winId,
+					updates,
+				);
+			},
+		);
+	}
+
 	// ----------------------------------------------
 	// SEND STATE UPDATE
 	// ----------------------------------------------

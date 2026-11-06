@@ -913,47 +913,6 @@ export class WindowManager {
 	}
 
 	// --------------------------------------------------
-	// DETACHED SYNC
-	// --------------------------------------------------
-
-	setupStandaloneSync(winId: WindowId) {
-		const win = this.find(winId);
-		if (!win) return;
-
-		// 1. Skapa transport och RPC-instans för Slav-fönstret
-		// const transport = createRpcTransport(this.backend);
-		// const rpc = new WindowRpc(transport, winId);
-
-		this.sync.start(
-			winId,
-			() => {
-				const win = this.find(winId);
-				if (!win) {
-					return { props: {} };
-				}
-				return {
-					props: $state.snapshot(win.props),
-				};
-			},
-			(state: DetachedWindowState) => {
-				const win = this.find(winId);
-				if (!win) return;
-				this.updateProps(
-					state.props ?? {},
-					win,
-				);
-			},
-			(updates) => {
-				this.updateState(winId, updates);
-			},
-			// rpc,
-		);
-		return () => {
-			this.sync.stop(winId);
-		};
-	}
-
-	// --------------------------------------------------
 	// DETACH
 	// --------------------------------------------------
 
@@ -981,8 +940,10 @@ export class WindowManager {
 			);
 		}
 
+		const detachedManagerId = crypto.randomUUID();
+
 		const descriptor: ExternalWindowDescriptor = {
-			wMangerId: win.wManagerId,
+			wMangerId: detachedManagerId,
 			winId: win.winId,
 
 			title: win.title,
@@ -997,13 +958,40 @@ export class WindowManager {
 			left: win.state.left,
 			top: win.state.top,
 		};
+
 		await this.sync.open(descriptor, target);
-		win.viewPort = {
-			id: win.winId,
-			type: target,
-		};
-		this.setupStandaloneSync(win.winId);
+
+		this.sync.attachWindow(win, this);
 	}
+
+	// --------------------------------------------------
+	// DETACHED SYNC
+	// --------------------------------------------------
+
+	// setupStandaloneSync(win: WindowInstance) {
+	// 	this.sync.start(
+	// 		win.winId,
+	// 		() => ({
+	// 			props: $state.snapshot(win.props),
+	// 		}),
+	// 		(state: DetachedWindowState) => {
+	// 			this.updateProps(
+	// 				state.props ?? {},
+	// 				win,
+	// 			);
+	// 		},
+	// 		(updates) => {
+	// 			this.updateState(
+	// 				win.winId,
+	// 				updates,
+	// 			);
+	// 		},
+	// 	);
+
+	// 	return () => {
+	// 		this.sync.stop(win.winId);
+	// 	};
+	// }
 
 	// --------------------------------------------------
 	// CLOSE
