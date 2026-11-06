@@ -581,7 +581,7 @@ function shouldBroadcast(win: WindowInstance): boolean {
 	const parent = win.parentId ? wManager.find(win.parentId) : null;
 
 	console.log(
-		"[BROADCAST CHECK]",
+		"[BROADCAST CHECKK]",
 		win.title,
 		"parent",
 		win.parentId,
