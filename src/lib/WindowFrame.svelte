@@ -30,16 +30,6 @@
 //  ├─ colors
 //  └─ layout
 
-// $effect(() => {
-//     if (!shouldBroadcast(win)) return;
-
-//     const props = $state.snapshot(win.props);
-
-//     wManager.sync.send(win.winId, {
-//         props
-//     });
-// });
-
 import { onDestroy, onMount, type Snippet } from "svelte";
 import { tick } from "svelte";
 
@@ -601,34 +591,17 @@ function close() {
 
 function shouldBroadcast(win: WindowInstance): boolean {
 	const parent = win.parentId ? wManager.find(win.parentId) : null;
-
-	return (
-		win.viewPort.type !== "workspace" ||
-		parent?.viewPort.type !== "workspace"
-	);
+	if (!parent) {
+		return false;
+	}
+	return (parent.wManagerId !== win.wManagerId);
 }
-
-/**
- * Går igenom props djupt. Om den hittar en funktion (callback),
- * registrerar den funktionen i RPC-registret och byter ut den
- * mot en speciell sträng-markör för nätverket.
- */
-
-// function stripFunctions(obj: any): any {
-// 	return JSON.parse(JSON.stringify(obj, (key, value) => {
-// 		if (typeof value === "function") {
-// 			return undefined; // Ta bort funktionen helt från nätverkspaketet!
-// 		}
-// 		return value;
-// 	}));
-// }
 
 // Här reagerar vi på ändringar i props och gör om funktioner till RPC-strängar
 $effect(() => {
 	if (shouldBroadcast(win)) {
 		// 🌟 Ta en rå kopia av props
 		const props = $state.snapshot(win.props);
-
 		void wManager.sync.send(win.winId, {
 			props: props,
 		});

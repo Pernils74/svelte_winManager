@@ -58,6 +58,7 @@ export interface ExternalWindowDescriptor {
 	title: string;
 	componentKey: string;
 	parentId?: WindowId | null;
+	wMangerId: string;
 
 	props: Record<string, unknown>;
 	width?: number;
@@ -472,11 +473,10 @@ export class WindowBackendManager implements WindowBackend {
 		url.searchParams.set("winId", descriptor.winId);
 		url.searchParams.set("componentKey", descriptor.componentKey);
 		url.searchParams.set("title", descriptor.title);
+		url.searchParams.set("wMangerId", descriptor.wMangerId);
+
 		if (descriptor.parentId) {
-			url.searchParams.set(
-				"parentId",
-				descriptor.parentId,
-			);
+			url.searchParams.set("parentId", descriptor.parentId);
 		}
 		return url;
 	}
@@ -484,15 +484,10 @@ export class WindowBackendManager implements WindowBackend {
 	private saveInitialState(
 		descriptor: ExternalWindowDescriptor,
 	): void {
-		const state: DetachedWindowState = {
-			props: descriptor.props ?? {},
-		};
-
+		const state: DetachedWindowState = { props: descriptor.props ?? {} };
 		try {
 			localStorage.setItem(
-				initStorageKey(
-					descriptor.winId,
-				),
+				initStorageKey(descriptor.winId),
 				JSON.stringify(state),
 			);
 		} catch (error) {

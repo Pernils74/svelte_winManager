@@ -87,6 +87,7 @@ interface WindowViewPort {
 export interface WindowInstance<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
 > {
+	wManagerId: string;
 	winId: WindowId;
 
 	title: string;
@@ -162,6 +163,7 @@ function overlaps(
 
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
+	readonly wMangerId = crypto.randomUUID();
 	private zCounter = 1;
 	public readonly backend: WindowBackend;
 	public readonly sync: WindowSync;
@@ -174,6 +176,7 @@ export class WindowManager {
 		// this.register=
 
 		this.windows.push({
+			wMangerId: this.wMangerId,
 			winId: ROOT_WIN_ID,
 			title: "Root Workspace",
 			thumbnail: null,
@@ -319,21 +322,14 @@ export class WindowManager {
 				return existing as WindowInstance<TProps>;
 			}
 		}
-
-		const parent = this.find(options.parentId ?? ROOT_WIN_ID) ??
-			this.find(ROOT_WIN_ID)!;
+		const parent = this.find(options.parentId ?? ROOT_WIN_ID) ?? this.find(ROOT_WIN_ID)!;
 
 		const parentId = parent.winId;
-
 		const tileOffset = options.tileOffset ?? 20;
-
 		const siblingCount = this.getChildren(parentId).length;
-
 		const currentOffset = siblingCount * tileOffset;
-
 		const compKey = options.componentKey ??
 			getComponentKey(component);
-
 		if (!compKey) {
 			throw new Error(
 				`Komponenten "${
@@ -341,7 +337,6 @@ export class WindowManager {
 				}" är inte registrerad. Ange componentKey eller registrera komponenten först.`,
 			);
 		}
-
 		const geometry = this.fitToParent(parent, {
 			left: options.left ?? currentOffset,
 			top: options.top ?? currentOffset,
@@ -350,6 +345,7 @@ export class WindowManager {
 		});
 
 		const win = $state<WindowInstance<TProps>>({
+			wManagerId: this.wMangerId,
 			winId: options.winId ?? crypto.randomUUID(),
 			title: options.title ?? component.name ?? "Window",
 			thumbnail: null,
@@ -394,28 +390,14 @@ export class WindowManager {
 	// DUPLICATE
 	// --------------------------------------------------
 
-	duplicateWindow(
-		source: WindowInstance,
-		offset = 24,
-		parentId?: WindowId,
-	): WindowInstance | undefined {
-		if (
-			source.winId === ROOT_WIN_ID ||
-			!source.component
-		) {
-			return undefined;
-		}
+	duplicateWindow(source: WindowInstance, offset = 24, parentId?: WindowId): WindowInstance | undefined {
+		if (source.winId === ROOT_WIN_ID || !source.component) return undefined;
 
 		const copy = this.open(source.component, {
 			title: `${source.title} (copy)`,
-
 			parentId: parentId ?? source.parentId,
-
 			componentKey: source.componentKey,
-
-			props: structuredClone(
-				$state.snapshot(source.props),
-			),
+			props: structuredClone($state.snapshot(source.props)),
 
 			left: source.state.left + offset,
 			top: source.state.top + offset,
@@ -424,7 +406,6 @@ export class WindowManager {
 			height: source.state.height,
 
 			transparency: source.state.transparency,
-
 			showButtons: source.showButtons,
 
 			titlebar: source.titlebar,
@@ -446,37 +427,17 @@ export class WindowManager {
 		rect: Partial<WindowRect>,
 	): WindowRect {
 		const bounds = parent.boundingEl;
-
 		const parentWidth = bounds?.clientWidth ?? parent.state.width;
-
 		const parentHeight = bounds?.clientHeight ?? parent.state.height;
-
 		const width = Math.min(
 			rect.width ?? 400,
 			parentWidth,
 		);
+		const height = Math.min(rect.height ?? 300, parentHeight);
+		const left = Math.max(0, Math.min(rect.left ?? 0, parentWidth - width));
+		const top = Math.max(0, Math.min(rect.top ?? 0, parentHeight - height));
 
-		const height = Math.min(
-			rect.height ?? 300,
-			parentHeight,
-		);
-
-		const left = Math.max(
-			0,
-			Math.min(rect.left ?? 0, parentWidth - width),
-		);
-
-		const top = Math.max(
-			0,
-			Math.min(rect.top ?? 0, parentHeight - height),
-		);
-
-		return {
-			left,
-			top,
-			width,
-			height,
-		};
+		return { left, top, width, height };
 	}
 
 	reparent(
@@ -490,9 +451,7 @@ export class WindowManager {
 			this.find(ROOT_WIN_ID);
 
 		if (!win || !parent) return false;
-
 		if (id === ROOT_WIN_ID) return false;
-
 		if (
 			id === newParentId ||
 			this.getDescendants(id).some(
@@ -503,11 +462,8 @@ export class WindowManager {
 		}
 
 		const bounds = parent.boundingEl;
-
 		if (!bounds) return false;
-
 		const parentRect = bounds.getBoundingClientRect();
-
 		const localRect = {
 			left: screenRect.left -
 				parentRect.left +
@@ -522,9 +478,7 @@ export class WindowManager {
 		};
 
 		const geometry = this.fitToParent(parent, localRect);
-
 		win.parentId = parent.winId;
-
 		win.boundingEl = null;
 
 		Object.assign(win.state, geometry, {
@@ -572,42 +526,6 @@ export class WindowManager {
 		}
 	}
 
-	// updatePayload<TPayload>(id: WindowId, payload: TPayload): void {
-	// 	const win = this.find(id);
-	// 	if (!win) return;
-
-	// 	// 🟢 Skydd mot eviga loopar: Jämför strängifierad data
-	// 	const oldPayloadStr = JSON.stringify($state.snapshot(win.payload));
-	// 	const newPayloadStr = JSON.stringify(payload);
-
-	// 	if (oldPayloadStr !== newPayloadStr) {
-	// 		// Om det är ett existerande reaktivt objekt vill vi helst inte skriva över
-	// 		// referensen helt om det går, men för enkelhetens skull skriver vi över
-	// 		// eller mergar fält för fält för att behålla reaktivitet:
-	// 		if (
-	// 			win.payload && typeof win.payload === "object" &&
-	// 			typeof payload === "object"
-	// 		) {
-	// 			Object.assign(win.payload, payload);
-	// 		} else {
-	// 			win.payload = payload;
-	// 		}
-	// 	}
-	// }
-
-	updatePropsByKey(
-		key: string,
-		props: Record<string, unknown>,
-	): void {
-		for (const win of this.windows) {
-			if (win.componentKey !== key) continue;
-
-			Object.assign(win.props, props);
-
-			this.publishDetachedProps(win);
-		}
-	}
-
 	private publishDetachedProps(win: WindowInstance): void {
 		if (win.viewPort.type === "workspace") return;
 		void this.sync.send(
@@ -647,16 +565,13 @@ export class WindowManager {
 		updates: Partial<WindowMetrics>,
 	): void {
 		if (win.winId === ROOT_WIN_ID) return;
-
 		Object.assign(win.metrics, updates);
 	}
 
 	updateAll(updates: Partial<WindowState>): void {
 		for (const win of this.windows) {
 			if (win.winId === ROOT_WIN_ID) continue;
-
 			Object.assign(win.state, updates);
-
 			this.publishDetachedStateUpdate(win, updates);
 		}
 	}
@@ -675,31 +590,6 @@ export class WindowManager {
 	}
 
 	// --------------------------------------------------
-	// VIEWPORT
-	// --------------------------------------------------
-
-	isWindowOrParentDetached(id: WindowId): boolean {
-		const win = this.find(id);
-
-		if (!win || win.winId === ROOT_WIN_ID) {
-			return false;
-		}
-
-		if (win.viewPort.type !== "workspace") {
-			return true;
-		}
-
-		if (
-			win.parentId &&
-			win.parentId !== ROOT_WIN_ID
-		) {
-			return this.isWindowOrParentDetached(win.parentId);
-		}
-
-		return false;
-	}
-
-	// --------------------------------------------------
 	// FOCUS
 	// --------------------------------------------------
 
@@ -714,16 +604,9 @@ export class WindowManager {
 	// --------------------------------------------------
 
 	minimize(win: WindowInstance): void {
-		if (
-			!win ||
-			win.winId === ROOT_WIN_ID ||
-			win.state.isMinimized
-		) {
-			return;
-		}
+		if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) return;
 
 		win.storedState = rectOf(win);
-
 		win.state.isMinimized = true;
 
 		this.publishDetachedStateUpdate(win, {
