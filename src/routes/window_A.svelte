@@ -4,6 +4,8 @@ import { onMount } from "svelte";
 import { getWindowManager, type WindowInstance } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
+import WindowRegistryDebug from "#lib/WindowRegistryDebug.svelte";
+
 import Window_B from "./window_B.svelte";
 import { type WindowBProps } from "./window_B.svelte";
 
@@ -39,12 +41,20 @@ function spawnReactive() {
 	});
 }
 onMount(() => {
-	spawnReactive();
+	// spawnReactive();
 });
 
 // Uppdatera props i det öppnade fönstret
 $effect(() => {
-	console.log("prop: ", message);
+	// console.log("prop: ", message);
+
+	// console.log(
+	// 	[...wManager.windows].map((w) => ({
+	// 		id: w.winId,
+	// 		parent: w.parentId,
+	// 	})),
+	// );
+
 	if (!win_B) return;
 
 	wManager.updateProps({
@@ -58,8 +68,13 @@ $effect(() => {
 <div class="window-container">
 	<h3>Window A</h3>
 
+	<WindowRegistryDebug {wManager} />
+
 	<p>
-		Parent: <strong>{parentId ?? "root"}</strong>
+		Parent: <strong>{parentId ?? "root"}  Antal win {wManager.winCount}     </strong>
+	</p>
+	<p>
+		wManagerId: <strong>{win.wManagerId ?? "root"}</strong>
 	</p>
 
 	<input

@@ -404,96 +404,102 @@ export class WindowSync {
 		// INCOMING MESSAGES
 		// ------------------------------------------
 
-		const unsubscribe = this.backend.onRawMessage(
-			winId,
-			(packet: WindowTransportPacket) => {
-				if (stopped || this.destroyed) {
-					return;
-				}
+		const unsubscribe = this.backend.onRawMessage(winId, (packet: WindowTransportPacket) => {
+			console.log(
+				"[SYNC RX]",
+				winId,
+				packet.sourceId,
+				packet.message.type,
+			);
 
-				// Ignorera egna utskick.
-				if (packet.sourceId === this.backend.endpointId) {
-					return;
-				}
+			if (stopped || this.destroyed) {
+				return;
+			}
+			// Ignorera egna utskick.
+			if (packet.sourceId === this.backend.endpointId) {
+				return;
+			}
+			const message = packet.message;
 
-				const message = packet.message;
+			if (message.winId !== winId) {
+				return;
+			}
 
-				if (message.winId !== winId) {
-					return;
-				}
+			// ----------------------------------
+			// WINDOW STATE
+			// ----------------------------------
 
-				// ----------------------------------
-				// WINDOW STATE
-				// ----------------------------------
-
-				if (isWindowStateUpdateMessage(message, winId)) {
-					try {
-						applyWindowStateUpdate?.(
-							message.updates,
-						);
-					} catch (error) {
-						console.error(
-							`[WindowSync] Kunde inte applicera fönstertillstånd för ${winId}:`,
-							error,
-						);
-					}
-
-					return;
-				}
-
-				// ----------------------------------
-				// PROPS
-				// ----------------------------------
-
-				if (
-					message.type !== "sync:props" ||
-					!message.state ||
-					typeof message.state.props !== "object" ||
-					message.state.props === null ||
-					Array.isArray(message.state.props)
-				) {
-					return;
-				}
-
-				const incoming = snapshot({
-					props: message.state.props,
-				});
-
-				// Identiskt state behöver inte appliceras.
-				if (lastSnapshot && deepEqual(lastSnapshot, incoming)) {
-					return;
-				}
-
-				/**
-				 * Uppdatera snapshot FÖRE mutation.
-				 *
-				 * När applyState ändrar Svelte-state
-				 * körs effekten igen.
-				 *
-				 * Den kan då upptäcka att state redan
-				 * finns lokalt och undvika en loop.
-				 */
-				lastSnapshot = incoming;
-
+			if (isWindowStateUpdateMessage(message, winId)) {
 				try {
-					const rpc = this.getRpc(winId);
-
-					const restoredProps = restoreRpcToCallbacks(
-						incoming.props,
-						rpc,
+					applyWindowStateUpdate?.(
+						message.updates,
 					);
-
-					applyState({
-						props: restoredProps,
-					});
 				} catch (error) {
 					console.error(
-						`[WindowSync] Kunde inte applicera props för ${winId}:`,
+						`[WindowSync] Kunde inte applicera fönstertillstånd för ${winId}:`,
 						error,
 					);
 				}
-			},
-		);
+
+				return;
+			}
+
+			// ----------------------------------
+			// PROPS
+			// ----------------------------------
+
+			if (
+				message.type !== "sync:props" ||
+				!message.state ||
+				typeof message.state.props !== "object" ||
+				message.state.props === null ||
+				Array.isArray(message.state.props)
+			) {
+				return;
+			}
+
+			const incoming = snapshot({
+				props: message.state.props,
+			});
+
+			// Identiskt state behöver inte appliceras.
+			if (lastSnapshot && deepEqual(lastSnapshot, incoming)) {
+				return;
+			}
+
+			/**
+			 * Uppdatera snapshot FÖRE mutation.
+			 *
+			 * När applyState ändrar Svelte-state
+			 * körs effekten igen.
+			 *
+			 * Den kan då upptäcka att state redan
+			 * finns lokalt och undvika en loop.
+			 */
+			lastSnapshot = incoming;
+
+			try {
+				const rpc = this.getRpc(winId);
+				const restoredProps = restoreRpcToCallbacks(
+					incoming.props,
+					rpc,
+				);
+
+				console.log(
+					"[APPLY STATE]",
+					winId,
+					restoredProps,
+				);
+				applyState({
+					props: restoredProps,
+				});
+			} catch (error) {
+				console.error(
+					`[WindowSync] Kunde inte applicera props för ${winId}:`,
+					error,
+				);
+			}
+		});
 
 		// ------------------------------------------
 		// OUTGOING REACTIVE SYNCHRONIZATION
@@ -557,30 +563,6 @@ export class WindowSync {
 			stopEffect,
 			unsubscribe,
 		});
-	}
-
-	attachWindow_old(
-		win: WindowInstance,
-		manager: WindowManager,
-	): void {
-		this.start(
-			win.winId,
-			() => ({
-				props: $state.snapshot(win.props),
-			}),
-			(state) => {
-				manager.updateProps(
-					state.props ?? {},
-					win,
-				);
-			},
-			(updates) => {
-				manager.updateState(
-					win.winId,
-					updates,
-				);
-			},
-		);
 	}
 
 	attachWindow(

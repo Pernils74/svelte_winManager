@@ -2,6 +2,8 @@
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
+import WindowRegistryDebug from "#lib/WindowRegistryDebug.svelte";
+
 export interface WindowBProps {
 	msg?: string;
 	counter?: number;
@@ -23,7 +25,6 @@ function updateCounter() {
 }
 
 function updateTextFromB(value: string) {
-	
 	wManager.updateProps({
 		msg: value,
 	}, win);
@@ -49,16 +50,25 @@ function detachToWindow() {
 	wManager.detachWindow(win, "browser-window");
 }
 
-$effect(() => {
-	console.log("prop i B: ", win.props);
-});
+// $effect(() => {
+// 	console.log("prop i B: ", win.props);
+// });
 </script>
 
 <div class="window-container">
 	<h3>{win.title}</h3>
 
+	<WindowRegistryDebug {wManager} />
+
 	<p>
-		Parent: <strong>{parentId ?? "root"}</strong>
+		Parent: <strong>{parentId ?? "root"} antal wins {wManager.winCount}</strong>
+	</p>
+	<p>
+		wManagerId: <strong>{win.wManagerId ?? "root"}</strong>
+	</p>
+	<p>
+		Parent wManagerId: <strong>{wManager.find(win.parentId )?.wManagerId?? "root"}</strong><br>
+		Parent wManagerId: <strong>{wManager.find(parentId )?.wManagerId?? "root"}</strong>
 	</p>
 
 	<p>
@@ -87,7 +97,7 @@ $effect(() => {
 
 	<input
 		type="text"
-		bind:value={win.props.shared.msg2}
+		bind:value={win.props.msg2}
 		placeholder="Type text..."
 	/>
 
@@ -113,7 +123,7 @@ $effect(() => {
     <p> inget</p>
 {/if}
 
-	<div class="actions">
+	<!-- <div class="actions">
 		<button
 			onclick={reparentToRoot}
 			disabled={parentId === "root"}
@@ -128,7 +138,7 @@ $effect(() => {
 		<button onclick={detachToWindow}>
 			🪟 Detach To Window
 		</button>
-	</div>
+	</div> -->
 </div>
 
 <style>

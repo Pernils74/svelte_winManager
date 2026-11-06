@@ -90,15 +90,15 @@ const wManager = initializeWindowManager({
 // );
 
 onMount(() => {
-	wManager.open(debug, {
-		title: "🪟 debug",
-		// Reparent this window to the window with ID 1 (Window A)
-		// parentId: "1",
-		width: 700,
-		height: 600,
-		left: 250,
-		top: 800,
-	});
+	// wManager.open(debug, {
+	// 	title: "🪟 debug",
+	// 	// Reparent this window to the window with ID 1 (Window A)
+	// 	// parentId: "1",
+	// 	width: 700,
+	// 	height: 600,
+	// 	left: 250,
+	// 	top: 800,
+	// });
 
 	wManager.open(WindowA, {
 		title: "🪟 Window A",
@@ -110,13 +110,13 @@ onMount(() => {
 		titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
-	wManager.open(WinGraphA, {
-		title: "🪟 Window graph A",
-		width: 600,
-		height: 700,
-		left: 650,
-		top: 100,
-	});
+	// wManager.open(WinGraphA, {
+	// 	title: "🪟 Window graph A",
+	// 	width: 600,
+	// 	height: 700,
+	// 	left: 650,
+	// 	top: 100,
+	// });
 
 	// wManager.open(WindowC, {
 	// 	title: "🪟 Window C",

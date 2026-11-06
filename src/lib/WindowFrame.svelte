@@ -570,14 +570,27 @@ function close() {
 }
 
 // Spara fönstrets lokala innehållsyta till managern så dess barn kan hitta den!
-//  $effect(() => {
-//  	if (contentEl) {
-//  		wManager.setBoundingEl(win.winId, contentEl);
-//  	}
-//  });
+// OBS ta inte bort den för då kraschar reparent
+$effect(() => {
+	if (contentEl) {
+		wManager.setBoundingEl(win.winId, contentEl);
+	}
+});
 
 function shouldBroadcast(win: WindowInstance): boolean {
 	const parent = win.parentId ? wManager.find(win.parentId) : null;
+
+	console.log(
+		"[BROADCAST CHECK]",
+		win.title,
+		"parent",
+		win.parentId,
+		"win",
+		win.wManagerId,
+		"manager",
+		wManager.wManagerId,
+	);
+
 	if (!parent) {
 		return false;
 	}

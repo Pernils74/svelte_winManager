@@ -434,7 +434,6 @@ export class WindowManager {
 
 		const parent = this.find(newParentId) ??
 			this.find(ROOT_WIN_ID);
-		console.log("[wmanger-reparent]", win?.title, parent?.title);
 
 		if (!win || !parent) return false;
 		if (id === ROOT_WIN_ID) return false;
@@ -476,7 +475,15 @@ export class WindowManager {
 		win.storedState = null;
 
 		this.focus(win);
-
+		// console.log(
+		// 	"[after]",
+		// 	win.title,
+		// 	"parent=",
+		// 	win.parentId,
+		// );
+		// console.log(
+		// 	this.getChildren(parent.winId).map((w) => w.title),
+		// );
 		return true;
 	}
 
@@ -497,7 +504,8 @@ export class WindowManager {
 		win?: WindowInstance<TProps>,
 	): void {
 		if (win) {
-			console.log("props");
+			console.log("[UPDATE PROPS]", win.winId, props);
+
 			Object.assign(win.props, props);
 			this.publishDetachedProps(win);
 			return;

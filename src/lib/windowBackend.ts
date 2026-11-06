@@ -896,11 +896,23 @@ export class WindowBackendManager implements WindowBackend {
 	private notifyListeners(
 		packet: WindowTransportPacket,
 	): void {
+		// console.log(
+		// 	"[DISPATCH]",
+		// 	packet.winId,
+		// 	[...this.listeners.keys()],
+		// );
+
 		const callbacks = this.listeners.get(
 			packet.winId,
 		);
 
-		if (!callbacks) return;
+		if (!callbacks) {
+			// console.warn(
+			// 	"[NO LISTENER]",
+			// 	packet.winId,
+			// );
+			return;
+		}
 
 		for (
 			const callback of [
