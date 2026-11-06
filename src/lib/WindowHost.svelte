@@ -69,7 +69,7 @@ let standaloneWinId = $derived(page.url.searchParams.get("winId"));
 let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
 let standaloneParentId = $derived(page.url.searchParams.get("parentId"));
 let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
-let standaloneManagerId = page.url.searchParams.get("wmanagerId");
+let standaloneManagerId = page.url.searchParams.get("wManagerId");
 
 let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
 

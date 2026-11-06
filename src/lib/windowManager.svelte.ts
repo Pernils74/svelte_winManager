@@ -967,7 +967,8 @@ export class WindowManager {
 
 		const children = this.getChildren(win.winId);
 		for (const child of children) {
-			if (child.viewPort.type !== "workspace") continue;
+			// if (child.viewPort.type !== "workspace") continue;
+			if (child.wManagerId != this.wMangerId) continue;
 			this.reparent(
 				child.winId,
 				ROOT_WIN_ID,
@@ -981,6 +982,7 @@ export class WindowManager {
 		}
 
 		const descriptor: ExternalWindowDescriptor = {
+			wMangerId: win.wManagerId,
 			winId: win.winId,
 
 			title: win.title,
