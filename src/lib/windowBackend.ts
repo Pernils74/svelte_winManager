@@ -125,14 +125,10 @@ interface WindowRegistryEntry {
 	parentId: WindowId | null;
 	wManagerId: string;
 	componentKey: string;
-	viewPortType: WindowViewPortType;
 }
 
 export class WindowsRegistryService {
-	windows = new Map<
-		WindowId,
-		WindowRegistryEntry
-	>();
+	windows = new Map<WindowId, WindowRegistryEntry>();
 
 	version = 0;
 

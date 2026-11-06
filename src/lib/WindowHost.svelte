@@ -148,15 +148,6 @@ $effect(() => {
 					},
 					showButtons: false,
 					docking: {},
-					// payload: null, // Kommer populeras sekunden efter via localStorage/BroadcastChannel
-
-					viewPort: {
-						id: targetWinId,
-						type: (() => {
-							if ("__TAURI_INTERNALS__" in window) return "tauri-window" as const;
-							return window.name === `detached_${targetWinId}` ? "browser-window" as const : "browser-tab" as const;
-						})(),
-					},
 				};
 
 				wManager.windows.push(newWinInstance);
@@ -164,13 +155,6 @@ $effect(() => {
 				winInstance.component = component;
 				winInstance.componentKey = componentKey;
 				winInstance.title = title;
-				winInstance.viewPort = {
-					id: targetWinId,
-					type: (() => {
-						if ("__TAURI_INTERNALS__" in window) return "tauri-window" as const;
-						return window.name === `detached_${targetWinId}` ? "browser-window" as const : "browser-tab" as const;
-					})(),
-				};
 			}
 
 			if (cancelled) return;
@@ -351,7 +335,7 @@ function publishStandaloneStateUpdate(
 		{:else}
 			<!-- 1. Rendera alla vanliga rot-fönster -->
 			{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
-				{#if !win.state.isMinimized && win.viewPort.type == "workspace"}
+				{#if !win.state.isMinimized && 	win.wManagerId === wManager.wManagerId}
 					{@render renderWindow(win)}
 				{/if}
 			{/each}
@@ -392,13 +376,13 @@ function publishStandaloneStateUpdate(
 						onclick={() => wManager.restore(win)}
 					>
 						<span class="task-icon"> 
-							{#if win.viewPort.type === "workspace"}
+							<!-- {#if win.viewPort.type === "workspace"}
 								🪟
 							{:else if win.viewPort.type === "browser-tab"}
 								🌐
 							{:else if win.viewPort.type === "tauri-window"}
 								🖥️
-							{/if}
+							{/if} -->
 
 						 ◫ </span>
 

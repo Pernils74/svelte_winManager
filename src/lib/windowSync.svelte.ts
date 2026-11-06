@@ -1,44 +1,9 @@
-// Sändning
-// Frame
-//   │
-//   │ { value: 42, onSave: fn }
-//   ▼
-// WindowManager
-//   │
-//   ▼
-// WindowSync
-//   │
-//   ├── value → 42
-//   │
-//   ├── onSave → function
-//   │          │
-//   │          └── rpc.register(...)
-//   │
-//   └── onSave → { __rpc: "..." }
-//   │
-//   ▼
-// BroadcastChannel
-
-// andra sidan
-// BroadcastChannel
-//        │
-//        ▼
-// WindowSync
-//        │
-//        ├── { __rpc: "..." }
-//        │
-//        └── skapa lokal proxy:
-
-//            (...args) =>
-//                rpc.call(...)
-
 import type {
 	DetachedWindowState,
 	ExternalWindowDescriptor,
 	WindowBackend,
 	WindowMessage,
 	WindowTransportPacket,
-	WindowViewPortType,
 } from "./windowBackend";
 
 import type { WindowId, WindowState } from "./windowManager.svelte";
@@ -377,7 +342,7 @@ export class WindowSync {
 	 */
 	async open(
 		descriptor: ExternalWindowDescriptor,
-		target: WindowViewPortType,
+		target: WindowTarget,
 	): Promise<void> {
 		this.assertAlive();
 

@@ -112,7 +112,6 @@ export interface WindowInstance<
 	showButtons: boolean;
 	docking: WindowDocking;
 	titlebar?: WindowTiltlebarComponent;
-	viewPort: WindowViewPort;
 
 	metrics: WindowMetrics;
 }
@@ -200,10 +199,6 @@ export class WindowManager {
 			tileOffset: 0,
 			showButtons: false,
 			docking: {},
-			viewPort: {
-				id: "",
-				type: "workspace",
-			},
 			metrics: {
 				renderMs: 0,
 				renderStrategy: "immediate",
@@ -267,32 +262,25 @@ export class WindowManager {
 		return result;
 	}
 
-	getRenderableRoots(runtimeType: WindowViewPortType) {
+	getRenderableRoots(): WindowInstance[] {
 		return this.getChildren(ROOT_WIN_ID).filter(
 			(win) =>
 				!win.state.isMinimized &&
-				win.viewPort.type === runtimeType,
+				win.wManagerId === this.wManagerId,
 		);
 	}
 
-	getRenderableChildren(
-		parentId: WindowId,
-		viewPortType: WindowViewPort["type"],
-	): WindowInstance[] {
+	getRenderableChildren(parentId: WindowId): WindowInstance[] {
 		return this.getChildren(parentId).filter(
 			(win) =>
 				!win.state.isMinimized &&
-				win.viewPort.type === viewPortType,
+				win.wManagerId === this.wManagerId,
 		);
 	}
 
 	getOrphanWorkspaceWindows(): WindowInstance[] {
 		return this.windows.filter((win) => {
-			if (
-				win.winId === ROOT_WIN_ID ||
-				win.state.isMinimized ||
-				win.viewPort.type !== "workspace"
-			) {
+			if (win.winId === ROOT_WIN_ID || win.state.isMinimized || win.wManagerId !== this.wManagerId) {
 				return false;
 			}
 
@@ -302,8 +290,10 @@ export class WindowManager {
 
 			const parent = this.find(win.parentId);
 
-			return !parent ||
-				parent.viewPort.type !== "workspace";
+			return (
+				!parent ||
+				parent.wManagerId !== this.wManagerId
+			);
 		});
 	}
 
@@ -328,8 +318,7 @@ export class WindowManager {
 		const tileOffset = options.tileOffset ?? 20;
 		const siblingCount = this.getChildren(parentId).length;
 		const currentOffset = siblingCount * tileOffset;
-		const compKey = options.componentKey ??
-			getComponentKey(component);
+		const compKey = options.componentKey ?? getComponentKey(component);
 		if (!compKey) {
 			throw new Error(
 				`Komponenten "${
@@ -345,7 +334,7 @@ export class WindowManager {
 		});
 
 		const win = $state<WindowInstance<TProps>>({
-			wManagerId: this.wMangerId,
+			wManagerId: this.wManagerId,
 			winId: options.winId ?? crypto.randomUUID(),
 			title: options.title ?? component.name ?? "Window",
 			thumbnail: null,
@@ -370,10 +359,6 @@ export class WindowManager {
 			showButtons: options.showButtons ?? true,
 			docking: options.docking ?? {},
 			titlebar: options.titlebar,
-			viewPort: {
-				id: crypto.randomUUID(),
-				type: "workspace",
-			},
 			metrics: {
 				renderMs: 0,
 				renderStrategy: "immediate",
@@ -926,8 +911,7 @@ export class WindowManager {
 
 		const children = this.getChildren(win.winId);
 		for (const child of children) {
-			// if (child.viewPort.type !== "workspace") continue;
-			if (child.wManagerId != this.wMangerId) continue;
+			if (child.wManagerId != this.wManagerId) continue;
 			this.reparent(
 				child.winId,
 				ROOT_WIN_ID,
