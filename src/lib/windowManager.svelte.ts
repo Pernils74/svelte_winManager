@@ -79,10 +79,10 @@ export interface WindowComponentProps<
 
 import { type WindowViewPortType } from "./windowBackend.ts";
 
-interface WindowViewPort {
-	id: string;
-	type: WindowViewPortType;
-}
+// interface WindowViewPort {
+// 	id: string;
+// 	type: WindowViewPortType;
+// }
 
 export interface WindowInstance<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
@@ -512,7 +512,7 @@ export class WindowManager {
 	}
 
 	private publishDetachedProps(win: WindowInstance): void {
-		if (win.viewPort.type === "workspace") return;
+		if (win.wManagerId != this.wManagerId) return;
 		void this.sync.send(
 			win.winId,
 			{

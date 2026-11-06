@@ -2,6 +2,8 @@
 
 import type { WindowId, WindowState } from "./windowManager.svelte";
 
+import type { WindowTarget } from "./windowSync.svelte";
+
 export interface DetachedWindowState {
 	props: Record<string, unknown>;
 }
@@ -78,7 +80,9 @@ export interface WindowBackend {
 	readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId: string;
 
-	open(descriptor: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
+	// open(descriptor: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
+	open(descriptor: ExternalWindowDescriptor, target: WindowTarget): Promise<void>;
+
 	close(winId: string): Promise<void>;
 	sendRaw(message: WindowMessage): Promise<void>;
 
@@ -421,7 +425,8 @@ export class WindowBackendManager implements WindowBackend {
 
 	async open(
 		descriptor: ExternalWindowDescriptor,
-		target: WindowViewPortType,
+		// target: WindowViewPortType,
+		target: WindowTarget,
 	): Promise<void> {
 		this.assertAlive();
 

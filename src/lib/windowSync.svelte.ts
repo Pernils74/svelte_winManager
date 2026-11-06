@@ -12,6 +12,10 @@ import { createRpcTransport, WindowRpc } from "./windowRpc";
 // --------------------------------------------------
 // TYPES
 // --------------------------------------------------
+export type WindowTarget =
+	| "browser-tab"
+	| "browser-window"
+	| "tauri-window";
 
 type ReadState = () => DetachedWindowState;
 
