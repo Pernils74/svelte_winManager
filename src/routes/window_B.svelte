@@ -7,7 +7,7 @@ import WindowRegistryDebug from "#lib/WindowRegistryDebug.svelte";
 export interface WindowBProps {
 	msg?: string;
 	counter?: number;
-	shared?: {};
+	shared?: Record<string, unknown> & { msg2?: string };
 }
 
 let {
@@ -97,7 +97,14 @@ function detachToWindow() {
     2 vägs
 	<input
 		type="text"
-		bind:value={win.props.shared.msg2}
+		value={((win.props as WindowBProps).shared?.msg2 ?? "")}
+		oninput={(event) => {
+			const props = win.props as WindowBProps;
+			const shared = props.shared ?? {} as Record<string, unknown> & { msg2?: string };
+			shared.msg2 = event.currentTarget.value;
+			props.shared = shared;
+			win.props = props as typeof win.props;
+		}}
 		placeholder="Type text..."
 	/>
 
@@ -150,12 +157,6 @@ function detachToWindow() {
 	background-color: rgb(243, 245, 247);
 	width: 100%;
 	height: 100%;
-}
-
-.actions {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
 }
 
 code,

@@ -36,8 +36,8 @@ $effect(() => {
     class="word"
     style:font-size="{fontSize}px"
   >
-    {#each letters as letter, i}
-      <span class="letter" key={i}>{letter}</span>
+    {#each letters as letter, i (i)}
+      <span class="letter">{letter}</span>
     {/each}
   </div>
 </div>

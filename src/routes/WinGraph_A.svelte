@@ -18,7 +18,7 @@ type Point3D = {
 	z: number;
 };
 
-interface GraphConfig {
+interface GraphConfig extends Record<string, number> {
 	pointsPerBatch: number;
 	updateMs: number;
 }
@@ -77,8 +77,9 @@ function openGraph() {
 		height: 500,
 		left: 60,
 		top: 10,
-		payload: config,
 		props: {
+			pointsPerBatch: config.pointsPerBatch,
+			updateMs: config.updateMs,
 			points: [],
 		},
 	});
@@ -95,9 +96,10 @@ function openDebug() {
 		height: 300,
 		left: 30,
 		top: 10,
-		payload: config,
 		props: {
 			points: [],
+			pointsPerBatch: config.pointsPerBatch,
+			updateMs: config.updateMs,
 		},
 	});
 }

@@ -70,11 +70,11 @@ let frameEl: HTMLDivElement;
 // let contentEl: HTMLDivElement;
 let contentEl = $state<HTMLElement | undefined>(undefined);
 
-let left = $derived(win.state.left);
-let top = $derived(win.state.top);
-let width = $derived(win.state.width);
-let height = $derived(win.state.height);
-let transparency = $derived(win.state.transparency);
+let left = $derived(win.rect.left);
+let top = $derived(win.rect.top);
+let width = $derived(win.rect.width);
+let height = $derived(win.rect.height);
+let transparency = $derived(win.transparency);
 let titleId = $derived(`win-title-${win.winId}`);
 
 let titlebarVisible = $state(true);
@@ -125,7 +125,7 @@ function showTitlebar() {
 }
 
 function scheduleHideTitlebar() {
-	if (!win.state.isMaximized) return;
+	if (!win.isMaximized) return;
 
 	clearTitlebarTimeout();
 	hideTitlebarTimeout = setTimeout(() => {
@@ -135,7 +135,7 @@ function scheduleHideTitlebar() {
 }
 
 $effect(() => {
-	if (win.state.isMaximized) {
+	if (win.isMaximized) {
 		scheduleHideTitlebar();
 	} else {
 		clearTitlebarTimeout();
@@ -148,10 +148,10 @@ onMount(() => {
 	// mäts i sin förälders innehållsyta.
 	const rect = frameEl.getBoundingClientRect();
 
-	if (win.state.width <= 0 || win.state.height <= 0) {
+	if (win.rect.width <= 0 || win.rect.height <= 0) {
 		wManager.updateState(win.winId, {
-			width: win.state.width || rect.width,
-			height: win.state.height || rect.height,
+			width: win.rect.width || rect.width,
+			height: win.rect.height || rect.height,
 		});
 	}
 });
@@ -163,8 +163,8 @@ onDestroy(() => {
 
 function getSnapTargets(axis: "x" | "y"): number[] {
 	const targets: number[] = [];
-	const currentWidth = win.state.width;
-	const currentHeight = win.state.height;
+	const currentWidth = win.rect.width;
+	const currentHeight = win.rect.height;
 
 	if (axis === "x") {
 		targets.push(0, bounds.clientWidth - currentWidth);
@@ -199,15 +199,15 @@ function getSnapTargets(axis: "x" | "y"): number[] {
 			win.parentId ?? ROOT_WIN_ID,
 		)
 	) {
-		if (other.winId === win.winId || other.state.isMinimized) {
+		if (other.winId === win.winId || other.isMinimized) {
 			continue;
 		}
 
 		addRectTargets({
-			left: other.state.left,
-			top: other.state.top,
-			width: other.state.width,
-			height: other.state.height,
+			left: other.rect.left,
+			top: other.rect.top,
+			width: other.rect.width,
+			height: other.rect.height,
 		});
 	}
 
@@ -249,7 +249,7 @@ function beginInteraction(event: MouseEvent, mode: InteractionMode) {
 
 	if (target instanceof Element && target.closest("button, input, select, textarea, a")) return;
 
-	// if (win.state.isMaximized) return;
+	// if (win.isMaximized) return;
 
 	event.preventDefault();
 	event.stopPropagation();
@@ -273,11 +273,11 @@ function beginInteraction(event: MouseEvent, mode: InteractionMode) {
 	dragStartX = event.clientX;
 	dragStartY = event.clientY;
 
-	startLeft = activeWin.state.left;
-	startTop = activeWin.state.top;
-	startWidth = activeWin.state.width;
-	startHeight = activeWin.state.height;
-	startTransparency = activeWin.state.transparency;
+	startLeft = activeWin.rect.left;
+	startTop = activeWin.rect.top;
+	startWidth = activeWin.rect.width;
+	startHeight = activeWin.rect.height;
+	startTransparency = activeWin.transparency;
 
 	document.body.style.userSelect = "none";
 
@@ -394,17 +394,17 @@ function onMouseMove(event: MouseEvent) {
 				.filter(
 					(other) =>
 						other.winId !== activeWin.winId &&
-						!other.state.isMinimized,
+						!other.isMinimized,
 				);
 
 			const xTargets = [
 				0,
 				boundsWidth - startWidth,
 				...children.flatMap((other) => [
-					other.state.left,
-					other.state.left + other.state.width,
-					other.state.left - startWidth,
-					other.state.left + other.state.width - startWidth,
+					other.rect.left,
+					other.rect.left + other.rect.width,
+					other.rect.left - startWidth,
+					other.rect.left + other.rect.width - startWidth,
 				]),
 			];
 
@@ -412,10 +412,10 @@ function onMouseMove(event: MouseEvent) {
 				0,
 				boundsHeight - startHeight,
 				...children.flatMap((other) => [
-					other.state.top,
-					other.state.top + other.state.height,
-					other.state.top - startHeight,
-					other.state.top + other.state.height - startHeight,
+					other.rect.top,
+					other.rect.top + other.rect.height,
+					other.rect.top - startHeight,
+					other.rect.top + other.rect.height - startHeight,
 				]),
 			];
 
@@ -529,7 +529,7 @@ function changeTransparency(event: WheelEvent) {
 
 	wManager.updateState(win.winId, {
 		transparency: clamp(
-			Number((win.state.transparency + delta).toFixed(2)),
+			Number((win.transparency + delta).toFixed(2)),
 			0.2,
 			1,
 		),
@@ -630,7 +630,7 @@ function shouldBroadcast(win: WindowInstance): boolean {
 	bind:this={frameEl}
 	class="window-frame"
 	data-window-id={win.winId}
-	class:is-maximized={win.state.isMaximized}
+	class:is-maximized={win.isMaximized}
 	style:left="{left}px"
 	style:top="{top}px"
 	style:width="{width}px"
@@ -649,7 +649,7 @@ function shouldBroadcast(win: WindowInstance): boolean {
 
 
 
-  {#if win.state.isMaximized && !titlebarVisible}
+  {#if win.isMaximized && !titlebarVisible}
   <div 
     class="titlebar-hover-trigger" 
     onmouseenter={showTitlebar}
@@ -661,7 +661,7 @@ function shouldBroadcast(win: WindowInstance): boolean {
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="titlebar"
-    class:is-hidden={win.state.isMaximized && !titlebarVisible}
+    class:is-hidden={win.isMaximized && !titlebarVisible}
     
     use:interaction={"move"}
     onmouseenter={showTitlebar}
@@ -732,8 +732,8 @@ function shouldBroadcast(win: WindowInstance): boolean {
 
 
   <!-- 🌟 VARJE FÖNSTERS EGNA LOKALA TASKBAR 🌟 -->
-  {#if wManager.windows.some(w => w.parentId === win.winId && w.state.isMinimized)}
-    {@const localMinimized = wManager.windows.filter(w => w.parentId === win.winId && w.state.isMinimized)}
+  {#if wManager.windows.some(w => w.parentId === win.winId && w.isMinimized)}
+    {@const localMinimized = wManager.windows.filter(w => w.parentId === win.winId && w.isMinimized)}
     <footer class="local-taskbar">
       {#each localMinimized as subWin (subWin.winId)}
         <div class="task-item">

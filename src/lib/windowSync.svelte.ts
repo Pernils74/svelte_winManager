@@ -9,6 +9,7 @@ import type {
 import type { WindowId, WindowInstance, WindowManager, WindowState } from "./windowManager.svelte";
 import { createRpcTransport, WindowRpc } from "./windowRpc";
 
+import { ROOT_WIN_ID } from "./windowManager.svelte";
 // --------------------------------------------------
 // TYPES
 // --------------------------------------------------
@@ -31,7 +32,7 @@ interface SyncSession {
 // --------------------------------------------------
 
 function snapshot<T>(value: T): T {
-	return $state.snapshot(value);
+	return $state.snapshot(value) as T;
 }
 
 /**
@@ -231,10 +232,7 @@ function deepEqual(
 function isWindowStateUpdateMessage(
 	value: WindowMessage,
 	winId: string,
-): value is Extract<
-	WindowMessage,
-	{ type: "sync:state-update" }
-> {
+): value is Extract<WindowMessage, { type: "sync:state-update" }> {
 	if (
 		value.type !== "sync:state-update" ||
 		value.winId !== winId
@@ -378,21 +376,22 @@ export class WindowSync {
 	 * Applicerar inkommande fönstergeometri/state.
 	 */
 	start(
-		winId: string,
+		win: WindowInstance,
 		readState: ReadState,
 		applyState: ApplyState,
 		applyWindowStateUpdate?: (updates: Partial<WindowState>) => void,
+		manager?: WindowManager,
 	): void {
 		this.assertAlive();
 
-		if (!winId) {
+		if (!win) {
 			throw new Error(
-				"WindowSync.start kräver winId.",
+				"WindowSync.start kräver win.",
 			);
 		}
 
 		// Undvik dubbla sessioner.
-		this.stop(winId);
+		this.stop(win.winId);
 
 		let stopped = false;
 
@@ -404,14 +403,15 @@ export class WindowSync {
 		// INCOMING MESSAGES
 		// ------------------------------------------
 
-		const unsubscribe = this.backend.onRawMessage(winId, (packet: WindowTransportPacket) => {
+		const unsubscribe = this.backend.onRawMessage(win.winId, (packet: WindowTransportPacket) => {
 			console.log(
 				"[SYNC RX]",
-				winId,
+				win.winId,
 				packet.sourceId,
 				packet.message.type,
 			);
 
+			// session is stopped
 			if (stopped || this.destroyed) {
 				return;
 			}
@@ -421,7 +421,8 @@ export class WindowSync {
 			}
 			const message = packet.message;
 
-			if (message.winId !== winId) {
+			// För att förhindra att samma runime skall behandla sitt eget broadcst som inkommande meddelande
+			if (message.winId !== win.winId) {
 				return;
 			}
 
@@ -429,14 +430,14 @@ export class WindowSync {
 			// WINDOW STATE
 			// ----------------------------------
 
-			if (isWindowStateUpdateMessage(message, winId)) {
+			if (isWindowStateUpdateMessage(message, win.winId)) {
 				try {
 					applyWindowStateUpdate?.(
 						message.updates,
 					);
 				} catch (error) {
 					console.error(
-						`[WindowSync] Kunde inte applicera fönstertillstånd för ${winId}:`,
+						`[WindowSync] Kunde inte applicera fönstertillstånd för ${win.title}:`,
 						error,
 					);
 				}
@@ -479,7 +480,7 @@ export class WindowSync {
 			lastSnapshot = incoming;
 
 			try {
-				const rpc = this.getRpc(winId);
+				const rpc = this.getRpc(win.winId);
 				const restoredProps = restoreRpcToCallbacks(
 					incoming.props,
 					rpc,
@@ -487,7 +488,7 @@ export class WindowSync {
 
 				console.log(
 					"[APPLY STATE]",
-					winId,
+					win.title,
 					restoredProps,
 				);
 				applyState({
@@ -495,7 +496,7 @@ export class WindowSync {
 				});
 			} catch (error) {
 				console.error(
-					`[WindowSync] Kunde inte applicera props för ${winId}:`,
+					`[WindowSync] Kunde inte applicera props för ${win.title}:`,
 					error,
 				);
 			}
@@ -516,19 +517,29 @@ export class WindowSync {
 				 * så att Svelte kan spåra förändringar.
 				 */
 				const current = readState();
+				if (manager) {
+					const parent = manager.find(win.parentId ?? ROOT_WIN_ID);
+					if (parent && parent.wManagerId === win.wManagerId) return;
 
-				// Skapa clone-safe snapshot.
+					if (win.parentId && win.parentId !== ROOT_WIN_ID) {
+						const parent = manager.find(win.parentId);
+						if (parent && parent.wManagerId === win.wManagerId) {
+							return;
+						}
+					}
+				}
+
 				const transportProps = this.prepareForTransport(
 					current.props ?? {},
-					winId,
+					win.winId,
 				);
 
-				const currentSnapshot = snapshot({ props: transportProps });
+				const currentSnapshot: DetachedWindowState = {
+					props: (transportProps as Record<string, unknown>) ?? {},
+				};
 
-				// Ingen förändring.
 				if (
-					lastSnapshot &&
-					deepEqual(
+					lastSnapshot && deepEqual(
 						lastSnapshot,
 						currentSnapshot,
 					)
@@ -543,23 +554,35 @@ export class WindowSync {
 					{ type: "sync:props" }
 				> = {
 					type: "sync:props",
-					winId,
+					winId: win.winId,
+					parentId: win.parentId ?? ROOT_WIN_ID,
 					state: currentSnapshot,
 				};
 
+				if (
+					message.type === "sync:props" &&
+					message.parentId !== (win.parentId ?? ROOT_WIN_ID)
+				) {
+					return;
+				}
+				// Läge A : Jag är en parent vars Child har detachats
+				// this.wMangerId === parent.wManagerId && ChildProcess.wManagerID !== this.wManagerId
+
+				// Läge B : Jag är ett child som har flyttat till ny flik (wManager instans)
+				// this.wManagerId === ChildProcess.wManagerId && ChildProcess.parentId.wMangerId !== ChildProcess.wManagerId
 				// Skicka till transporten.
 				void this.backend
 					.sendRaw(message)
 					.catch((error) => {
 						console.error(
-							`[WindowSync] Transportfel för ${winId}:`,
+							`[WindowSync] Transportfel för ${win.winId}:`,
 							error,
 						);
 					});
 			});
 		});
 
-		this.sessions.set(winId, {
+		this.sessions.set(win.winId, {
 			stopEffect,
 			unsubscribe,
 		});
@@ -567,30 +590,39 @@ export class WindowSync {
 
 	startToMonitor(
 		win: WindowInstance,
-		manager: WindowManager,
+		wManager: WindowManager,
 	): () => void {
 		this.start(
-			win.winId,
+			win,
 			() => ({
 				props: $state.snapshot(win.props),
 			}),
-			(state) => {
-				manager.updateProps(
-					state.props ?? {},
+			(incomingState) => {
+				wManager.updateProps(
+					incomingState.props ?? {},
 					win,
 				);
 			},
 			(updates) => {
-				manager.updateState(
+				wManager.updateState(
 					win.winId,
 					updates,
 				);
 			},
+			wManager,
 		);
 
 		return () => {
 			this.stop(win.winId);
 		};
+	}
+
+	attachWindow(
+		win: WindowInstance,
+		manager: WindowManager,
+	): () => void {
+		this.startToMonitor(win, manager);
+		return () => this.stop(win.winId);
 	}
 
 	// ----------------------------------------------
@@ -707,6 +739,7 @@ export class WindowSync {
 		> = {
 			type: "sync:props",
 			winId,
+			parentId: "root",
 			state: {
 				props: cleanProps as Record<string, unknown>,
 			},
@@ -731,6 +764,7 @@ export class WindowSync {
 		> = {
 			type: "sync:props",
 			winId,
+			parentId: "root",
 			state: cleanState,
 		};
 

@@ -7,8 +7,11 @@ type Point3D = {
 	z: number;
 };
 
-interface Props extends WindowComponentProps {
-	payload?: { points: Point3D[] };
+interface PointPayload extends Record<string, unknown> {
+	points: Point3D[];
+}
+
+interface Props extends WindowComponentProps<PointPayload> {
 	maxPoints?: number;
 }
 
@@ -19,7 +22,7 @@ let { win, maxPoints = 5000 }: Props = $props();
 
 <div>
 	Points:
-	<strong>{win.payload?.points.length ??0}</strong>
+	<strong>{((win.props as PointPayload | undefined)?.points.length ?? 0)}</strong>
 </div>
 
 <div>
@@ -30,10 +33,10 @@ let { win, maxPoints = 5000 }: Props = $props();
 <div>
 	Showing:
 	<strong>
-		{Math.min(win.payload?.points.length ??0, maxPoints)}
+		{Math.min(((win.props as PointPayload | undefined)?.points.length ?? 0), maxPoints)}
 	</strong>
 </div>
 
 <pre>
-{JSON.stringify(win.payload?.points.at(-1) ?? null, null, 2)}
+{JSON.stringify(((win.props as PointPayload | undefined)?.points.at(-1) ?? null), null, 2)}
 </pre>

@@ -86,7 +86,7 @@ let minimizedWindows = $derived(
 	wManager.windows.filter(
 		(win) =>
 			win.winId !== ROOT_WIN_ID &&
-			win.state.isMinimized,
+			win.isMinimized,
 	),
 );
 
@@ -131,16 +131,17 @@ $effect(() => {
 					props: {},
 					parentId: standaloneParentId,
 					boundingEl: null,
-					state: {
+					rect: {
 						left: 0,
 						top: 0,
 						width: window.innerWidth,
 						height: window.innerHeight,
-						isMinimized: false,
-						isMaximized: true,
-						transparency: 1,
-						isFocused: false,
 					},
+					isMinimized: false,
+					isMaximized: true,
+					transparency: 1,
+					isFocused: false,
+
 					storedState: null,
 					zIndex: 1,
 					tileOffset: 0,
@@ -297,7 +298,7 @@ function publishStandaloneStateUpdate(
 				/>
 
 				{#each wManager.getChildren(win.winId) as child (child.winId)}
-					{#if !child.state.isMinimized && win.wManagerId === wManager.wManagerId}
+					{#if !child.isMinimized && win.wManagerId === wManager.wManagerId}
 						{@render renderWindow(child)}  // Anropar sig själv rekursivt
 					{:else}
 						{console.log(`Child window ${child.winId} is minimized or detached, skipping render.`)}
@@ -325,7 +326,7 @@ function publishStandaloneStateUpdate(
 				</div>
 			{:else}
 				{@const standaloneWin = wManager.find(standaloneWinId)}
-				{#if standaloneWin && !standaloneWin.state.isMinimized}
+				{#if standaloneWin && !standaloneWin.isMinimized}
 					{@render renderWindow(standaloneWin)}
 				{/if}	 
 			{"}"}	 
@@ -334,7 +335,7 @@ function publishStandaloneStateUpdate(
 		{:else}
 			<!-- 1. Rendera alla vanliga rot-fönster -->
 			{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
-				{#if !win.state.isMinimized && 	win.wManagerId === wManager.wManagerId}
+				{#if !win.isMinimized && 	win.wManagerId === wManager.wManagerId}
 					{@render renderWindow(win)}
 				{/if}
 			{/each}

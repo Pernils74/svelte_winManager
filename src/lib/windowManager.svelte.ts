@@ -16,6 +16,21 @@ export const MIN_HEIGHT = 100;
 
 const MAXIMIZE_EPSILON = 5;
 
+// Överst i din windowManager.svelte.ts tillsammans med ROOT_WIN_ID etc.
+export interface AppConfig {
+	theme: "light" | "dark";
+	locale: string;
+	modules: string[]; // Exempel på dina moduler som kommer in
+	[key: string]: unknown;
+}
+
+const DEFAULT_CONFIG: AppConfig = {
+	theme: "light",
+	locale: "sv-SE",
+	modules: [],
+	onlySingleton: false,
+};
+
 export type WindowId = string;
 
 export type DockSide =
@@ -59,7 +74,10 @@ export interface WindowRect {
 export interface WindowMetrics {
 	renderMs: number;
 	renderBusy: boolean;
+	isBusy?: boolean;
 	renderStrategy: RenderStrategy;
+	renderCount?: number;
+	droppedUpdates?: number;
 }
 
 export interface WindowState extends WindowRect {
@@ -103,7 +121,17 @@ export interface WindowInstance<
 	props: TProps & Record<string, unknown>;
 	parentId: WindowId | null;
 	boundingEl: HTMLElement | null;
-	state: WindowState;
+	rect: WindowRect;
+	isDetached?: boolean;
+	renderStrategy?: RenderStrategy;
+	runtime?: { type?: string; id?: string };
+	context?: unknown;
+
+	isMaximized: boolean;
+	transparency: number;
+	isFocused: boolean;
+	isMinimized: boolean;
+
 	storedState: WindowRect | null;
 
 	zIndex: number;
@@ -127,6 +155,7 @@ export interface OpenWindowOptions<
 	tileOffset?: number;
 
 	props?: TProps;
+
 	left?: number;
 	top?: number;
 	width?: number;
@@ -140,7 +169,7 @@ export interface OpenWindowOptions<
 }
 
 function rectOf(win: WindowInstance): WindowRect {
-	const { left, top, width, height } = win.state;
+	const { left, top, width, height } = win.rect;
 
 	return {
 		left,
@@ -163,6 +192,8 @@ function overlaps(
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
 	readonly wManagerId = crypto.randomUUID();
+	public readonly config: AppConfig;
+
 	private zCounter = 1;
 	public readonly backend: WindowBackend;
 	public readonly sync: WindowSync;
@@ -170,6 +201,11 @@ export class WindowManager {
 
 	constructor(options: WindowManagerOptions = {}) {
 		// startar backend och lyssning på broadcastchannel
+		this.config = {
+			...DEFAULT_CONFIG,
+			...options.config,
+		};
+
 		this.backend = options.backend ?? createWindowBackend();
 		this.sync = new WindowSync(this.backend);
 		// this.register=
@@ -184,16 +220,16 @@ export class WindowManager {
 			props: {},
 			parentId: null,
 			boundingEl: null,
-			state: {
+			rect: {
 				left: 0,
 				top: 0,
 				width: 1920,
 				height: 1080,
-				isMinimized: false,
-				isMaximized: false,
-				transparency: 1,
-				isFocused: false,
 			},
+			isMinimized: false,
+			isMaximized: false,
+			transparency: 1,
+			isFocused: false,
 			storedState: null,
 			zIndex: 0,
 			tileOffset: 0,
@@ -269,7 +305,7 @@ export class WindowManager {
 	getRenderableRoots(): WindowInstance[] {
 		return this.getChildren(ROOT_WIN_ID).filter(
 			(win) =>
-				!win.state.isMinimized &&
+				!win.isMinimized &&
 				win.wManagerId === this.wManagerId,
 		);
 	}
@@ -277,14 +313,14 @@ export class WindowManager {
 	getRenderableChildren(parentId: WindowId): WindowInstance[] {
 		return this.getChildren(parentId).filter(
 			(win) =>
-				!win.state.isMinimized &&
+				!win.isMinimized &&
 				win.wManagerId === this.wManagerId,
 		);
 	}
 
 	getOrphanWorkspaceWindows(): WindowInstance[] {
 		return this.windows.filter((win) => {
-			if (win.winId === ROOT_WIN_ID || win.state.isMinimized || win.wManagerId !== this.wManagerId) {
+			if (win.winId === ROOT_WIN_ID || win.isMinimized || win.wManagerId !== this.wManagerId) {
 				return false;
 			}
 
@@ -305,7 +341,9 @@ export class WindowManager {
 	// OPEN
 	// --------------------------------------------------
 
-	open<TProps extends Record<string, unknown> = Record<string, unknown>>(
+	open<
+		TProps extends Record<string, unknown> = Record<string, unknown>,
+	>(
 		component: Component<any>,
 		options: OpenWindowOptions<TProps> = {},
 	): WindowInstance<TProps> {
@@ -330,13 +368,14 @@ export class WindowManager {
 				}" är inte registrerad. Ange componentKey eller registrera komponenten först.`,
 			);
 		}
-		const geometry = this.fitToParent(parent, {
+		const rect = this.fitToParent(parent, {
 			left: options.left ?? currentOffset,
 			top: options.top ?? currentOffset,
 			width: options.width ?? 400,
 			height: options.height ?? 300,
 		});
 
+		const initProps = (options.props ?? ({} as TProps)) as TProps & Record<string, unknown>;
 		const win = $state<WindowInstance<TProps>>({
 			wManagerId: this.wManagerId,
 			winId: options.winId ?? crypto.randomUUID(),
@@ -344,19 +383,14 @@ export class WindowManager {
 			thumbnail: null,
 			component,
 			componentKey: compKey,
-			props: options.props ?? ({} as TProps),
+			props: initProps,
 			parentId,
 			boundingEl: options.boundingEl ?? null,
-			state: {
-				left: geometry.left,
-				top: geometry.top,
-				width: geometry.width,
-				height: geometry.height,
-				isMinimized: false,
-				isMaximized: false,
-				transparency: options.transparency ?? 1,
-				isFocused: false,
-			},
+			rect: rect,
+			isMinimized: false,
+			isMaximized: false,
+			transparency: options.transparency ?? 1,
+			isFocused: false,
 			storedState: null,
 			zIndex: ++this.zCounter,
 			tileOffset,
@@ -369,7 +403,7 @@ export class WindowManager {
 				renderBusy: false,
 			},
 		});
-		this.windows.push(win);
+		this.windows.push(win as any);
 		return win;
 	}
 
@@ -392,10 +426,10 @@ export class WindowManager {
 				child.winId,
 				ROOT_WIN_ID,
 				{
-					left: child.state.left + win.state.left,
-					top: child.state.top + win.state.top,
-					width: child.state.width,
-					height: child.state.height,
+					left: child.rect.left + win.rect.left,
+					top: child.rect.top + win.rect.top,
+					width: child.rect.width,
+					height: child.rect.height,
 				},
 			);
 		}
@@ -409,15 +443,15 @@ export class WindowManager {
 			title: win.title,
 			componentKey: win.componentKey,
 
-			// parentId: win.parentId,
-			parentId: null, // detached window blir root i nya runtime
+			parentId: win.parentId,
+			// parentId: null, // detached window blir root i nya runtime
 			props: $state.snapshot(win.props),
 
-			width: win.state.width,
-			height: win.state.height,
+			width: win.rect.width,
+			height: win.rect.height,
 
-			left: win.state.left,
-			top: win.state.top,
+			left: win.rect.left,
+			top: win.rect.top,
 		};
 
 		// detta för att förhindra att den renderas i nuvarande wManager.
@@ -429,9 +463,11 @@ export class WindowManager {
 		// 🌟 JACKA IN LYSSNAREN DIREKT HÄR:
 		// Detta gör att fönstret omedelbart börjar lyssna på globala props,
 		// state-uppdateringar och RPC-callbacks oavsett var det renderas.
-		if (win.winId !== ROOT_WIN_ID) {
-			this.sync.startToMonitor(win, this);
-		}
+		this.sync.startToMonitor(win, this);
+
+		// if (win.winId !== ROOT_WIN_ID) {
+		// 	this.sync.startToMonitor(win, this);
+		// }
 	}
 
 	// --------------------------------------------------
@@ -447,13 +483,13 @@ export class WindowManager {
 			componentKey: source.componentKey,
 			props: structuredClone($state.snapshot(source.props)),
 
-			left: source.state.left + offset,
-			top: source.state.top + offset,
+			left: source.rect.left + offset,
+			top: source.rect.top + offset,
 
-			width: source.state.width,
-			height: source.state.height,
+			width: source.rect.width,
+			height: source.rect.height,
 
-			transparency: source.state.transparency,
+			transparency: source.transparency,
 			showButtons: source.showButtons,
 
 			titlebar: source.titlebar,
@@ -475,8 +511,8 @@ export class WindowManager {
 		rect: Partial<WindowRect>,
 	): WindowRect {
 		const bounds = parent.boundingEl;
-		const parentWidth = bounds?.clientWidth ?? parent.state.width;
-		const parentHeight = bounds?.clientHeight ?? parent.state.height;
+		const parentWidth = bounds?.clientWidth ?? parent.rect.width;
+		const parentHeight = bounds?.clientHeight ?? parent.rect.height;
 		const width = Math.min(
 			rect.width ?? 400,
 			parentWidth,
@@ -526,11 +562,11 @@ export class WindowManager {
 			height: screenRect.height,
 		};
 
-		const geometry = this.fitToParent(parent, localRect);
+		const rect = this.fitToParent(parent, localRect);
 		win.parentId = parent.winId;
 		win.boundingEl = null;
 
-		Object.assign(win.state, geometry, {
+		Object.assign(win.rect, rect, {
 			isMaximized: false,
 		});
 
@@ -635,12 +671,18 @@ export class WindowManager {
 		const win = this.find(id);
 		if (!win) return;
 
-		if (win.winId === ROOT_WIN_ID) {
-			Object.assign(win.state, updates);
-			return;
+		const { left, top, width, height, ...windowState } = updates;
+		Object.assign(win.rect, {
+			...(left !== undefined && { left }),
+			...(top !== undefined && { top }),
+			...(width !== undefined && { width }),
+			...(height !== undefined && { height }),
+		});
+		Object.assign(win, windowState);
+
+		if (win.winId !== ROOT_WIN_ID) {
+			this.publishDetachedStateUpdate(win, updates);
 		}
-		Object.assign(win.state, updates);
-		this.publishDetachedStateUpdate(win, updates);
 	}
 
 	updateMetrics(
@@ -654,7 +696,24 @@ export class WindowManager {
 	updateAll(updates: Partial<WindowState>): void {
 		for (const win of this.windows) {
 			if (win.winId === ROOT_WIN_ID) continue;
-			Object.assign(win.state, updates);
+
+			const {
+				left,
+				top,
+				width,
+				height,
+				...windowState
+			} = updates;
+
+			Object.assign(win.rect, {
+				...(left !== undefined && { left }),
+				...(top !== undefined && { top }),
+				...(width !== undefined && { width }),
+				...(height !== undefined && { height }),
+			});
+
+			Object.assign(win, windowState);
+
 			this.publishDetachedStateUpdate(win, updates);
 		}
 	}
@@ -664,7 +723,7 @@ export class WindowManager {
 
 		if (!root) return;
 
-		Object.assign(root.state, {
+		Object.assign(root.rect, {
 			left: 0,
 			top: 0,
 			width: Math.max(0, width),
@@ -679,7 +738,7 @@ export class WindowManager {
 	focus(win: WindowInstance): void {
 		if (win.winId === ROOT_WIN_ID) return;
 		win.zIndex = ++this.zCounter;
-		win.state.isFocused = true;
+		win.isFocused = true;
 	}
 
 	// --------------------------------------------------
@@ -687,10 +746,10 @@ export class WindowManager {
 	// --------------------------------------------------
 
 	minimize(win: WindowInstance): void {
-		if (!win || win.winId === ROOT_WIN_ID || win.state.isMinimized) return;
+		if (!win || win.winId === ROOT_WIN_ID || win.isMinimized) return;
 
 		win.storedState = rectOf(win);
-		win.state.isMinimized = true;
+		win.isMinimized = true;
 
 		this.publishDetachedStateUpdate(win, {
 			isMinimized: true,
@@ -701,11 +760,11 @@ export class WindowManager {
 		if (!win || win.winId === ROOT_WIN_ID) return;
 
 		if (win.storedState) {
-			Object.assign(win.state, win.storedState);
+			Object.assign(win.rect, win.storedState);
 		}
 
-		win.state.isMinimized = false;
-		win.state.isFocused = true;
+		win.isMinimized = false;
+		win.isFocused = true;
 
 		this.focus(win);
 
@@ -761,12 +820,12 @@ export class WindowManager {
 		const neighbors = siblings.filter((other) => {
 			if (
 				other.winId === win.winId ||
-				other.state.isMinimized
+				other.isMinimized
 			) {
 				return false;
 			}
 
-			const b = other.state;
+			const b = other.rect;
 
 			return (
 				(mode.includes("left") &&
@@ -806,7 +865,7 @@ export class WindowManager {
 
 		if (mode.includes("left") || mode.includes("right")) {
 			for (const other of neighbors) {
-				const b = other.state;
+				const b = other.rect;
 
 				if (
 					mode.includes("left") &&
@@ -817,7 +876,7 @@ export class WindowManager {
 					next.left = old.left + allowed;
 					next.width = old.width - allowed;
 
-					other.state.width = b.width + allowed;
+					other.rect.width = b.width + allowed;
 				} else if (
 					mode.includes("right") &&
 					Math.abs(b.left - (old.left + old.width)) <= EPSILON
@@ -825,15 +884,15 @@ export class WindowManager {
 					const delta = next.left + next.width - (old.left + old.width);
 					const allowed = Math.min(delta, b.width - MIN_WIDTH);
 					next.width = old.width + allowed;
-					other.state.left = b.left + allowed;
-					other.state.width = b.width - allowed;
+					other.rect.left = b.left + allowed;
+					other.rect.width = b.width - allowed;
 				}
 			}
 		}
 
 		if (mode.includes("top") || mode.includes("bottom")) {
 			for (const other of neighbors) {
-				const b = other.state;
+				const b = other.rect;
 
 				if (
 					mode.includes("top") &&
@@ -847,38 +906,37 @@ export class WindowManager {
 					next.top = old.top + allowed;
 					next.height = old.height - allowed;
 
-					other.state.height = b.height + allowed;
+					other.rect.height = b.height + allowed;
 				} else if (mode.includes("bottom") && Math.abs(b.top - (old.top + old.height)) <= EPSILON) {
 					const delta = next.top + next.height - (old.top + old.height);
 					const allowed = Math.min(delta, b.height - MIN_HEIGHT);
 
 					next.height = old.height + allowed;
 
-					other.state.top = b.top + allowed;
-					other.state.height = b.height - allowed;
+					other.rect.top = b.top + allowed;
+					other.rect.height = b.height - allowed;
 				}
 			}
 		}
-		Object.assign(win.state, next);
+		Object.assign(win.rect, next);
 		this.publishDetachedStateUpdate(win, next);
 	}
 
 	// --------------------------------------------------
 	// MAXIMIZE
 	// --------------------------------------------------
-
 	toggleMaximize(
 		win: WindowInstance,
 		bounds: HTMLElement,
 	): void {
 		if (!win || win.winId === ROOT_WIN_ID) return;
 
-		if (win.state.isMaximized) {
+		if (win.isMaximized) {
 			if (win.storedState) {
-				Object.assign(win.state, win.storedState);
+				Object.assign(win.rect, win.storedState);
 			}
 
-			win.state.isMaximized = false;
+			win.isMaximized = false;
 
 			this.focus(win);
 
@@ -889,44 +947,82 @@ export class WindowManager {
 
 			return;
 		}
+
 		win.storedState = rectOf(win);
+
 		let maxLeft = 0;
 		let maxTop = 0;
 		let maxRight = bounds.clientWidth;
 		let maxBottom = bounds.clientHeight;
-		const a = win.state;
+
+		const a = win.rect;
+
 		const siblings = this.getChildren(
 			win.parentId ?? ROOT_WIN_ID,
 		);
 
 		for (const other of siblings) {
-			if (other.winId === win.winId || other.state.isMinimized) continue;
-			const b = other.state;
-			const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON && a.top + a.height > b.top + MAXIMIZE_EPSILON;
-			const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON && a.left + a.width > b.left + MAXIMIZE_EPSILON;
-			if (overlapsY && Math.abs(a.left - (b.left + b.width)) <= MAXIMIZE_EPSILON) {
-				maxLeft = Math.max(maxLeft, b.left + b.width);
+			if (
+				other.winId === win.winId ||
+				other.isMinimized
+			) {
+				continue;
 			}
-			if (overlapsY && Math.abs(a.left + a.width - b.left) <= MAXIMIZE_EPSILON) {
-				maxRight = Math.min(maxRight, b.left);
+
+			const b = other.rect;
+
+			const overlapsY = a.top < b.top + b.height - MAXIMIZE_EPSILON &&
+				a.top + a.height > b.top + MAXIMIZE_EPSILON;
+
+			const overlapsX = a.left < b.left + b.width - MAXIMIZE_EPSILON &&
+				a.left + a.width > b.left + MAXIMIZE_EPSILON;
+
+			if (
+				overlapsY &&
+				Math.abs(
+						a.left - (b.left + b.width),
+					) <= MAXIMIZE_EPSILON
+			) {
+				maxLeft = Math.max(
+					maxLeft,
+					b.left + b.width,
+				);
 			}
-			if (overlapsX && Math.abs(a.top - (b.top + b.height)) <= MAXIMIZE_EPSILON) {
+
+			if (
+				overlapsY &&
+				Math.abs(
+						a.left + a.width - b.left,
+					) <= MAXIMIZE_EPSILON
+			) {
+				maxRight = Math.min(
+					maxRight,
+					b.left,
+				);
+			}
+
+			if (
+				overlapsX &&
+				Math.abs(
+						a.top - (b.top + b.height),
+					) <= MAXIMIZE_EPSILON
+			) {
 				maxTop = Math.max(maxTop, b.top + b.height);
 			}
+
 			if (overlapsX && Math.abs(a.top + a.height - b.top) <= MAXIMIZE_EPSILON) {
 				maxBottom = Math.min(maxBottom, b.top);
 			}
 		}
 
-		Object.assign(win.state, {
+		Object.assign(win.rect, {
 			left: maxLeft,
 			top: maxTop,
-
 			width: Math.max(0, maxRight - maxLeft),
 			height: Math.max(0, maxBottom - maxTop),
-
-			isMaximized: true,
 		});
+
+		win.isMaximized = true;
 
 		this.focus(win);
 
@@ -934,8 +1030,7 @@ export class WindowManager {
 			...rectOf(win),
 			isMaximized: true,
 		});
-	}
-	// --------------------------------------------------
+	} // --------------------------------------------------
 	// DETACHED SYNC
 	// --------------------------------------------------
 
@@ -1040,7 +1135,13 @@ export class WindowManager {
 
 const [getContextManager, setContextManager] = createContext<WindowManager>();
 
+// export interface WindowManagerOptions {
+// 	modules?: Record<string, () => Promise<any>>;
+// 	backend?: WindowBackend;
+// }
+
 export interface WindowManagerOptions {
+	config?: Partial<AppConfig>;
 	modules?: Record<string, () => Promise<any>>;
 	backend?: WindowBackend;
 }
@@ -1048,11 +1149,14 @@ export interface WindowManagerOptions {
 export function initializeWindowManager(
 	options?: WindowManagerOptions,
 ): WindowManager {
+	// 1. Slå ihop hårdkodade defaults med vad som skickades in i app-starten
+
 	try {
 		return getContextManager();
 	} catch {
 		const wManager = new WindowManager({
 			backend: options?.backend,
+			config: options?.config,
 		});
 
 		if (options?.modules) {

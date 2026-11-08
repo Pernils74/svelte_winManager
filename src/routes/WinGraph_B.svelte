@@ -28,21 +28,19 @@ type Point3D = {
 	z: number;
 };
 
-interface GraphConfig {
+interface GraphConfig extends Record<string, number> {
 	pointsPerBatch: number;
 	updateMs: number;
 }
 
 interface Props extends WindowComponentProps<GraphConfig> {
 	win: WindowInstance<GraphConfig>;
-	payload: GraphConfig;
 	points: Point3D[];
 }
 
-let { win, winId, parentId, payload, points }: Props = $props();
+let { win, winId, parentId, points }: Props = $props();
 
-// let config = $derived(payload);
-let config: GraphConfig = $derived(win.payload);
+let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
 
 // PID-parametrar
 const KP = 0.35;
@@ -186,7 +184,6 @@ onMount(() => {
 	</div>
 
 	<GraphView
-		payload={config}
 		points={points}
 		onRenderMs={onRenderMs}
 	/>

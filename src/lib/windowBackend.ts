@@ -6,6 +6,23 @@
 
 // wManagerId identifierar vilken runtime som äger instanserna.
 
+// BroadcastChannel
+//        |
+//        v
+//   receivePacket()
+//        |
+//        v
+//  isTransportPacket()
+//        |
+//        v
+//  notifyListeners()
+//        |
+//        +---- winId A -> listeners A
+//        |
+//        +---- winId B -> listeners B
+//        |
+//        +---- winId C -> listeners C
+
 import type { WindowId, WindowState } from "./windowManager.svelte";
 
 import type { WindowTarget } from "./windowSync.svelte";
@@ -15,7 +32,7 @@ export interface DetachedWindowState {
 }
 
 export type WindowMessage =
-	| { type: "sync:props"; winId: WindowId; state: DetachedWindowState }
+	| { type: "sync:props"; winId: WindowId; parentId?: WindowId; state: DetachedWindowState }
 	| {
 		type: "sync:state-update";
 		winId: WindowId;
@@ -39,12 +56,12 @@ export type WindowMessage =
 		result?: unknown;
 		error?: string;
 	}
-	| { type: "system:close"; winId: WindowId }
-	| {
-		type: "registry:snapshot";
-		version: number;
-		entries: WindowRegistryEntry[];
-	};
+	| { type: "system:close"; winId: WindowId };
+// | {
+// 	type: "registry:snapshot";
+// 	version: number;
+// 	entries: WindowRegistryEntry[];
+// };
 
 export interface WindowTransportPacket {
 	winId: WindowId;
@@ -73,6 +90,7 @@ export interface ExternalWindowDescriptor {
 	height?: number;
 	left?: number;
 	top?: number;
+	alwaysOnTop?: boolean; //TODO inför att popoup windows skall ligga först
 }
 
 /**
@@ -217,6 +235,20 @@ function tauriEventName(winId: string): string {
 	return `${TAURI_EVENT_PREFIX}${winId}`;
 }
 
+/**
+ * Validerar om ett värde är ett giltigt transportpaket.
+ *
+ * - Paketet måste vara ett objekt.
+ * - packet.winId måste vara en sträng.
+ * - packet.sourceId måste vara en sträng.
+ * - packet.message måste vara ett objekt.
+ * - Meddelandets winId måste matcha paketets winId.
+ * - Meddelandet måste ha en giltig type.
+ * - Varje meddelandetyp måste ha sina obligatoriska fält.
+ *
+ * @param value Det okända värde som ska valideras.
+ * @returns `true` om värdet uppfyller alla kriterier för en WindowTransportPacket, annars `false`.
+ */
 function isTransportPacket(
 	value: unknown,
 ): value is WindowTransportPacket {
@@ -406,6 +438,7 @@ export class WindowBackendManager implements WindowBackend {
 					message: {
 						type: "sync:props",
 						winId,
+						parentId: new URLSearchParams(globalThis.location.search).get("parentId") ?? undefined,
 						state,
 					},
 				};
@@ -457,10 +490,11 @@ export class WindowBackendManager implements WindowBackend {
 				await this.openTauriWindow(descriptor);
 				return;
 
-			case "workspace":
-				throw new Error(
-					"Workspace kan inte öppnas som externt fönster.",
-				);
+		default:
+			const _exhaustive: never = target;
+			throw new Error(
+				`Okänt fönster-target: ${String(_exhaustive)}`,
+			);
 		}
 	}
 
@@ -908,9 +942,7 @@ export class WindowBackendManager implements WindowBackend {
 		// 	[...this.listeners.keys()],
 		// );
 
-		const callbacks = this.listeners.get(
-			packet.winId,
-		);
+		const callbacks = this.listeners.get(packet.winId);
 
 		if (!callbacks) {
 			// console.warn(

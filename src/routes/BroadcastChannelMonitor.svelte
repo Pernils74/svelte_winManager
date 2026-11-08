@@ -4,6 +4,8 @@
 import { onMount } from "svelte";
 
 interface Props {
+	win?: unknown;
+	winId?: string;
 	channelName?: string;
 }
 

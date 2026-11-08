@@ -57,8 +57,8 @@ function inspect(target: HTMLElement) {
 	winId = win.winId;
 	parentId = win.parentId ?? "root";
 
-	winX = win.state.left;
-	winY = win.state.top;
+	winX = win.rect.left;
+	winY = win.rect.top;
 
 	runtimeType = win.runtime?.type ?? "unknown";
 	runtimeId = win.runtime?.id ?? "";
