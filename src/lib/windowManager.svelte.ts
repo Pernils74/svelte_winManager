@@ -4,7 +4,6 @@ import { WindowSync } from "./windowSync.svelte.ts";
 
 import {
 	createWindowBackend,
-	type DetachedWindowState,
 	type ExternalWindowDescriptor,
 	type WindowBackend,
 } from "./windowBackend.ts";
@@ -254,7 +253,7 @@ export class WindowManager {
 	}
 
 	debugBroadcast(winId: string, props: Record<string, unknown>): void {
-		void this.sync.send(winId, { props });
+		void this.sync.send(winId, props);
 	}
 
 	findAll(winId: WindowId): WindowInstance[] {
@@ -606,7 +605,7 @@ export class WindowManager {
 		const targets = win
 			? win.parentId === null ? [win] : this.windows.filter((current) =>
 				current.parentId === win.parentId &&
-				current.wManagerId === this.wManagerId &&
+				current.wManagerId === win.wManagerId &&
 				current.componentKey === win.componentKey
 			)
 			: this.windows.filter((current) =>
@@ -649,9 +648,7 @@ export class WindowManager {
 		if (win.wManagerId != this.wManagerId) return;
 		void this.sync.send(
 			win.winId,
-			{
-				props: $state.snapshot(win.props),
-			},
+			$state.snapshot(win.props),
 		).catch((error) => {
 			console.error(
 				`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
@@ -1033,31 +1030,6 @@ export class WindowManager {
 	} // --------------------------------------------------
 	// DETACHED SYNC
 	// --------------------------------------------------
-
-	// setupStandaloneSync(win: WindowInstance) {
-	// 	this.sync.start(
-	// 		win.winId,
-	// 		() => ({
-	// 			props: $state.snapshot(win.props),
-	// 		}),
-	// 		(state: DetachedWindowState) => {
-	// 			this.updateProps(
-	// 				state.props ?? {},
-	// 				win,
-	// 			);
-	// 		},
-	// 		(updates) => {
-	// 			this.updateState(
-	// 				win.winId,
-	// 				updates,
-	// 			);
-	// 		},
-	// 	);
-
-	// 	return () => {
-	// 		this.sync.stop(win.winId);
-	// 	};
-	// }
 
 	// --------------------------------------------------
 	// CLOSE

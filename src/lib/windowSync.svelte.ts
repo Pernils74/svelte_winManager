@@ -1,5 +1,4 @@
 import type {
-	DetachedWindowState,
 	ExternalWindowDescriptor,
 	WindowBackend,
 	WindowMessage,
@@ -18,9 +17,9 @@ export type WindowTarget =
 	| "browser-window"
 	| "tauri-window";
 
-type ReadState = () => DetachedWindowState;
+type ReadProps = () => Record<string, unknown>;
 
-type ApplyState = (state: DetachedWindowState) => void;
+type ApplyProps = (props: Record<string, unknown>) => void;
 
 interface SyncSession {
 	stopEffect: () => void;
@@ -366,10 +365,10 @@ export class WindowSync {
 	/**
 	 * Startar dubbelriktad props-synkronisering.
 	 *
-	 * readState:
+	 * readProps:
 	 * Läser aktuella reaktiva props.
 	 *
-	 * applyState:
+	 * applyProps:
 	 * Applicerar inkommande props.
 	 *
 	 * applyWindowStateUpdate:
@@ -377,8 +376,8 @@ export class WindowSync {
 	 */
 	start(
 		win: WindowInstance,
-		readState: ReadState,
-		applyState: ApplyState,
+		readProps: ReadProps,
+		applyState: ApplyProps,
 		applyWindowStateUpdate?: (updates: Partial<WindowState>) => void,
 		manager?: WindowManager,
 	): void {
@@ -395,9 +394,7 @@ export class WindowSync {
 
 		let stopped = false;
 
-		let lastSnapshot:
-			| DetachedWindowState
-			| undefined;
+		let lastSnapshot: Record<string, unknown> | undefined;
 
 		// ------------------------------------------
 		// INCOMING MESSAGES
@@ -451,19 +448,16 @@ export class WindowSync {
 
 			if (
 				message.type !== "sync:props" ||
-				!message.state ||
-				typeof message.state.props !== "object" ||
-				message.state.props === null ||
-				Array.isArray(message.state.props)
+				!message.props ||
+				typeof message.props !== "object" ||
+				Array.isArray(message.props)
 			) {
 				return;
 			}
 
-			const incoming = snapshot({
-				props: message.state.props,
-			});
+			const incoming = snapshot(message.props);
 
-			// Identiskt state behöver inte appliceras.
+			// Identiska props behöver inte appliceras.
 			if (lastSnapshot && deepEqual(lastSnapshot, incoming)) {
 				return;
 			}
@@ -477,23 +471,17 @@ export class WindowSync {
 			 * Den kan då upptäcka att state redan
 			 * finns lokalt och undvika en loop.
 			 */
-			lastSnapshot = incoming;
+			lastSnapshot = snapshot(incoming);
 
 			try {
 				const rpc = this.getRpc(win.winId);
 				const restoredProps = restoreRpcToCallbacks(
-					incoming.props,
+					incoming,
 					rpc,
 				);
 
-				console.log(
-					"[APPLY STATE]",
-					win.title,
-					restoredProps,
-				);
-				applyState({
-					props: restoredProps,
-				});
+				console.log("[APPLY PROPS]", win.title, restoredProps);
+				applyState(restoredProps);
 			} catch (error) {
 				console.error(
 					`[WindowSync] Kunde inte applicera props för ${win.title}:`,
@@ -513,10 +501,10 @@ export class WindowSync {
 				}
 
 				/**
-				 * readState måste läsa reaktiva värden
+				 * readProps måste läsa reaktiva värden
 				 * så att Svelte kan spåra förändringar.
 				 */
-				const current = readState();
+				const currentProps = readProps();
 				if (manager) {
 					const parent = manager.find(win.parentId ?? ROOT_WIN_ID);
 					if (parent && parent.wManagerId === win.wManagerId) return;
@@ -530,13 +518,11 @@ export class WindowSync {
 				}
 
 				const transportProps = this.prepareForTransport(
-					current.props ?? {},
+					currentProps,
 					win.winId,
 				);
 
-				const currentSnapshot: DetachedWindowState = {
-					props: (transportProps as Record<string, unknown>) ?? {},
-				};
+				const currentSnapshot = (transportProps as Record<string, unknown>) ?? {};
 
 				if (
 					lastSnapshot && deepEqual(
@@ -556,7 +542,7 @@ export class WindowSync {
 					type: "sync:props",
 					winId: win.winId,
 					parentId: win.parentId ?? ROOT_WIN_ID,
-					state: currentSnapshot,
+					props: currentSnapshot,
 				};
 
 				if (
@@ -594,12 +580,10 @@ export class WindowSync {
 	): () => void {
 		this.start(
 			win,
-			() => ({
-				props: $state.snapshot(win.props),
-			}),
-			(incomingState) => {
+			() => $state.snapshot(win.props),
+			(incomingProps) => {
 				wManager.updateProps(
-					incomingState.props ?? {},
+					incomingProps,
 					win,
 				);
 			},
@@ -722,14 +706,14 @@ export class WindowSync {
 
 	async send(
 		winId: string,
-		state: DetachedWindowState,
+		props: Record<string, unknown>,
 	): Promise<void> {
 		this.assertAlive();
 
 		const rpc = this.getRpc(winId);
 
 		const cleanProps = this.prepareForTransport(
-			snapshot(state.props ?? {}),
+			snapshot(props),
 			winId,
 		);
 
@@ -740,32 +724,7 @@ export class WindowSync {
 			type: "sync:props",
 			winId,
 			parentId: "root",
-			state: {
-				props: cleanProps as Record<string, unknown>,
-			},
-		};
-
-		await this.backend.sendRaw(message);
-	}
-
-	async send_old(
-		winId: string,
-		state: DetachedWindowState,
-	): Promise<void> {
-		this.assertAlive();
-
-		const cleanState = snapshot({
-			props: state.props ?? {},
-		});
-
-		const message: Extract<
-			WindowMessage,
-			{ type: "sync:props" }
-		> = {
-			type: "sync:props",
-			winId,
-			parentId: "root",
-			state: cleanState,
+			props: cleanProps as Record<string, unknown>,
 		};
 
 		await this.backend.sendRaw(message);

@@ -27,12 +27,8 @@ import type { WindowId, WindowState } from "./windowManager.svelte";
 
 import type { WindowTarget } from "./windowSync.svelte";
 
-export interface DetachedWindowState {
-	props: Record<string, unknown>;
-}
-
 export type WindowMessage =
-	| { type: "sync:props"; winId: WindowId; parentId?: WindowId; state: DetachedWindowState }
+	| { type: "sync:props"; winId: WindowId; parentId?: WindowId; props: Record<string, unknown> }
 	| {
 		type: "sync:state-update";
 		winId: WindowId;
@@ -277,7 +273,11 @@ function isTransportPacket(
 
 	switch (message.type) {
 		case "sync:props":
-			return true;
+			return (
+				!!message.props &&
+				typeof message.props === "object" &&
+				!Array.isArray(message.props)
+			);
 
 		case "sync:state-update":
 			return (
@@ -428,7 +428,10 @@ export class WindowBackendManager implements WindowBackend {
 
 				if (!raw) return;
 
-				const state = JSON.parse(raw) as DetachedWindowState;
+				const props = JSON.parse(raw) as Record<string, unknown>;
+				if (!props || typeof props !== "object" || Array.isArray(props)) {
+					throw new Error("Initial window props must be an object.");
+				}
 
 				localStorage.removeItem(key);
 
@@ -439,7 +442,7 @@ export class WindowBackendManager implements WindowBackend {
 						type: "sync:props",
 						winId,
 						parentId: new URLSearchParams(globalThis.location.search).get("parentId") ?? undefined,
-						state,
+						props,
 					},
 				};
 
@@ -516,11 +519,10 @@ export class WindowBackendManager implements WindowBackend {
 	private saveInitialState(
 		descriptor: ExternalWindowDescriptor,
 	): void {
-		const state: DetachedWindowState = { props: descriptor.props ?? {} };
 		try {
 			localStorage.setItem(
 				initStorageKey(descriptor.winId),
-				JSON.stringify(state),
+				JSON.stringify(descriptor.props ?? {}),
 			);
 		} catch (error) {
 			throw new Error(
