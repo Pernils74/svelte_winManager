@@ -300,8 +300,18 @@ win.payload.data = data;
 a component can receive updates explicitly:
 
 ```ts
-manager.updateProps(win, {
+manager.updateProps({
     data
+}, win);
+```
+
+Props are published to other runtimes by default. When applying props received
+from synchronization, pass `{ publish: false }` to avoid publishing them again:
+
+```ts
+manager.updateProps({ data }, win, {
+    publish: false,
+    preserveReferences: true
 });
 ```
 

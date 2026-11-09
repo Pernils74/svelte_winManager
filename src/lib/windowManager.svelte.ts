@@ -201,6 +201,37 @@ function isWindowInstance(
 		"wManagerId" in value;
 }
 
+function isPlainObject(
+	value: unknown,
+): value is Record<string, unknown> {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+function reconcileObject(
+	target: Record<string, unknown>,
+	source: Record<string, unknown>,
+): void {
+	for (const key of Object.keys(target)) {
+		if (!Object.prototype.hasOwnProperty.call(source, key)) {
+			delete target[key];
+		}
+	}
+
+	for (const [key, value] of Object.entries(source)) {
+		const current = target[key];
+		if (isPlainObject(current) && isPlainObject(value)) {
+			reconcileObject(current, value);
+		} else {
+			target[key] = value;
+		}
+	}
+}
+
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
 	readonly wManagerId = crypto.randomUUID();
@@ -658,8 +689,9 @@ export class WindowManager {
 	updateProps<TProps extends Record<string, unknown>>(
 		props: Partial<TProps>,
 		win?: WindowInstance<TProps>,
+		options: { publish?: boolean; preserveReferences?: boolean } = {},
 	): void {
-		console.log("updateprops");
+		// console.log("updateprops");
 		const targets = win
 			? this.windows.filter((current) =>
 				current.parentId === win.parentId &&
@@ -672,8 +704,17 @@ export class WindowManager {
 			);
 
 		for (const current of targets) {
-			Object.assign(current.props, props);
-			this.publishProps(current);
+			if (options.preserveReferences) {
+				reconcileObject(
+					current.props,
+					props as Record<string, unknown>,
+				);
+			} else {
+				Object.assign(current.props, props);
+			}
+			if (options.publish !== false) {
+				this.publishProps(current);
+			}
 		}
 	}
 

@@ -30,8 +30,8 @@ function spawnReactive() {
 	win_B = wManager.open(Window_B, {
 		title: "🔗 Window_B (Props)",
 		width: 600,
-		height: 950,
-		top: 100,
+		height: 1100,
+		top: 50,
 		left: 650,
 		props: { // <--- Ta bort <WindowBProps> härifrån
 			msg: message,

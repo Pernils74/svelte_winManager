@@ -426,12 +426,12 @@ export class WindowSync {
 		// ------------------------------------------
 
 		const unsubscribe = this.backend.onRawMessage(win.winId, (packet: WindowTransportPacket) => {
-			console.log(
-				"[SYNC RX]",
-				win.winId,
-				packet.from_WinId,
-				packet.message.type,
-			);
+			// console.log(
+			// 	"[SYNC RX]",
+			// 	win.winId,
+			// 	packet.from_WinId,
+			// 	packet.message.type,
+			// );
 
 			// session is stopped
 			if (stopped || this.destroyed) {
@@ -508,7 +508,8 @@ export class WindowSync {
 					rpc,
 				);
 
-				console.log("[APPLY PROPS]", win.title, restoredProps);
+				// console.log("[APPLY PROPS]", win.title, restoredProps);
+
 				applyState(restoredProps);
 			} catch (error) {
 				console.error(
@@ -552,7 +553,7 @@ export class WindowSync {
 							// w.wManagerId !== win.wManagerId,
 						);
 
-					console.log("detachedsiblings ", detachedSiblings);
+					// console.log("detachedsiblings ", detachedSiblings);
 					if (detachedSiblings.length === 0) return;
 
 					// if (win.renderTargetWinId && win.renderTargetWinId !== ROOT_WIN_ID) {
@@ -629,6 +630,7 @@ export class WindowSync {
 				wManager.updateProps(
 					incomingProps,
 					win,
+					{ publish: false, preserveReferences: true },
 				);
 			},
 			(updates) => {
