@@ -2,13 +2,9 @@ import { type Component, createContext } from "svelte";
 import { getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
 import { WindowSync } from "./windowSync.svelte.ts";
 
-import {
-	createWindowBackend,
-	type ExternalWindowDescriptor,
-	type WindowBackend,
-} from "./windowBackend.ts";
+import { createWindowBackend, type ExternalWindowDescriptor, type WindowBackend } from "./windowBackend.ts";
 
-export const ROOT_WIN_ID = "root";
+export const ROOT_WIN_ID = "app_root";
 export const EPSILON = 3;
 export const MIN_WIDTH = 160;
 export const MIN_HEIGHT = 100;
@@ -91,7 +87,7 @@ export interface WindowComponentProps<
 > {
 	win: WindowInstance<TProps>;
 	winId: WindowId;
-	parentId: WindowId | null;
+	renderTargetWinId: WindowId | null;
 }
 
 import { type WindowViewPortType } from "./windowBackend.ts";
@@ -107,6 +103,18 @@ export interface WindowInstance<
 	wManagerId: string;
 	winId: WindowId;
 
+	/**
+	 * WinId för fönstret som skapade denna instans.
+	 * Förblir oförändrad även om fönstret detachas.
+	 */
+	parentId: WindowId | null;
+
+	/**
+	 * WinId för fönstret där denna instans renderas.
+	 * Kan ändras vid reparenting eller detach.
+	 */
+	renderTargetWinId: WindowId | null;
+
 	title: string;
 	thumbnail: string | null;
 
@@ -118,7 +126,7 @@ export interface WindowInstance<
 	 * This object is reactive and synchronized between runtimes.
 	 */
 	props: TProps & Record<string, unknown>;
-	parentId: WindowId | null;
+
 	boundingEl: HTMLElement | null;
 	rect: WindowRect;
 	isDetached?: boolean;
@@ -149,6 +157,7 @@ export interface OpenWindowOptions<
 	winId?: WindowId;
 	title?: string;
 	parentId?: WindowId | null;
+	renderTargetWinId?: WindowId | null;
 
 	boundingEl?: HTMLElement | null;
 	tileOffset?: number;
@@ -188,6 +197,15 @@ function overlaps(
 		endA > startB + EPSILON;
 }
 
+function isWindowInstance(
+	value: WindowInstance | Component<any>,
+): value is WindowInstance {
+	return typeof value === "object" &&
+		value !== null &&
+		"winId" in value &&
+		"wManagerId" in value;
+}
+
 export class WindowManager {
 	windows = $state<WindowInstance[]>([]);
 	readonly wManagerId = crypto.randomUUID();
@@ -212,12 +230,13 @@ export class WindowManager {
 		this.windows.push({
 			wManagerId: this.wManagerId,
 			winId: ROOT_WIN_ID,
+			parentId: null,
 			title: "Root Workspace",
 			thumbnail: null,
 			component: null,
 			componentKey: "",
 			props: {},
-			parentId: null,
+			renderTargetWinId: null,
 			boundingEl: null,
 			rect: {
 				left: 0,
@@ -253,7 +272,18 @@ export class WindowManager {
 	}
 
 	debugBroadcast(winId: string, props: Record<string, unknown>): void {
-		void this.sync.send(winId, props);
+		const win = this.find(winId);
+		if (!win) {
+			throw new Error(`Fönstret ${winId} hittades inte.`);
+		}
+
+		void this.sync.send(
+			winId,
+			props,
+			win.wManagerId,
+			win.parentId,
+			win.renderTargetWinId ?? ROOT_WIN_ID,
+		);
 	}
 
 	findAll(winId: WindowId): WindowInstance[] {
@@ -274,13 +304,13 @@ export class WindowManager {
 		);
 	}
 
-	getChildren(parentId: WindowId): WindowInstance[] {
+	getChildren(renderTargetWinId: WindowId): WindowInstance[] {
 		return this.windows.filter(
-			(win) => win.parentId === parentId,
+			(win) => win.renderTargetWinId === renderTargetWinId,
 		);
 	}
 
-	getDescendants(parentId: WindowId): WindowInstance[] {
+	getDescendants(renderTargetWinId: WindowId): WindowInstance[] {
 		const result: WindowInstance[] = [];
 
 		const visited = new Set<WindowId>();
@@ -296,7 +326,7 @@ export class WindowManager {
 			}
 		};
 
-		visit(parentId);
+		visit(renderTargetWinId);
 
 		return result;
 	}
@@ -309,8 +339,8 @@ export class WindowManager {
 		);
 	}
 
-	getRenderableChildren(parentId: WindowId): WindowInstance[] {
-		return this.getChildren(parentId).filter(
+	getRenderableChildren(renderTargetWinId: WindowId): WindowInstance[] {
+		return this.getChildren(renderTargetWinId).filter(
 			(win) =>
 				!win.isMinimized &&
 				win.wManagerId === this.wManagerId,
@@ -323,11 +353,11 @@ export class WindowManager {
 				return false;
 			}
 
-			if (!win.parentId || win.parentId === ROOT_WIN_ID) {
+			if (!win.renderTargetWinId || win.renderTargetWinId === ROOT_WIN_ID) {
 				return false;
 			}
 
-			const parent = this.find(win.parentId);
+			const parent = this.find(win.renderTargetWinId);
 
 			return (
 				!parent ||
@@ -336,11 +366,38 @@ export class WindowManager {
 		});
 	}
 
+	open<TProps extends Record<string, unknown> = Record<string, unknown>>(
+		component: Component<any>,
+		options?: OpenWindowOptions<TProps>,
+	): WindowInstance<TProps>;
+	open<TProps extends Record<string, unknown> = Record<string, unknown>>(
+		parent: WindowInstance,
+		component: Component<any>,
+		options?: OpenWindowOptions<TProps>,
+	): WindowInstance<TProps>;
+	open<TProps extends Record<string, unknown> = Record<string, unknown>>(
+		first: WindowInstance | Component<any>,
+		second: Component<any> | OpenWindowOptions<TProps> = {},
+		third: OpenWindowOptions<TProps> = {},
+	): WindowInstance<TProps> {
+		if (isWindowInstance(first)) {
+			return this.openWindow(second as Component<any>, {
+				...third,
+				parentId: first.winId,
+			});
+		}
+
+		return this.openWindow(
+			first,
+			second as OpenWindowOptions<TProps>,
+		);
+	}
+
 	// --------------------------------------------------
 	// OPEN
 	// --------------------------------------------------
 
-	open<
+	openWindow<
 		TProps extends Record<string, unknown> = Record<string, unknown>,
 	>(
 		component: Component<any>,
@@ -353,11 +410,15 @@ export class WindowManager {
 				return existing as WindowInstance<TProps>;
 			}
 		}
-		const parent = this.find(options.parentId ?? ROOT_WIN_ID) ?? this.find(ROOT_WIN_ID)!;
+		const parent = this.find(options.renderTargetWinId ?? ROOT_WIN_ID) ??
+			this.find(ROOT_WIN_ID)!;
 
-		const parentId = parent.winId;
+		const renderTargetWinId = parent.winId;
+
+		const parentId = options.parentId ?? null;
+
 		const tileOffset = options.tileOffset ?? 20;
-		const siblingCount = this.getChildren(parentId).length;
+		const siblingCount = this.getChildren(renderTargetWinId).length;
 		const currentOffset = siblingCount * tileOffset;
 		const compKey = options.componentKey ?? getComponentKey(component);
 		if (!compKey) {
@@ -378,12 +439,13 @@ export class WindowManager {
 		const win = $state<WindowInstance<TProps>>({
 			wManagerId: this.wManagerId,
 			winId: options.winId ?? crypto.randomUUID(),
+			parentId,
 			title: options.title ?? component.name ?? "Window",
 			thumbnail: null,
 			component,
 			componentKey: compKey,
 			props: initProps,
-			parentId,
+			renderTargetWinId,
 			boundingEl: options.boundingEl ?? null,
 			rect: rect,
 			isMinimized: false,
@@ -443,7 +505,8 @@ export class WindowManager {
 			componentKey: win.componentKey,
 
 			parentId: win.parentId,
-			// parentId: null, // detached window blir root i nya runtime
+			renderTargetWinId: win.renderTargetWinId,
+			// renderTargetWinId: null, // detached window blir root i nya runtime
 			props: $state.snapshot(win.props),
 
 			width: win.rect.width,
@@ -473,12 +536,12 @@ export class WindowManager {
 	// DUPLICATE
 	// --------------------------------------------------
 
-	duplicateWindow(source: WindowInstance, offset = 24, parentId?: WindowId): WindowInstance | undefined {
+	duplicateWindow(source: WindowInstance, offset = 24, renderTargetWinId?: WindowId): WindowInstance | undefined {
 		if (source.winId === ROOT_WIN_ID || !source.component) return undefined;
 
 		const copy = this.open(source.component, {
 			title: `${source.title} (copy)`,
-			parentId: parentId ?? source.parentId,
+			renderTargetWinId: renderTargetWinId ?? source.renderTargetWinId,
 			componentKey: source.componentKey,
 			props: structuredClone($state.snapshot(source.props)),
 
@@ -525,21 +588,21 @@ export class WindowManager {
 
 	reparent(
 		id: WindowId,
-		newParentId: WindowId,
+		newRenderTargetWinId: WindowId,
 		screenRect: WindowRect,
 	): boolean {
 		const win = this.find(id);
 
-		const parent = this.find(newParentId) ??
+		const parent = this.find(newRenderTargetWinId) ??
 			this.find(ROOT_WIN_ID);
 
 		if (!win || !parent) return false;
 		if (id === ROOT_WIN_ID) return false;
 
 		if (
-			id === newParentId ||
+			id === newRenderTargetWinId ||
 			this.getDescendants(id).some(
-				(child) => child.winId === newParentId,
+				(child) => child.winId === newRenderTargetWinId,
 			)
 		) {
 			return false;
@@ -562,7 +625,7 @@ export class WindowManager {
 		};
 
 		const rect = this.fitToParent(parent, localRect);
-		win.parentId = parent.winId;
+		win.renderTargetWinId = parent.winId;
 		win.boundingEl = null;
 
 		Object.assign(win.rect, rect, {
@@ -577,7 +640,7 @@ export class WindowManager {
 		// 	"[after]",
 		// 	win.title,
 		// 	"parent=",
-		// 	win.parentId,
+		// 	win.renderTargetWinId,
 		// );
 		// console.log(
 		// 	this.getChildren(parent.winId).map((w) => w.title),
@@ -603,11 +666,13 @@ export class WindowManager {
 	): void {
 		console.log("updateprops");
 		const targets = win
-			? win.parentId === null ? [win] : this.windows.filter((current) =>
-				current.parentId === win.parentId &&
-				current.wManagerId === win.wManagerId &&
-				current.componentKey === win.componentKey
-			)
+			? win.renderTargetWinId === null
+				? [win]
+				: this.windows.filter((current) =>
+					current.renderTargetWinId === win.renderTargetWinId &&
+					current.wManagerId === win.wManagerId &&
+					current.componentKey === win.componentKey
+				)
 			: this.windows.filter((current) =>
 				Object.keys(props).some(
 					(key) => key in current.props,
@@ -625,8 +690,10 @@ export class WindowManager {
 		win?: WindowInstance<TProps>,
 	): void {
 		if (win) {
-			// Hämtar alla med samma parentId i aktuell js wManger runtime
-			const targets = win.parentId ? this.windows.filter((current) => current.parentId === win.parentId) : [win];
+			// Hämtar alla med samma renderTargetWinId i aktuell js wManger runtime
+			const targets = win.renderTargetWinId
+				? this.windows.filter((current) => current.renderTargetWinId === win.renderTargetWinId)
+				: [win];
 			for (const current of targets) {
 				Object.assign(current.props, props);
 				this.publishDetachedProps(current);
@@ -649,6 +716,9 @@ export class WindowManager {
 		void this.sync.send(
 			win.winId,
 			$state.snapshot(win.props),
+			win.wManagerId,
+			win.parentId,
+			win.renderTargetWinId ?? ROOT_WIN_ID,
 		).catch((error) => {
 			console.error(
 				`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
@@ -793,7 +863,12 @@ export class WindowManager {
 		winId: WindowId,
 		updates: Partial<WindowState>,
 	): Promise<void> {
-		await this.sync.sendStateUpdate(winId, updates);
+		const win = this.find(winId);
+		if (!win) {
+			throw new Error(`Fönstret ${winId} hittades inte.`);
+		}
+
+		await this.sync.sendStateUpdate(winId, updates, win.wManagerId);
 	}
 
 	// --------------------------------------------------
@@ -812,7 +887,7 @@ export class WindowManager {
 			...proposed,
 		};
 		const siblings = this.getChildren(
-			win.parentId ?? ROOT_WIN_ID,
+			win.renderTargetWinId ?? ROOT_WIN_ID,
 		);
 		const neighbors = siblings.filter((other) => {
 			if (
@@ -955,7 +1030,7 @@ export class WindowManager {
 		const a = win.rect;
 
 		const siblings = this.getChildren(
-			win.parentId ?? ROOT_WIN_ID,
+			win.renderTargetWinId ?? ROOT_WIN_ID,
 		);
 
 		for (const other of siblings) {
@@ -1063,7 +1138,7 @@ export class WindowManager {
 
 			// if (child && child.viewPort.type !== "workspace") {
 			if (child) {
-				void this.backend.close(id).catch((error) => {
+				void this.backend.close(id, child.wManagerId).catch((error) => {
 					console.error(
 						`[WindowManager] Kunde inte stänga fönster ${id}:`,
 						error,
@@ -1106,6 +1181,7 @@ export class WindowManager {
 // --------------------------------------------------
 
 const [getContextManager, setContextManager] = createContext<WindowManager>();
+const [getCurrentWindow, setCurrentWindow] = createContext<WindowInstance>();
 
 // export interface WindowManagerOptions {
 // 	modules?: Record<string, () => Promise<any>>;
@@ -1141,6 +1217,89 @@ export function initializeWindowManager(
 	}
 }
 
-export function getWindowManager(): WindowManager {
-	return getContextManager();
+// export function getWindowManager(): WindowManager {
+// 	return getContextManager();
+// }
+
+export function getWindowManager(
+	windowContext?: WindowInstance,
+): WindowManager {
+	const manager = getContextManager();
+
+	if (windowContext) {
+		setCurrentWindow(windowContext);
+	}
+
+	let currentWindow: WindowInstance;
+	try {
+		currentWindow = getCurrentWindow();
+	} catch {
+		return manager;
+	}
+
+	return new Proxy(manager, {
+		get(target, property) {
+			if (property === "open" || property === "openWindow") {
+				return (
+					first: WindowInstance | Component<any>,
+					second: Component<any> | OpenWindowOptions = {},
+					third?: OpenWindowOptions,
+				) => {
+					if (isWindowInstance(first)) {
+						return target.open(
+							first,
+							second as Component<any>,
+							third,
+						);
+					}
+
+					const options = second as OpenWindowOptions;
+					return target.openWindow(first, {
+						...options,
+						parentId: options.parentId !== undefined
+							? options.parentId
+							: options.renderTargetWinId !== undefined
+							? options.renderTargetWinId
+							: currentWindow.winId,
+					});
+				};
+			}
+
+			const value = Reflect.get(target, property, target);
+			return typeof value === "function" ? value.bind(target) : value;
+		},
+	});
 }
+
+// export function getWindowManager(): WindowManager {
+// 	const manager = getContextManager();
+// 	let currentWindow: WindowInstance;
+
+// 	try {
+// 		currentWindow = getCurrentWindow();
+// 	} catch {
+// 		return manager;
+// 	}
+
+// 	return new Proxy(manager, {
+// 		get(target, property) {
+// 			if (property === "openWindow") {
+// 				return (
+// 					component: Component<any>,
+// 					options: OpenWindowOptions = {},
+// 				) =>
+// 					target.openWindow(component, {
+// 						...options,
+// 						parentId: options.parentId !== undefined
+// 							? options.parentId
+// 							: options.renderTargetWinId !== undefined
+// 							? options.renderTargetWinId
+// 							: currentWindow.winId,
+// 					});
+// 			}
+
+// 			const value = Reflect.get(target, property, target);
+// 			return typeof value === "function" ? value.bind(target) : value;
+// 		},
+// 	});
+// }

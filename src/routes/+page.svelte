@@ -93,7 +93,7 @@ onMount(() => {
 	// wManager.open(debug, {
 	// 	title: "🪟 debug",
 	// 	// Reparent this window to the window with ID 1 (Window A)
-	// 	// parentId: "1",
+	// 	// renderTargetWinId: "1",
 	// 	width: 700,
 	// 	height: 600,
 	// 	left: 250,
@@ -120,7 +120,7 @@ onMount(() => {
 
 	// wManager.open(WindowC, {
 	// 	title: "🪟 Window C",
-	// 	parentId: 1, // Reparent this window to the window with ID 1 (Window A)
+	// 	renderTargetWinId: 1, // Reparent this window to the window with ID 1 (Window A)
 	// 	width: 700,
 	// 	height: 600,
 	// 	left: 250,

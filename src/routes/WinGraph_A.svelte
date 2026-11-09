@@ -10,7 +10,7 @@ import WinGraphDebug from "./WinGraphDebug.svelte";
 import { onDestroy } from "svelte";
 const wManager = getWindowManager();
 
-let { win, winId, parentId }: WindowComponentProps = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 
 type Point3D = {
 	x: number;
@@ -107,7 +107,7 @@ function openDebug() {
 <div class="window-container">
 	<h4>📡 Live Data Stream</h4>
 	<p>
-	Parent:	<strong>{parentId ?? "root"}</strong>
+	Parent:	<strong>{renderTargetWinId ?? "root"}</strong>
 	</p>
 	<label>
 	Batch size

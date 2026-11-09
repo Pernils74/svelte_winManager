@@ -25,6 +25,8 @@ let {
 		<thead>
 			<tr>
 				<th>WinId</th>
+				<th>Win title</th>
+
 				<th>Parent</th>
 				<th>wManagerId</th>
 				<th>Detached</th>
@@ -35,9 +37,11 @@ let {
 			{#each wManager.windows as win (win.winId)}
 				<tr>
 					<td>{win.winId}</td>
-					<td>{win.parentId ?? "ROOT"}</td>
+					<td>{win.title}</td>
+
+					<td>{win.renderTargetWinId ?? "ROOT"}</td>
 					<td>{win.wManagerId}</td>
-					<td>{wManager.find(win.parentId)?.wManagerId != wManager.wManagerId ? "✅" : ""}</td> 
+					<td>{wManager.find(win.renderTargetWinId)?.wManagerId != wManager.wManagerId ? "✅" : ""}</td>
 				</tr>
 			{/each}
 		</tbody>

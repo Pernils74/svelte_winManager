@@ -67,6 +67,10 @@ const wManager = getWindowManager();
 // Reading of URL-parametrar for standalone windows (win.isDetached=true)
 let standaloneWinId = $derived(page.url.searchParams.get("winId"));
 let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
+let standaloneRenderTargetWinId = $derived(
+	page.url.searchParams.get("renderTargetWinId") ??
+		page.url.searchParams.get("parentId"),
+);
 let standaloneParentId = $derived(page.url.searchParams.get("parentId"));
 let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
 let standaloneManagerId = page.url.searchParams.get("wManagerId");
@@ -130,6 +134,7 @@ $effect(() => {
 					thumbnail: null,
 					props: {},
 					parentId: standaloneParentId,
+					renderTargetWinId: standaloneRenderTargetWinId,
 					boundingEl: null,
 					rect: {
 						left: 0,
@@ -283,7 +288,7 @@ function publishStandaloneStateUpdate(
 		{#if win.component}
 			{@const WindowComponent = win.component}
 			{@const globalIdx = wManager.windows.findIndex(w => w.winId === win.winId)}
-			{@const parentInstance = wManager.find(win.parentId)}
+			{@const parentInstance = wManager.find(win.renderTargetWinId)}
 
 
 			<WindowFrame
@@ -293,7 +298,7 @@ function publishStandaloneStateUpdate(
 				<WindowComponent
 					bind:win={wManager.windows[globalIdx]}
 					winId={win.winId}
-					parentId={win.parentId}
+					renderTargetWinId={win.renderTargetWinId}
 					{...win.props}
 				/>
 

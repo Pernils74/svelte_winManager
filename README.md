@@ -84,7 +84,7 @@ WindowHost
 ```
 
 This diagram illustrates a possible hierarchy. Whether Window C is actually
-nested inside Window B depends on the `parentId` supplied when C is opened.
+nested inside Window B depends on the `renderTargetWinId` supplied when C is opened.
 
 Detached windows follow a separate runtime path:
 
@@ -147,11 +147,12 @@ Conceptually, a window instance looks like this:
 ```ts
 interface WindowInstance<TPayload = unknown> {
   winId: string;
+  parentId: string | null;
   title: string;
   component: Component<any> | null;
   componentKey?: string;
   props: Record<string, unknown>;
-  parentId: string | null;
+  renderTargetWinId: string | null;
   state: WindowState;
   payload: TPayload;
 }
@@ -216,9 +217,14 @@ import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 | ---------- | -------------------------------------------------------------- |
 | `win`      | The current `WindowInstance`, including its state and payload. |
 | `winId`    | The unique ID of the current window.                           |
-| `parentId` | The parent window ID, or `null` if there is no parent ID.      |
+| `renderTargetWinId` | The ID of the window where this window is rendered, or `null`. |
 
-For root-level windows, the parent ID is typically `"root"`.
+`win.parentId` identifies the window component that created this instance.
+It stays unchanged when the window is detached or reparented.
+`win.renderTargetWinId` identifies where it is currently rendered and may
+change when reparented.
+
+For root-level windows, the render target is typically `"root"`.
 
 ### Accessing window information
 
@@ -226,12 +232,12 @@ For root-level windows, the parent ID is typically `"root"`.
 <script lang="ts">
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
-let { win, winId, parentId }: WindowComponentProps = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 </script>
 
 <p>Window ID: {winId}</p>
 <p>Title: {win.title}</p>
-<p>Parent: {parentId ?? "none"}</p>
+<p>Parent: {renderTargetWinId ?? "none"}</p>
 <p>Width: {win.state.width}px</p>
 ```
 
@@ -261,7 +267,7 @@ export interface WindowBProps {
 let {
   win,
   winId,
-  parentId,
+  renderTargetWinId,
   myNoneReactiveProp,
 }: WindowComponentProps & WindowBProps = $props();
 </script>
@@ -280,7 +286,7 @@ Use `WindowManager.open()` to create a window.
 ```ts
 const child = wManager.open(Window_C, {
   title: "Window C",
-  parentId: winId,
+  renderTargetWinId: winId,
   width: 400,
   height: 300,
   payload: {
@@ -300,7 +306,8 @@ authoritative types and defaults.
 | Option         | Purpose                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------- |
 | `title`        | Window title.                                                                                                 |
-| `parentId`     | Parent window ID. Use `"root"` or omit it for a root-level window, according to the implementation's default. |
+| `parentId`     | Creator window ID. Defaults to the current window when called from a window component. |
+| `renderTargetWinId`     | ID of the window where this window should be rendered. Defaults to the manager's root workspace. |
 | `boundingEl`   | Optional bounding element.                                                                                    |
 | `tileOffset`   | Offset used when placing sibling windows.                                                                     |
 | `setId`        | Requests a specific window ID; the implementation may return an existing matching window.                     |
@@ -321,7 +328,7 @@ Example:
 ```ts
 wManager.open(Window_C, {
   title: "Child Window",
-  parentId: winId,
+  renderTargetWinId: winId,
   width: 500,
   height: 350,
   left: 40,
@@ -333,9 +340,21 @@ wManager.open(Window_C, {
 });
 ```
 
-When a parent ID is supplied, the manager uses it to establish the hierarchy. If
-the requested parent cannot be found, the implementation may fall back to the
-root workspace.
+When called from a window component, `parentId` defaults to that component's
+`winId`. The render target defaults to the root workspace. Set
+`renderTargetWinId` explicitly to nest the new window inside another window:
+
+```ts
+wManager.openWindow(Window_C, {
+  parentId: win.winId,
+  renderTargetWinId: win.winId,
+  title: "Child Window",
+});
+```
+
+`parentId` records which window created the instance; it does not control where
+the instance is rendered. If `renderTargetWinId` is omitted or does not match a
+window in this manager, the manager's root workspace is used.
 
 ## WindowManager API
 
@@ -349,8 +368,8 @@ arguments.
 | -------------------------- | ------------------------------------ |
 | `find(id)`                 | Finds a window by ID.                |
 | `findByTitle(title)`       | Finds a window by title.             |
-| `getChildren(parentId)`    | Returns direct children of a window. |
-| `getDescendants(parentId)` | Returns descendants recursively.     |
+| `getChildren(renderTargetWinId)`    | Returns direct children of a window. |
+| `getDescendants(renderTargetWinId)` | Returns descendants recursively.     |
 
 Example:
 
@@ -385,7 +404,7 @@ const descendants = wManager.getDescendants(winId);
 | `restore(win)`                            | Restores a minimized window.                                 |
 | `toggleMaximize(win, bounds)`             | Toggles maximization relative to bounds.                     |
 | `resizeDockedWindow(win, mode, proposed)` | Resizes docked windows and adjusts adjacent siblings.        |
-| `reparent(id, newParentId, screenRect?)`  | Changes a window's parent and adjusts its position and size. |
+| `reparent(id, newRenderTargetWinId, screenRect?)`  | Changes a window's parent and adjusts its position and size. |
 | `setThumbnail(id, thumbnail)`             | Sets a window thumbnail.                                     |
 
 Example:
@@ -537,7 +556,7 @@ import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 import Window_C from "./window_C.svelte";
 
-let { win, winId, parentId, myNoneReactiveProp }:
+let { win, winId, renderTargetWinId, myNoneReactiveProp }:
   & WindowComponentProps
   & { myNoneReactiveProp: string } = $props();
 
@@ -579,7 +598,7 @@ interface WindowCPayload {
   counter: number;
 }
 
-let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps<WindowCPayload> = $props();
 </script>
 
 <div>
@@ -728,7 +747,7 @@ import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 let {
   win,
   winId,
-  parentId,
+  renderTargetWinId,
   myNoneReactiveProp,
 }: WindowComponentProps & WindowBProps = $props();
 </script>
@@ -762,11 +781,11 @@ payload: {
 
 The latter creates a separate object with the value read at that time.
 
-In the current example, if the `parentId` option for C is commented out, C opens
+In the current example, if the `renderTargetWinId` option for C is commented out, C opens
 at the root level rather than as a child of B. To make it a nested window, pass:
 
 ```ts
-parentId: winId;
+renderTargetWinId: winId;
 ```
 
 ### Window C: reading a typed payload
@@ -787,7 +806,7 @@ It then types the infrastructure props:
 <script lang="ts">
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
-let { win, winId, parentId }: WindowComponentProps<WindowCPayload> = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps<WindowCPayload> = $props();
 </script>
 ```
 
@@ -819,12 +838,12 @@ For example:
 ```ts
 const windowB = wManager.open(Window_B, {
   title: "Window B",
-  parentId: winId,
+  renderTargetWinId: winId,
 });
 
 const windowC = wManager.open(Window_C, {
   title: "Window C",
-  parentId: windowB.winId,
+  renderTargetWinId: windowB.winId,
 });
 ```
 
@@ -995,12 +1014,12 @@ or Tauri webviews.
 
 ### A window opens at the workspace root instead of inside its parent
 
-Set the `parentId` option to the intended parent's `winId`:
+Set the `renderTargetWinId` option to the intended parent's `winId`:
 
 ```ts
 wManager.open(Window_C, {
   title: "Window C",
-  parentId: winId,
+  renderTargetWinId: winId,
 });
 ```
 
@@ -1038,7 +1057,7 @@ descendant windows when a parent is closed.
   operation.
 - Use **backend messaging** when data must cross into a detached browser tab or
   Tauri window.
-- Set **`parentId` explicitly** when a window should be nested inside another
+- Set **`renderTargetWinId` explicitly** when a window should be nested inside another
   window.
 - Keep the window manager initialized in the appropriate context and retrieve
   the existing instance in descendant components.

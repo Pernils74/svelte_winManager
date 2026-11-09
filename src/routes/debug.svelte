@@ -35,7 +35,7 @@ const wManager = getWindowManager();
 					<code>{win.winId}</code>
 				</td>
 
-				<td>{win.parentId ?? "-"}</td>
+				<td>{win.renderTargetWinId ?? "-"}</td>
 
 				<td>
 					{wManager.getChildren(win.winId).length}
@@ -71,7 +71,7 @@ const wManager = getWindowManager();
 
 						<pre>
             {JSON.stringify({
-            	parentId: win.parentId,
+							renderTargetWinId: win.renderTargetWinId,
             	children: wManager.getChildren(win.winId).map(c => c.winId),
             
             	context: win.context,

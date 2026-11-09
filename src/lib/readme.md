@@ -92,7 +92,7 @@ The actual `WindowInstance` objects remain local to each runtime.
 ```ts
 interface WindowRegistryEntry {
     winId: WindowId;
-    parentId?: WindowId;
+    renderTargetWinId?: WindowId;
 
     componentKey: string;
 
@@ -141,7 +141,7 @@ All WindowManagers update their local registry.
 Without a shared registry:
 
 ```ts
-manager.find(parentId);
+manager.find(renderTargetWinId);
 ```
 
 fails whenever the parent exists in another runtime.

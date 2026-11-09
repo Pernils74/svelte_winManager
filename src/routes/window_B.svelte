@@ -4,6 +4,8 @@ import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
 import WindowRegistryDebug from "#lib/WindowRegistryDebug.svelte";
 
+import BroadcastChannelRenderTargetMonitor from "./BroadcastChannelRenderTargetMonitor.svelte";
+
 export interface WindowBProps {
 	msg?: string;
 	counter?: number;
@@ -13,7 +15,7 @@ export interface WindowBProps {
 let {
 	win = $bindable(),
 	winId,
-	parentId,
+	renderTargetWinId,
 }: WindowComponentProps & WindowBProps = $props();
 
 const wManager = getWindowManager();
@@ -58,19 +60,22 @@ function detachToWindow() {
 <div class="window-container">
 	<h3>{win.title}</h3>
 
-	<WindowRegistryDebug {wManager} />
+	<!-- <WindowRegistryDebug {wManager} /> -->
 
 	<p>
-		Parent: <strong>{parentId ?? "root"} antal wins {wManager.winCount}</strong>
+		WinId: <strong> {winId}     </strong><br>
+		RenderTargetWinId: <strong>{renderTargetWinId ?? "root"}     </strong><br>
+		wManagerId: <strong>{win.wManagerId ?? "root"}</strong><br>
+		Antal wins: <strong> {wManager.winCount}     </strong>
 	</p>
 	<p>
-		wManagerId: <strong>{win.wManagerId ?? "root"}</strong>
 	</p>
-	<p>
-		Parent wManagerId: <strong>{wManager.find(win.parentId )?.wManagerId?? "root"}</strong><br>
-		Parent wManagerId: <strong>{wManager.find(parentId )?.wManagerId?? "root"}</strong>
-	</p>
-
+	<!-- <p>
+		Parent wManagerId: <strong>{wManager.find(win.renderTargetWinId )?.wManagerId?? "root"}</strong><br>
+		Parent wManagerId: <strong>{wManager.find(renderTargetWinId )?.wManagerId?? "root"}</strong>
+	</p> -->
+   <BroadcastChannelRenderTargetMonitor	renderTargetWinId={wManager.find(win.renderTargetWinId)?.renderTargetWinId ?? undefined}
+/>
 	<p>
 		WinId:
 		<small>{winId}</small>
@@ -133,7 +138,7 @@ function detachToWindow() {
 	<!-- <div class="actions">
 		<button
 			onclick={reparentToRoot}
-			disabled={parentId === "root"}
+			disabled={renderTargetWinId === "root"}
 		>
 			🖥️ Reparent To Root
 		</button>

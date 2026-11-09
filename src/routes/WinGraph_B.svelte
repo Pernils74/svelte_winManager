@@ -38,7 +38,7 @@ interface Props extends WindowComponentProps<GraphConfig> {
 	points: Point3D[];
 }
 
-let { win, winId, parentId, points }: Props = $props();
+let { win, winId, renderTargetWinId, points }: Props = $props();
 
 let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
 

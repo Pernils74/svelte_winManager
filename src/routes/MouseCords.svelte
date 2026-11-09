@@ -15,7 +15,7 @@ let mouseY = $state(0);
 
 // Selected window
 let winId = $state("");
-let parentId = $state("");
+let renderTargetWinId = $state("");
 
 // Window position
 let winX = $state(0);
@@ -55,7 +55,7 @@ function inspect(target: HTMLElement) {
 	}
 
 	winId = win.winId;
-	parentId = win.parentId ?? "root";
+	renderTargetWinId = win.renderTargetWinId ?? "root";
 
 	winX = win.rect.left;
 	winY = win.rect.top;
@@ -68,7 +68,7 @@ function inspect(target: HTMLElement) {
 
 function resetWindow() {
 	winId = "";
-	parentId = "";
+	renderTargetWinId = "";
 
 	winX = 0;
 	winY = 0;
@@ -160,8 +160,8 @@ function togglePopup() {
 							<span>winId</span>
 							<b class="blue wrap">{winId}</b>
 
-							<span>parentId</span>
-							<b class="yellow wrap">{parentId}</b>
+							<span>renderTargetWinId</span>
+							<b class="yellow wrap">{renderTargetWinId}</b>
 
 							<span>Position X</span>
 							<b>{winX}</b>

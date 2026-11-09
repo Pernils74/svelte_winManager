@@ -1,9 +1,4 @@
-import type {
-	ExternalWindowDescriptor,
-	WindowBackend,
-	WindowMessage,
-	WindowTransportPacket,
-} from "./windowBackend";
+import type { ExternalWindowDescriptor, WindowBackend, WindowMessage, WindowTransportPacket } from "./windowBackend";
 
 import type { WindowId, WindowInstance, WindowManager, WindowState } from "./windowManager.svelte";
 import { createRpcTransport, WindowRpc } from "./windowRpc";
@@ -314,14 +309,29 @@ export class WindowSync {
 	private destroyed = false;
 
 	private readonly rpcInstances = new Map<string, WindowRpc>();
+	private readonly rpcManagerIds = new Map<string, string>();
 
-	private getRpc(winId: string): WindowRpc {
+	private getRpc(
+		winId: string,
+		wManagerId: string | (() => string),
+	): WindowRpc {
 		let rpc = this.rpcInstances.get(winId);
+		const managerId = typeof wManagerId === "function" ? wManagerId() : wManagerId;
+
+		if (
+			rpc &&
+			this.rpcManagerIds.get(winId) !== managerId
+		) {
+			rpc.destroy();
+			this.rpcInstances.delete(winId);
+			rpc = undefined;
+		}
 
 		if (!rpc) {
 			const transport = createRpcTransport(this.backend);
-			rpc = new WindowRpc(transport, winId);
+			rpc = new WindowRpc(transport, winId, { wManagerId });
 			this.rpcInstances.set(winId, rpc);
+			this.rpcManagerIds.set(winId, managerId);
 		}
 
 		return rpc;
@@ -357,6 +367,21 @@ export class WindowSync {
 			target,
 		);
 	}
+
+	// winId
+	//   = unik fönsterinstans
+
+	// componentKey
+	//   = vilken komponenttyp som renderas
+
+	// renderTargetWinId
+	//   = synkgrupp mellan instanser
+
+	// wManagerId
+	//   = vilken runtime instansen tillhör
+
+	// endpointId
+	//   = vilken backend-instans som skickade paketet
 
 	// ----------------------------------------------
 	// START
@@ -404,7 +429,7 @@ export class WindowSync {
 			console.log(
 				"[SYNC RX]",
 				win.winId,
-				packet.sourceId,
+				packet.from_WinId,
 				packet.message.type,
 			);
 
@@ -412,14 +437,16 @@ export class WindowSync {
 			if (stopped || this.destroyed) {
 				return;
 			}
-			// Ignorera egna utskick.
-			if (packet.sourceId === this.backend.endpointId) {
-				return;
-			}
 			const message = packet.message;
 
 			// För att förhindra att samma runime skall behandla sitt eget broadcst som inkommande meddelande
-			if (message.winId !== win.winId) {
+			if (
+				packet.to_WinId !== win.winId ||
+				message.winId !== win.winId
+			) {
+				return;
+			}
+			if (message.wManagerId !== win.wManagerId) {
 				return;
 			}
 
@@ -455,6 +482,10 @@ export class WindowSync {
 				return;
 			}
 
+			if (message.parentId !== undefined) {
+				win.parentId = message.parentId;
+			}
+
 			const incoming = snapshot(message.props);
 
 			// Identiska props behöver inte appliceras.
@@ -474,7 +505,7 @@ export class WindowSync {
 			lastSnapshot = snapshot(incoming);
 
 			try {
-				const rpc = this.getRpc(win.winId);
+				const rpc = this.getRpc(win.winId, () => win.wManagerId);
 				const restoredProps = restoreRpcToCallbacks(
 					incoming,
 					rpc,
@@ -505,31 +536,46 @@ export class WindowSync {
 				 * så att Svelte kan spåra förändringar.
 				 */
 				const currentProps = readProps();
+				// avgör om transport behövs
 				if (manager) {
-					const parent = manager.find(win.parentId ?? ROOT_WIN_ID);
-					if (parent && parent.wManagerId === win.wManagerId) return;
+					// jag och min prent finns i samma runtime
+					// const parent = manager.find(win.renderTargetWinId ?? ROOT_WIN_ID);
+					// if (parent && parent.wManagerId === win.wManagerId) return;
 
-					if (win.parentId && win.parentId !== ROOT_WIN_ID) {
-						const parent = manager.find(win.parentId);
-						if (parent && parent.wManagerId === win.wManagerId) {
-							return;
-						}
-					}
+					/**
+					 * Hitta syskon med samma parent-grupp men i andra runtimes.
+					 *
+					 * Används för att avgöra om gruppen är spridd över
+					 * flera WindowManagers (t.ex. detached fönster).
+					 */
+					const detachedSiblings = manager
+						.windows
+						.filter(
+							(w) => w.renderTargetWinId === win.renderTargetWinId, //&&
+							// w.wManagerId !== win.wManagerId,
+						);
+
+					console.log("detachedsiblings ", detachedSiblings);
+					if (detachedSiblings.length === 0) return;
+
+					// if (win.renderTargetWinId && win.renderTargetWinId !== ROOT_WIN_ID) {
+					// 	const parent = manager.find(win.renderTargetWinId);
+					// 	if (parent && parent.wManagerId === win.wManagerId) {
+					// 		return;
+					// 	}
+					// }
 				}
 
 				const transportProps = this.prepareForTransport(
 					currentProps,
 					win.winId,
+					win.wManagerId,
 				);
 
 				const currentSnapshot = (transportProps as Record<string, unknown>) ?? {};
 
-				if (
-					lastSnapshot && deepEqual(
-						lastSnapshot,
-						currentSnapshot,
-					)
-				) {
+				// finns inget att uppdatera
+				if (lastSnapshot && deepEqual(lastSnapshot, currentSnapshot)) {
 					return;
 				}
 
@@ -541,21 +587,21 @@ export class WindowSync {
 				> = {
 					type: "sync:props",
 					winId: win.winId,
-					parentId: win.parentId ?? ROOT_WIN_ID,
+					wManagerId: win.wManagerId,
+					parentId: win.parentId,
+					renderTargetWinId: win.renderTargetWinId ?? ROOT_WIN_ID,
 					props: currentSnapshot,
 				};
 
-				if (
-					message.type === "sync:props" &&
-					message.parentId !== (win.parentId ?? ROOT_WIN_ID)
-				) {
+				if (message.type === "sync:props" && message.renderTargetWinId !== (win.renderTargetWinId ?? ROOT_WIN_ID)) {
+					console.log("felaktigt ..");
 					return;
 				}
 				// Läge A : Jag är en parent vars Child har detachats
 				// this.wMangerId === parent.wManagerId && ChildProcess.wManagerID !== this.wManagerId
 
 				// Läge B : Jag är ett child som har flyttat till ny flik (wManager instans)
-				// this.wManagerId === ChildProcess.wManagerId && ChildProcess.parentId.wMangerId !== ChildProcess.wManagerId
+				// this.wManagerId === ChildProcess.wManagerId && ChildProcess.renderTargetWinId.wMangerId !== ChildProcess.wManagerId
 				// Skicka till transporten.
 				void this.backend
 					.sendRaw(message)
@@ -582,6 +628,7 @@ export class WindowSync {
 			win,
 			() => $state.snapshot(win.props),
 			(incomingProps) => {
+				// console.log("inkommande props");
 				wManager.updateProps(
 					incomingProps,
 					win,
@@ -616,6 +663,7 @@ export class WindowSync {
 	async sendStateUpdate(
 		winId: WindowId,
 		updates: Partial<WindowState>,
+		wManagerId: string,
 	): Promise<void> {
 		this.assertAlive();
 
@@ -625,6 +673,7 @@ export class WindowSync {
 		> = {
 			type: "sync:state-update",
 			winId,
+			wManagerId,
 			updates: snapshot(updates),
 		};
 
@@ -643,9 +692,10 @@ export class WindowSync {
 	private prepareForTransport(
 		value: unknown,
 		winId: string,
+		wManagerId: string,
 		path = "props",
 	): unknown {
-		const rpc = this.getRpc(winId);
+		const rpc = this.getRpc(winId, wManagerId);
 
 		if (typeof value === "function") {
 			const method = `${winId}:${path}`;
@@ -676,6 +726,7 @@ export class WindowSync {
 				this.prepareForTransport(
 					item,
 					winId,
+					wManagerId,
 					`${path}.${index}`,
 				)
 			);
@@ -688,6 +739,7 @@ export class WindowSync {
 				result[key] = this.prepareForTransport(
 					child,
 					winId,
+					wManagerId,
 					`${path}.${key}`,
 				);
 			}
@@ -707,14 +759,18 @@ export class WindowSync {
 	async send(
 		winId: string,
 		props: Record<string, unknown>,
+		wManagerId: string,
+		parentId: WindowId | null,
+		renderTargetWinId: WindowId,
 	): Promise<void> {
 		this.assertAlive();
 
-		const rpc = this.getRpc(winId);
+		const rpc = this.getRpc(winId, wManagerId);
 
 		const cleanProps = this.prepareForTransport(
 			snapshot(props),
 			winId,
+			wManagerId,
 		);
 
 		const message: Extract<
@@ -723,7 +779,10 @@ export class WindowSync {
 		> = {
 			type: "sync:props",
 			winId,
-			parentId: "root",
+			wManagerId,
+			parentId,
+			// renderTargetWinId = "root"
+			renderTargetWinId,
 			props: cleanProps as Record<string, unknown>,
 		};
 
@@ -734,10 +793,10 @@ export class WindowSync {
 	// CLOSE
 	// ----------------------------------------------
 
-	async close(winId: string): Promise<void> {
+	async close(winId: string, wManagerId: string): Promise<void> {
 		this.stop(winId);
 
-		await this.backend.close(winId);
+		await this.backend.close(winId, wManagerId);
 	}
 
 	/**
@@ -745,8 +804,9 @@ export class WindowSync {
 	 */
 	async closeDetached(
 		winId: string,
+		wManagerId: string,
 	): Promise<void> {
-		await this.close(winId);
+		await this.close(winId, wManagerId);
 	}
 
 	// ----------------------------------------------
@@ -767,6 +827,7 @@ export class WindowSync {
 
 		rpc?.destroy();
 		this.rpcInstances.delete(winId);
+		this.rpcManagerIds.delete(winId);
 	}
 
 	/**

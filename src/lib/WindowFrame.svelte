@@ -61,10 +61,12 @@ interface Props {
 
 let { win = $bindable(), bounds, children }: Props = $props();
 
-const wManager = getWindowManager();
+const wManager = getWindowManager(win);
 
 const transport = createRpcTransport(wManager.backend);
-const rpc = new WindowRpc(transport, win.winId);
+const rpc = new WindowRpc(transport, win.winId, {
+	wManagerId: () => win.wManagerId,
+});
 
 let frameEl: HTMLDivElement;
 // let contentEl: HTMLDivElement;
@@ -196,7 +198,7 @@ function getSnapTargets(axis: "x" | "y"): number[] {
 	// Bara fönster i samma koordinatsystem deltar i dockningen.
 	for (
 		const other of wManager.getChildren(
-			win.parentId ?? ROOT_WIN_ID,
+			win.renderTargetWinId ?? ROOT_WIN_ID,
 		)
 	) {
 		if (other.winId === win.winId || other.isMinimized) {
@@ -390,7 +392,7 @@ function onMouseMove(event: MouseEvent) {
 			) => snapPosition(raw, targets, previous);
 
 			const children = wManager
-				.getChildren(activeWin.parentId ?? ROOT_WIN_ID)
+				.getChildren(activeWin.renderTargetWinId ?? ROOT_WIN_ID)
 				.filter(
 					(other) =>
 						other.winId !== activeWin.winId &&
@@ -579,11 +581,11 @@ $effect(() => {
 
 function shouldBroadcast_old(win: WindowInstance): boolean {
 	// Ett fönster utan parent är ett eget root-fönster.
-	// if (!win.parentId) return true;
-	if (win.parentId == null) return true;
+	// if (!win.renderTargetWinId) return true;
+	if (win.renderTargetWinId == null) return true;
 
 	// Försök hitta den logiska parenten i denna JS-runtime.
-	const parent = wManager.find(win.parentId);
+	const parent = wManager.find(win.renderTargetWinId);
 
 	// Parent finns inte i denna runtime.
 	// Då är win ett detached/externt fönster.
@@ -599,7 +601,7 @@ function shouldBroadcast_old(win: WindowInstance): boolean {
 }
 
 function shouldBroadcast(win: WindowInstance): boolean {
-	return win.parentId == null;
+	return win.renderTargetWinId == null;
 }
 
 // Här reagerar vi på ändringar i props och gör om funktioner till RPC-strängar
@@ -677,7 +679,7 @@ function shouldBroadcast(win: WindowInstance): boolean {
     {#if win.showButtons}
       {#if win.titlebar}
         {@const Titlebar = win.titlebar}
-        <Titlebar win={win} winId={win.winId} parentId={win.parentId} />
+        <Titlebar win={win} winId={win.winId} renderTargetWinId={win.renderTargetWinId} />
       {/if}
 
       <div class="controls">
@@ -732,8 +734,8 @@ function shouldBroadcast(win: WindowInstance): boolean {
 
 
   <!-- 🌟 VARJE FÖNSTERS EGNA LOKALA TASKBAR 🌟 -->
-  {#if wManager.windows.some(w => w.parentId === win.winId && w.isMinimized)}
-    {@const localMinimized = wManager.windows.filter(w => w.parentId === win.winId && w.isMinimized)}
+  {#if wManager.windows.some(w => w.renderTargetWinId === win.winId && w.isMinimized)}
+    {@const localMinimized = wManager.windows.filter(w => w.renderTargetWinId === win.winId && w.isMinimized)}
     <footer class="local-taskbar">
       {#each localMinimized as subWin (subWin.winId)}
         <div class="task-item">

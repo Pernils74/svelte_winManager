@@ -11,7 +11,7 @@ import { type WindowBProps } from "./window_B.svelte";
 
 import Wallpaper from "#lib/Wallpaper.svelte";
 
-let { win, winId, parentId }: WindowComponentProps = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 
 const wManager = getWindowManager();
 
@@ -30,8 +30,8 @@ function spawnReactive() {
 	win_B = wManager.open(Window_B, {
 		title: "🔗 Window_B (Props)",
 		width: 600,
-		height: 850,
-		top: 300,
+		height: 950,
+		top: 100,
 		left: 650,
 		props: { // <--- Ta bort <WindowBProps> härifrån
 			msg: message,
@@ -51,7 +51,7 @@ $effect(() => {
 	// console.log(
 	// 	[...wManager.windows].map((w) => ({
 	// 		id: w.winId,
-	// 		parent: w.parentId,
+	// 		parent: w.renderTargetWinId,
 	// 	})),
 	// );
 
@@ -68,14 +68,14 @@ $effect(() => {
 <div class="window-container">
 	<h3>Window A</h3>
 
+	<p>
+		WinId: <strong> {winId}     </strong><br>
+		RenderTargetWinId: <strong>{renderTargetWinId ?? "root"}     </strong><br>
+		wManagerId: <strong>{win.wManagerId ?? "root"}</strong><br>
+		Antal wins: <strong> {wManager.winCount}     </strong>
+	</p>
 	<WindowRegistryDebug {wManager} />
-
-	<p>
-		Parent: <strong>{parentId ?? "root"}  Antal win {wManager.winCount}     </strong>
-	</p>
-	<p>
-		wManagerId: <strong>{win.wManagerId ?? "root"}</strong>
-	</p>
+	<hr/>
 	envägs	
 	<input
 		type="text"

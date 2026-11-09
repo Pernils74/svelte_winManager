@@ -2,7 +2,7 @@
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 
-let { win, winId, parentId }: WindowComponentProps = $props();
+let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 
 import WindowB from "./window_B.svelte";
 import WinGraphA from "./WinGraph_A.svelte";

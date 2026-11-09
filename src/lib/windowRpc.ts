@@ -21,6 +21,7 @@ export interface WindowRpcOptions {
 	timeoutMs?: number;
 	sourceId?: string;
 	targetEndpointId?: string;
+	wManagerId: string | (() => string);
 }
 
 interface PendingRequest {
@@ -46,6 +47,7 @@ export class WindowRpc {
 	private readonly sourceId: string;
 	private readonly targetEndpointId?: string;
 	private readonly timeoutMs: number;
+	private readonly getWManagerId: () => string;
 
 	private readonly unsubscribe: () => void;
 
@@ -54,7 +56,7 @@ export class WindowRpc {
 	constructor(
 		private readonly transport: RpcTransport,
 		private readonly winId: string,
-		options: WindowRpcOptions = {},
+		options: WindowRpcOptions,
 	) {
 		if (!winId) {
 			throw new Error("WindowRpc kräver ett winId.");
@@ -66,6 +68,10 @@ export class WindowRpc {
 		this.targetEndpointId = options.targetEndpointId;
 
 		this.timeoutMs = options.timeoutMs ?? 10_000;
+		const managerId = options.wManagerId;
+		this.getWManagerId = typeof managerId === "function"
+			? managerId
+			: () => managerId;
 
 		this.unsubscribe = transport.onMessage(
 			winId,
@@ -138,6 +144,7 @@ export class WindowRpc {
 		> = {
 			type: "rpc:request" as const,
 			winId: this.winId,
+			wManagerId: this.getWManagerId(),
 			requestId,
 			sourceId: this.sourceId,
 			targetEndpointId: this.targetEndpointId,
@@ -188,6 +195,7 @@ export class WindowRpc {
 		}
 
 		if (message.winId !== this.winId) return;
+		if (message.wManagerId !== this.getWManagerId()) return;
 		// Ignorera alltid egna utskick.
 		if (message.sourceId === this.sourceId) return;
 		if (message.type === "rpc:response") {
@@ -241,6 +249,7 @@ export class WindowRpc {
 				response = {
 					type: "rpc:response",
 					winId: this.winId,
+					wManagerId: this.getWManagerId(),
 					requestId: message.requestId,
 					sourceId: this.sourceId,
 					targetEndpointId: message.sourceId,
@@ -250,6 +259,7 @@ export class WindowRpc {
 				response = {
 					type: "rpc:response",
 					winId: this.winId,
+					wManagerId: this.getWManagerId(),
 					requestId: message.requestId,
 					sourceId: this.sourceId,
 					targetEndpointId: message.sourceId,
@@ -327,7 +337,7 @@ export function createRpcTransport(
 			return broker.onRawMessage(
 				winId,
 				(packet) => {
-					if (packet.winId !== winId) return;
+					if (packet.to_WinId !== winId) return;
 
 					if (
 						packet.message.type !== "rpc:request" &&
