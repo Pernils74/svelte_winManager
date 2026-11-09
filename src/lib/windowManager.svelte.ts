@@ -92,11 +92,6 @@ export interface WindowComponentProps<
 
 import { type WindowViewPortType } from "./windowBackend.ts";
 
-// interface WindowViewPort {
-// 	id: string;
-// 	type: WindowViewPortType;
-// }
-
 export interface WindowInstance<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
 > {
