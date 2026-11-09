@@ -298,6 +298,7 @@ function publishStandaloneStateUpdate(
 				<WindowComponent
 					bind:win={wManager.windows[globalIdx]}
 					winId={win.winId}
+					parentId={win.parentId}
 					renderTargetWinId={win.renderTargetWinId}
 					{...win.props}
 				/>

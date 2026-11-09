@@ -64,6 +64,7 @@ function detachToWindow() {
 
 	<p>
 		WinId: <strong> {winId}     </strong><br>
+		ParentId: <strong> {win.parentId}     </strong><br>
 		RenderTargetWinId: <strong>{renderTargetWinId ?? "root"}     </strong><br>
 		wManagerId: <strong>{win.wManagerId ?? "root"}</strong><br>
 		Antal wins: <strong> {wManager.winCount}     </strong>
@@ -74,16 +75,15 @@ function detachToWindow() {
 		Parent wManagerId: <strong>{wManager.find(win.renderTargetWinId )?.wManagerId?? "root"}</strong><br>
 		Parent wManagerId: <strong>{wManager.find(renderTargetWinId )?.wManagerId?? "root"}</strong>
 	</p> -->
-   <BroadcastChannelRenderTargetMonitor	renderTargetWinId={wManager.find(win.renderTargetWinId)?.renderTargetWinId ?? undefined}
-/>
-	<p>
-		WinId:
-		<small>{winId}</small>
-	</p>
+	<BroadcastChannelRenderTargetMonitor
+		currentWinId={win.winId}
+		parentId={win.parentId}
+		renderTargetWinId={wManager.find(win.renderTargetWinId)?.renderTargetWinId ?? undefined}
+	/>
 
 	<hr />
 
-	<h4>Props Demo</h4>
+	
 
 	<p>
 		Received prop:

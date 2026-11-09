@@ -446,9 +446,10 @@ export class WindowSync {
 			) {
 				return;
 			}
-			if (message.wManagerId !== win.wManagerId) {
-				return;
-			}
+
+			// if (message.wManagerId !== win.wManagerId) {
+			//  	return;
+			//  }
 
 			// ----------------------------------
 			// WINDOW STATE
@@ -480,10 +481,6 @@ export class WindowSync {
 				Array.isArray(message.props)
 			) {
 				return;
-			}
-
-			if (message.parentId !== undefined) {
-				win.parentId = message.parentId;
 			}
 
 			const incoming = snapshot(message.props);
@@ -551,7 +548,7 @@ export class WindowSync {
 					const detachedSiblings = manager
 						.windows
 						.filter(
-							(w) => w.renderTargetWinId === win.renderTargetWinId, //&&
+							(w) => w.parentId === win.parentId, //&&
 							// w.wManagerId !== win.wManagerId,
 						);
 

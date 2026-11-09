@@ -4,13 +4,15 @@
 import { onMount } from "svelte";
 
 interface Props {
-	winId?: string;
+	currentWinId?: string;
+	parentId?: string | null;
 	renderTargetWinId?: string;
 	channelName?: string;
 }
 
 let {
-	winId,
+	currentWinId,
+	parentId,
 	renderTargetWinId,
 	channelName = "svelte_winmanager_channel",
 }: Props = $props();
@@ -26,7 +28,7 @@ onMount(() => {
 	channel.onmessage = (event) => {
 		const packet = event.data;
 
-		if (winId && packet?.to_WinId !== winId) {
+		if (currentWinId && packet?.to_WinId !== currentWinId) {
 			return;
 		}
 
@@ -74,12 +76,6 @@ function clear() {
 			<b>Channel:</b> {channelName}
 		</div>
 
-		{#if winId}
-			<div>
-				<b>WinId:</b> {winId}
-			</div>
-		{/if}
-
 		{#if renderTargetWinId}
 			<div>
 				<b>RenderTargetWinId:</b> {renderTargetWinId}
@@ -105,6 +101,11 @@ function clear() {
 				No matching message received
 			</div>
 		{/if}
+
+		<div class="window-identity">
+			<div><b>win.parentId:</b> {parentId ?? "null"}</div>
+			<div><b>win.winId:</b> {currentWinId ?? "unknown"}</div>
+		</div>
 	</div>
 </div>
 
@@ -158,6 +159,12 @@ pre {
 
 .empty {
 	color: #999;
+}
+
+.window-identity {
+	margin-top: 1rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid #444;
 }
 </style>
 ``
