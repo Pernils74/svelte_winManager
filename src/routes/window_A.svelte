@@ -70,6 +70,7 @@ $effect(() => {
 
 	<p>
 		WinId: <strong> {winId}     </strong><br>
+		ParentId: <strong> {win.parentId}     </strong><br>
 		RenderTargetWinId: <strong>{renderTargetWinId ?? "root"}     </strong><br>
 		wManagerId: <strong>{win.wManagerId ?? "root"}</strong><br>
 		Antal wins: <strong> {wManager.winCount}     </strong>
