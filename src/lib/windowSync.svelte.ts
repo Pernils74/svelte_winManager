@@ -3,7 +3,7 @@ import type { ExternalWindowDescriptor, WindowBackend, WindowMessage, WindowTran
 import type { WindowId, WindowInstance, WindowManager, WindowState } from "./windowManager.svelte";
 import { createRpcTransport, WindowRpc } from "./windowRpc";
 
-import { ROOT_WIN_ID } from "./windowManager.svelte";
+import { WINDOW_MANAGER_ROOT_ID } from "./windowManager.svelte";
 // --------------------------------------------------
 // TYPES
 // --------------------------------------------------
@@ -534,35 +534,7 @@ export class WindowSync {
 				 * så att Svelte kan spåra förändringar.
 				 */
 				const currentProps = readProps();
-				// avgör om transport behövs
-				if (manager) {
-					// jag och min prent finns i samma runtime
-					// const parent = manager.find(win.renderTargetWinId ?? ROOT_WIN_ID);
-					// if (parent && parent.wManagerId === win.wManagerId) return;
-
-					/**
-					 * Hitta syskon med samma parent-grupp men i andra runtimes.
-					 *
-					 * Används för att avgöra om gruppen är spridd över
-					 * flera WindowManagers (t.ex. detached fönster).
-					 */
-					const detachedSiblings = manager
-						.windows
-						.filter(
-							(w) => w.parentId === win.parentId, //&&
-							// w.wManagerId !== win.wManagerId,
-						);
-
-					// console.log("detachedsiblings ", detachedSiblings);
-					if (detachedSiblings.length === 0) return;
-
-					// if (win.renderTargetWinId && win.renderTargetWinId !== ROOT_WIN_ID) {
-					// 	const parent = manager.find(win.renderTargetWinId);
-					// 	if (parent && parent.wManagerId === win.wManagerId) {
-					// 		return;
-					// 	}
-					// }
-				}
+				if (manager && win.wManagerId === manager.wManagerId) return;
 
 				const transportProps = this.prepareForTransport(
 					currentProps,
@@ -587,11 +559,11 @@ export class WindowSync {
 					winId: win.winId,
 					wManagerId: win.wManagerId,
 					parentId: win.parentId,
-					renderTargetWinId: win.renderTargetWinId ?? ROOT_WIN_ID,
+					renderTargetWinId: win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
 					props: currentSnapshot,
 				};
 
-				if (message.type === "sync:props" && message.renderTargetWinId !== (win.renderTargetWinId ?? ROOT_WIN_ID)) {
+				if (message.type === "sync:props" && message.renderTargetWinId !== (win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID)) {
 					console.log("felaktigt ..");
 					return;
 				}

@@ -30,7 +30,7 @@
 //  ├─ colors
 //  └─ layout
 
-import { onDestroy, onMount, type Snippet } from "svelte";
+import { onDestroy, onMount, setContext, type Snippet } from "svelte";
 import { tick } from "svelte";
 
 // Längst upp bland dina övriga importer:
@@ -43,7 +43,7 @@ import {
 	MIN_HEIGHT,
 	MIN_WIDTH,
 	type ResizeMode,
-	ROOT_WIN_ID,
+	WINDOW_MANAGER_ROOT_ID,
 	type WindowInstance,
 	WindowManager,
 	type WindowRect,
@@ -61,7 +61,7 @@ interface Props {
 
 let { win = $bindable(), bounds, children }: Props = $props();
 
-const wManager = getWindowManager(win);
+const wManager = getWindowManager({ parentId: win.winId });
 
 const transport = createRpcTransport(wManager.backend);
 const rpc = new WindowRpc(transport, win.winId, {
@@ -198,7 +198,7 @@ function getSnapTargets(axis: "x" | "y"): number[] {
 	// Bara fönster i samma koordinatsystem deltar i dockningen.
 	for (
 		const other of wManager.getChildren(
-			win.renderTargetWinId ?? ROOT_WIN_ID,
+			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
 		)
 	) {
 		if (other.winId === win.winId || other.isMinimized) {
@@ -245,7 +245,7 @@ let reparentDrag = false;
 
 function beginInteraction(event: MouseEvent, mode: InteractionMode) {
 	if (event.button !== 0) return;
-	if (win.winId === ROOT_WIN_ID) return;
+	if (win.winId === WINDOW_MANAGER_ROOT_ID) return;
 
 	const target = event.target;
 
@@ -310,7 +310,7 @@ function findDropParent(
 		if (targetId === draggedId) continue;
 
 		// 3. Om fönstret är Root Workspace, hoppa över (vi vill hitta specifika fönster först)
-		if (targetId === ROOT_WIN_ID) continue;
+		if (targetId === WINDOW_MANAGER_ROOT_ID) continue;
 
 		// 4. Om fönstret är ett barn till fönstret vi drar, hoppa över (förhindra cykliska träd)
 		if (descendants.has(targetId)) continue;
@@ -322,7 +322,7 @@ function findDropParent(
 
 	// Om vi letade igenom alla element och bara hittade bakgrunden/wallpaper,
 	// så släpper vi fönstret på skrivbordsroten.
-	return ROOT_WIN_ID;
+	return WINDOW_MANAGER_ROOT_ID;
 }
 
 // WindowFrame.svelte -> handleMouseUp
@@ -392,7 +392,7 @@ function onMouseMove(event: MouseEvent) {
 			) => snapPosition(raw, targets, previous);
 
 			const children = wManager
-				.getChildren(activeWin.renderTargetWinId ?? ROOT_WIN_ID)
+				.getChildren(activeWin.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID)
 				.filter(
 					(other) =>
 						other.winId !== activeWin.winId &&
@@ -539,7 +539,7 @@ function changeTransparency(event: WheelEvent) {
 }
 
 async function minimize() {
-	if (win.winId === ROOT_WIN_ID) return;
+	if (win.winId === WINDOW_MANAGER_ROOT_ID) return;
 
 	endInteraction();
 

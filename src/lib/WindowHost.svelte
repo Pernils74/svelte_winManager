@@ -43,7 +43,7 @@ import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
-import { getWindowManager, ROOT_WIN_ID, type WindowInstance, type WindowState } from "./windowManager.svelte";
+import { getWindowManager, WINDOW_MANAGER_ROOT_ID, type WindowInstance, type WindowState } from "./windowManager.svelte";
 import { getComponentByKey } from "./windowComponentRegistry";
 
 // import { registerComponents } from "./windowRegistry";
@@ -89,7 +89,7 @@ let winCount = $derived(wManager.winCount);
 let minimizedWindows = $derived(
 	wManager.windows.filter(
 		(win) =>
-			win.winId !== ROOT_WIN_ID &&
+			win.winId !== WINDOW_MANAGER_ROOT_ID &&
 			win.isMinimized,
 	),
 );
@@ -207,7 +207,7 @@ onMount(() => {
 		console.warn("[WindowHost] contentEl is undefined on mount. Cannot set root bounds.");
 		return;
 	}
-	wManager.setBoundingEl(ROOT_WIN_ID, rootContentEl);
+	wManager.setBoundingEl(WINDOW_MANAGER_ROOT_ID, rootContentEl);
 	const updateBounds = () => {
 		if (!contentEl) return;
 		wManager.setRootBounds(
@@ -222,7 +222,7 @@ onMount(() => {
 
 	return () => {
 		observer.disconnect();
-		wManager.setBoundingEl(ROOT_WIN_ID, null);
+		wManager.setBoundingEl(WINDOW_MANAGER_ROOT_ID, null);
 	};
 });
 
@@ -340,7 +340,7 @@ function publishStandaloneStateUpdate(
 
 		{:else}
 			<!-- 1. Rendera alla vanliga rot-fönster -->
-			{#each wManager.getChildren(ROOT_WIN_ID) as win (win.winId)}
+			{#each wManager.getChildren(WINDOW_MANAGER_ROOT_ID) as win (win.winId)}
 				{#if !win.isMinimized && 	win.wManagerId === wManager.wManagerId}
 					{@render renderWindow(win)}
 				{/if}
