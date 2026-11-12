@@ -66,6 +66,8 @@ const wManager = getWindowManager({ parentId: win.winId });
 const transport = createRpcTransport(wManager.backend);
 const rpc = new WindowRpc(transport, win.winId, {
 	wManagerId: () => win.wManagerId,
+	localRuntimeId: wManager.wManagerId,
+	parentId: win.parentId,
 });
 
 let frameEl: HTMLDivElement;
@@ -479,8 +481,18 @@ function onMouseMove(event: MouseEvent) {
 		// wManager.update(activeWin.winId, nextRect);
 		wManager.updateState(activeWin.winId, { ...nextRect, transparency: 0.65 });
 	} else {
-		wManager.resizeDockedWindow(activeWin, dragMode, nextRect);
-		wManager.updateState(activeWin.winId, { transparency: 0.75 });
+		const resizedRect = wManager.resizeDockedWindow(
+			activeWin,
+			dragMode,
+			nextRect,
+			{ publish: false },
+		);
+		if (resizedRect) {
+			wManager.updateState(activeWin.winId, {
+				...resizedRect,
+				transparency: 0.75,
+			});
+		}
 	}
 }
 

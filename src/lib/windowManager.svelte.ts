@@ -251,7 +251,7 @@ export class WindowManager {
 		};
 
 		this.backend = options.backend ?? createWindowBackend();
-		this.sync = new WindowSync(this.backend);
+		this.sync = new WindowSync(this.backend, this.wManagerId);
 		// this.register=
 
 		this.windows.push({
@@ -310,6 +310,8 @@ export class WindowManager {
 			win.wManagerId,
 			win.parentId,
 			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+			win.componentKey,
+			this.wManagerId,
 		);
 	}
 
@@ -687,14 +689,20 @@ export class WindowManager {
 	updateProps<TProps extends Record<string, unknown>>(
 		props: Partial<TProps>,
 		win?: WindowInstance<TProps>,
-		options: { publish?: boolean; preserveReferences?: boolean } = {},
+		options: {
+			publish?: boolean;
+			preserveReferences?: boolean;
+			onlyWindow?: boolean;
+		} = {},
 	): void {
 		// console.log("updateprops");
 		const targets = win
-			? this.windows.filter((current) =>
-				current.parentId === win.parentId &&
-				current.componentKey === win.componentKey
-			)
+			? options.onlyWindow
+				? [win]
+				: this.windows.filter((current) =>
+					current.parentId === win.parentId &&
+					current.componentKey === win.componentKey
+				)
 			: this.windows.filter((current) =>
 				Object.keys(props).some(
 					(key) => key in current.props,
@@ -710,9 +718,23 @@ export class WindowManager {
 			} else {
 				Object.assign(current.props, props);
 			}
-			if (options.publish !== false) {
-				this.publishProps(current);
-			}
+		}
+
+		if (options.publish === false) return;
+
+		for (const current of targets) {
+			this.sync.markPropsPublished(current);
+		}
+
+		const publishedGroups = new Set<string>();
+		for (const current of targets) {
+			const groupKey = JSON.stringify([
+				current.parentId,
+				current.componentKey,
+			]);
+			if (publishedGroups.has(groupKey)) continue;
+			publishedGroups.add(groupKey);
+			this.publishProps(current);
 		}
 	}
 
@@ -723,6 +745,8 @@ export class WindowManager {
 			win.wManagerId,
 			win.parentId,
 			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+			win.componentKey,
+			this.wManagerId,
 		).catch((error) => {
 			console.error(
 				`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
@@ -738,6 +762,7 @@ export class WindowManager {
 	updateState(
 		id: WindowId,
 		updates: Partial<WindowState>,
+		options: { publish?: boolean } = {},
 	): void {
 		const win = this.find(id);
 		if (!win) return;
@@ -751,7 +776,7 @@ export class WindowManager {
 		});
 		Object.assign(win, windowState);
 
-		if (win.winId !== WINDOW_MANAGER_ROOT_ID) {
+		if (win.winId !== WINDOW_MANAGER_ROOT_ID && options.publish !== false) {
 			this.publishDetachedStateUpdate(win, updates);
 		}
 	}
@@ -872,7 +897,13 @@ export class WindowManager {
 			throw new Error(`Fönstret ${winId} hittades inte.`);
 		}
 
-		await this.sync.sendStateUpdate(winId, updates, win.wManagerId);
+		await this.sync.sendStateUpdate(
+			winId,
+			updates,
+			win.wManagerId,
+			win.parentId,
+			this.wManagerId,
+		);
 	}
 
 	// --------------------------------------------------
@@ -883,8 +914,9 @@ export class WindowManager {
 		win: WindowInstance,
 		mode: ResizeMode,
 		proposed: Partial<WindowRect>,
-	): void {
-		if (win.winId === WINDOW_MANAGER_ROOT_ID) return;
+		options: { publish?: boolean } = {},
+	): WindowRect | undefined {
+		if (win.winId === WINDOW_MANAGER_ROOT_ID) return undefined;
 		const old = rectOf(win);
 		const next: WindowRect = {
 			...old,
@@ -995,7 +1027,10 @@ export class WindowManager {
 			}
 		}
 		Object.assign(win.rect, next);
-		this.publishDetachedStateUpdate(win, next);
+		if (options.publish !== false) {
+			this.publishDetachedStateUpdate(win, next);
+		}
+		return next;
 	}
 
 	// --------------------------------------------------
@@ -1142,7 +1177,12 @@ export class WindowManager {
 
 			// if (child && child.viewPort.type !== "workspace") {
 			if (child) {
-				void this.backend.close(id, child.wManagerId).catch((error) => {
+				void this.backend.close(
+					id,
+					child.wManagerId,
+					child.parentId,
+					this.wManagerId,
+				).catch((error) => {
 					console.error(
 						`[WindowManager] Kunde inte stänga fönster ${id}:`,
 						error,

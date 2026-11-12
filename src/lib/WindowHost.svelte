@@ -253,7 +253,7 @@ function publishStandaloneStateUpdate(
 ): void {
 	if (!isStandalone || !standaloneWinId) return;
 
-	wManager.updateState(standaloneWinId, updates);
+	wManager.updateState(standaloneWinId, updates, { publish: false });
 	void wManager
 		.sendWindowStateUpdate(standaloneWinId, updates)
 		.catch((error) => {

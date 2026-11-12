@@ -1,4 +1,10 @@
-import type { ExternalWindowDescriptor, WindowBackend, WindowMessage, WindowTransportPacket } from "./windowBackend";
+import type {
+	ExternalWindowDescriptor,
+	WindowBackend,
+	WindowEndpoint,
+	WindowMessage,
+	WindowTransportPacket,
+} from "./windowBackend";
 
 import type { WindowId, WindowInstance, WindowManager, WindowState } from "./windowManager.svelte";
 import { createRpcTransport, WindowRpc } from "./windowRpc";
@@ -225,12 +231,8 @@ function deepEqual(
 
 function isWindowStateUpdateMessage(
 	value: WindowMessage,
-	winId: string,
 ): value is Extract<WindowMessage, { type: "sync:state-update" }> {
-	if (
-		value.type !== "sync:state-update" ||
-		value.winId !== winId
-	) {
+	if (value.type !== "sync:state-update") {
 		return false;
 	}
 
@@ -305,22 +307,28 @@ export class WindowSync {
 		string,
 		SyncSession
 	>();
+	private readonly publishedProps = new Map<string, Record<string, unknown>>();
 
 	private destroyed = false;
 
 	private readonly rpcInstances = new Map<string, WindowRpc>();
 	private readonly rpcManagerIds = new Map<string, string>();
+	private readonly rpcParentIds = new Map<string, WindowId | null>();
 
 	private getRpc(
 		winId: string,
 		wManagerId: string | (() => string),
+		parentId: WindowId | null = null,
 	): WindowRpc {
 		let rpc = this.rpcInstances.get(winId);
 		const managerId = typeof wManagerId === "function" ? wManagerId() : wManagerId;
 
 		if (
 			rpc &&
-			this.rpcManagerIds.get(winId) !== managerId
+			(
+				this.rpcManagerIds.get(winId) !== managerId ||
+				this.rpcParentIds.get(winId) !== parentId
+			)
 		) {
 			rpc.destroy();
 			this.rpcInstances.delete(winId);
@@ -329,9 +337,14 @@ export class WindowSync {
 
 		if (!rpc) {
 			const transport = createRpcTransport(this.backend);
-			rpc = new WindowRpc(transport, winId, { wManagerId });
+			rpc = new WindowRpc(transport, winId, {
+				wManagerId,
+				localRuntimeId: this.localRuntimeId,
+				parentId,
+			});
 			this.rpcInstances.set(winId, rpc);
 			this.rpcManagerIds.set(winId, managerId);
+			this.rpcParentIds.set(winId, parentId);
 		}
 
 		return rpc;
@@ -339,6 +352,7 @@ export class WindowSync {
 
 	constructor(
 		private readonly backend: WindowBackend,
+		private readonly localRuntimeId: string,
 	) {}
 
 	// ----------------------------------------------
@@ -421,59 +435,10 @@ export class WindowSync {
 
 		let lastSnapshot: Record<string, unknown> | undefined;
 
-		// ------------------------------------------
-		// INCOMING MESSAGES
-		// ------------------------------------------
+		const applyIncomingProps = (packet: WindowTransportPacket): void => {
+			if (stopped || this.destroyed) return;
 
-		const unsubscribe = this.backend.onRawMessage(win.winId, (packet: WindowTransportPacket) => {
-			// console.log(
-			// 	"[SYNC RX]",
-			// 	win.winId,
-			// 	packet.from_WinId,
-			// 	packet.message.type,
-			// );
-
-			// session is stopped
-			if (stopped || this.destroyed) {
-				return;
-			}
 			const message = packet.message;
-
-			// För att förhindra att samma runime skall behandla sitt eget broadcst som inkommande meddelande
-			if (
-				packet.to_WinId !== win.winId ||
-				message.winId !== win.winId
-			) {
-				return;
-			}
-
-			// if (message.wManagerId !== win.wManagerId) {
-			//  	return;
-			//  }
-
-			// ----------------------------------
-			// WINDOW STATE
-			// ----------------------------------
-
-			if (isWindowStateUpdateMessage(message, win.winId)) {
-				try {
-					applyWindowStateUpdate?.(
-						message.updates,
-					);
-				} catch (error) {
-					console.error(
-						`[WindowSync] Kunde inte applicera fönstertillstånd för ${win.title}:`,
-						error,
-					);
-				}
-
-				return;
-			}
-
-			// ----------------------------------
-			// PROPS
-			// ----------------------------------
-
 			if (
 				message.type !== "sync:props" ||
 				!message.props ||
@@ -483,33 +448,32 @@ export class WindowSync {
 				return;
 			}
 
-			const incoming = snapshot(message.props);
-
-			// Identiska props behöver inte appliceras.
-			if (lastSnapshot && deepEqual(lastSnapshot, incoming)) {
+			if (packet.to.type === "group") {
+				if (
+					packet.to.parentId !== win.parentId ||
+					packet.to.componentKey !== win.componentKey ||
+					packet.from.wManagerId === win.wManagerId
+				) {
+					return;
+				}
+			} else if (
+				packet.to.endpoint.winId !== win.winId ||
+				packet.to.endpoint.wManagerId !== win.wManagerId
+			) {
 				return;
 			}
 
-			/**
-			 * Uppdatera snapshot FÖRE mutation.
-			 *
-			 * När applyState ändrar Svelte-state
-			 * körs effekten igen.
-			 *
-			 * Den kan då upptäcka att state redan
-			 * finns lokalt och undvika en loop.
-			 */
+			const incoming = snapshot(message.props);
+			if (lastSnapshot && deepEqual(lastSnapshot, incoming)) return;
 			lastSnapshot = snapshot(incoming);
 
 			try {
-				const rpc = this.getRpc(win.winId, () => win.wManagerId);
-				const restoredProps = restoreRpcToCallbacks(
-					incoming,
-					rpc,
+				const rpc = this.getRpc(
+					packet.from.winId,
+					packet.from.wManagerId,
+					packet.from.parentId,
 				);
-
-				// console.log("[APPLY PROPS]", win.title, restoredProps);
-
+				const restoredProps = restoreRpcToCallbacks(incoming, rpc);
 				applyState(restoredProps);
 			} catch (error) {
 				console.error(
@@ -517,10 +481,64 @@ export class WindowSync {
 					error,
 				);
 			}
-		});
+		};
 
 		// ------------------------------------------
-		// OUTGOING REACTIVE SYNCHRONIZATION
+		// INCOMING MESSAGES
+		// ------------------------------------------
+
+		const unsubscribe = this.backend.onRawMessage(win.winId, (packet: WindowTransportPacket) => {
+			// session is stopped
+			if (stopped || this.destroyed) {
+				return;
+			}
+			const message = packet.message;
+
+			if (
+				packet.to.type !== "window" ||
+				packet.to.endpoint.winId !== win.winId ||
+				packet.to.endpoint.wManagerId !== win.wManagerId
+			) {
+				return;
+			}
+
+			// ----------------------------------
+			// WINDOW STATE
+			// ----------------------------------
+
+			if (isWindowStateUpdateMessage(message)) {
+				try {
+					applyWindowStateUpdate?.(message.updates);
+				} catch (error) {
+					console.error(
+						`[WindowSync] Kunde inte applicera fönstertillstånd för ${win.title}:`,
+						error,
+					);
+				}
+				return;
+			}
+
+			applyIncomingProps(packet);
+		});
+		const unsubscribeGroup = this.backend.onGroupMessage(
+			win.parentId,
+			win.componentKey,
+			applyIncomingProps,
+		);
+		const sourceRuntimeId = manager?.wManagerId ?? win.wManagerId;
+		const initialSnapshot = this.prepareForTransport(
+			readProps(),
+			win.winId,
+			sourceRuntimeId,
+			"props",
+			win.parentId,
+		) as Record<string, unknown>;
+		lastSnapshot = win.wManagerId === sourceRuntimeId
+			? initialSnapshot
+			: undefined;
+
+		// ------------------------------------------
+		// OUTGOING REACTIVE SYNCHRONIZATION (props)
 		// ------------------------------------------
 
 		const stopEffect = $effect.root(() => {
@@ -534,15 +552,24 @@ export class WindowSync {
 				 * så att Svelte kan spåra förändringar.
 				 */
 				const currentProps = readProps();
-				if (manager && win.wManagerId === manager.wManagerId) return;
 
 				const transportProps = this.prepareForTransport(
 					currentProps,
 					win.winId,
-					win.wManagerId,
+					sourceRuntimeId,
+					"props",
+					win.parentId,
 				);
 
 				const currentSnapshot = (transportProps as Record<string, unknown>) ?? {};
+				const publishedSnapshot = this.publishedProps.get(win.winId);
+				if (publishedSnapshot) {
+					this.publishedProps.delete(win.winId);
+					if (deepEqual(publishedSnapshot, currentSnapshot)) {
+						lastSnapshot = currentSnapshot;
+						return;
+					}
+				}
 
 				// finns inget att uppdatera
 				if (lastSnapshot && deepEqual(lastSnapshot, currentSnapshot)) {
@@ -551,19 +578,17 @@ export class WindowSync {
 
 				lastSnapshot = currentSnapshot;
 
-				const message: Extract<
-					WindowMessage,
-					{ type: "sync:props" }
-				> = {
+				const message: Extract<WindowMessage, { type: "sync:props" }> = {
 					type: "sync:props",
-					winId: win.winId,
-					wManagerId: win.wManagerId,
-					parentId: win.parentId,
+					componentKey: win.componentKey,
 					renderTargetWinId: win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
 					props: currentSnapshot,
 				};
 
-				if (message.type === "sync:props" && message.renderTargetWinId !== (win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID)) {
+				if (
+					message.type === "sync:props" &&
+					message.renderTargetWinId !== (win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID)
+				) {
 					console.log("felaktigt ..");
 					return;
 				}
@@ -574,7 +599,18 @@ export class WindowSync {
 				// this.wManagerId === ChildProcess.wManagerId && ChildProcess.renderTargetWinId.wMangerId !== ChildProcess.wManagerId
 				// Skicka till transporten.
 				void this.backend
-					.sendRaw(message)
+					.sendRaw(message, {
+						from: {
+							wManagerId: sourceRuntimeId,
+							winId: win.winId,
+							parentId: win.parentId,
+						},
+						to: {
+							type: "group",
+							parentId: win.parentId,
+							componentKey: win.componentKey,
+						},
+					})
 					.catch((error) => {
 						console.error(
 							`[WindowSync] Transportfel för ${win.winId}:`,
@@ -586,8 +622,27 @@ export class WindowSync {
 
 		this.sessions.set(win.winId, {
 			stopEffect,
-			unsubscribe,
+			unsubscribe: () => {
+				unsubscribe();
+				unsubscribeGroup();
+			},
 		});
+	}
+
+	markPropsPublished(win: WindowInstance): void {
+		if (!this.sessions.has(win.winId)) return;
+
+		const publishedSnapshot = this.prepareForTransport(
+			$state.snapshot(win.props),
+			win.winId,
+			this.localRuntimeId,
+			"props",
+			win.parentId,
+		);
+		this.publishedProps.set(
+			win.winId,
+			publishedSnapshot as Record<string, unknown>,
+		);
 	}
 
 	startToMonitor(
@@ -602,13 +657,14 @@ export class WindowSync {
 				wManager.updateProps(
 					incomingProps,
 					win,
-					{ publish: false, preserveReferences: true },
+					{ publish: false, preserveReferences: true, onlyWindow: true },
 				);
 			},
 			(updates) => {
 				wManager.updateState(
 					win.winId,
 					updates,
+					{ publish: false },
 				);
 			},
 			wManager,
@@ -635,6 +691,8 @@ export class WindowSync {
 		winId: WindowId,
 		updates: Partial<WindowState>,
 		wManagerId: string,
+		parentId: WindowId | null,
+		sourceRuntimeId: string,
 	): Promise<void> {
 		this.assertAlive();
 
@@ -643,12 +701,20 @@ export class WindowSync {
 			{ type: "sync:state-update" }
 		> = {
 			type: "sync:state-update",
-			winId,
-			wManagerId,
 			updates: snapshot(updates),
 		};
 
-		await this.backend.sendRaw(message);
+		await this.backend.sendRaw(message, {
+			from: {
+				wManagerId: sourceRuntimeId,
+				winId,
+				parentId,
+			},
+			to: {
+				type: "window",
+				endpoint: { wManagerId, winId, parentId },
+			},
+		});
 	}
 
 	// ----------------------------------------------
@@ -658,6 +724,7 @@ export class WindowSync {
 	private readonly rpcHandlers = new Map<string, {
 		callback: Function;
 		unregister: () => void;
+		endpointKey: string;
 	}>();
 
 	private prepareForTransport(
@@ -665,15 +732,20 @@ export class WindowSync {
 		winId: string,
 		wManagerId: string,
 		path = "props",
+		parentId: WindowId | null = null,
 	): unknown {
-		const rpc = this.getRpc(winId, wManagerId);
+		const rpc = this.getRpc(winId, wManagerId, parentId);
+		const endpointKey = JSON.stringify([wManagerId, parentId]);
 
 		if (typeof value === "function") {
 			const method = `${winId}:${path}`;
 
 			const existing = this.rpcHandlers.get(method);
 
-			if (existing?.callback === value) {
+			if (
+				existing?.callback === value &&
+				existing.endpointKey === endpointKey
+			) {
 				return `__RPC_CALLBACK__:${method}`;
 			}
 
@@ -687,6 +759,7 @@ export class WindowSync {
 			this.rpcHandlers.set(method, {
 				callback: value,
 				unregister,
+				endpointKey,
 			});
 
 			return `__RPC_CALLBACK__:${method}`;
@@ -699,6 +772,7 @@ export class WindowSync {
 					winId,
 					wManagerId,
 					`${path}.${index}`,
+					parentId,
 				)
 			);
 		}
@@ -712,6 +786,7 @@ export class WindowSync {
 					winId,
 					wManagerId,
 					`${path}.${key}`,
+					parentId,
 				);
 			}
 
@@ -733,15 +808,17 @@ export class WindowSync {
 		wManagerId: string,
 		parentId: WindowId | null,
 		renderTargetWinId: WindowId,
+		componentKey: string,
+		sourceRuntimeId: string,
 	): Promise<void> {
 		this.assertAlive();
-
-		const rpc = this.getRpc(winId, wManagerId);
 
 		const cleanProps = this.prepareForTransport(
 			snapshot(props),
 			winId,
-			wManagerId,
+			sourceRuntimeId,
+			"props",
+			parentId,
 		);
 
 		const message: Extract<
@@ -749,25 +826,44 @@ export class WindowSync {
 			{ type: "sync:props" }
 		> = {
 			type: "sync:props",
-			winId,
-			wManagerId,
-			parentId,
+			componentKey,
 			// renderTargetWinId = "root"
 			renderTargetWinId,
 			props: cleanProps as Record<string, unknown>,
 		};
 
-		await this.backend.sendRaw(message);
+		const from: WindowEndpoint = {
+			wManagerId: sourceRuntimeId,
+			winId,
+			parentId,
+		};
+		await this.backend.sendRaw(message, {
+			from,
+			to: {
+				type: "group",
+				parentId,
+				componentKey,
+			},
+		});
 	}
 
 	// ----------------------------------------------
 	// CLOSE
 	// ----------------------------------------------
 
-	async close(winId: string, wManagerId: string): Promise<void> {
+	async close(
+		winId: string,
+		wManagerId: string,
+		parentId: WindowId | null = null,
+	): Promise<void> {
 		this.stop(winId);
 
-		await this.backend.close(winId, wManagerId);
+		await this.backend.close(
+			winId,
+			wManagerId,
+			parentId,
+			this.localRuntimeId,
+		);
 	}
 
 	/**
@@ -799,6 +895,7 @@ export class WindowSync {
 		rpc?.destroy();
 		this.rpcInstances.delete(winId);
 		this.rpcManagerIds.delete(winId);
+		this.rpcParentIds.delete(winId);
 	}
 
 	/**
@@ -809,6 +906,7 @@ export class WindowSync {
 	stop(winId: string): void {
 		const session = this.sessions.get(winId);
 
+		this.publishedProps.delete(winId);
 		if (!session) return;
 
 		session.unsubscribe();

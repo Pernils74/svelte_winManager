@@ -1,15 +1,21 @@
 // src/lib/windowRpc.ts
 
-import type { WindowBackend, WindowMessage } from "./windowBackend";
+import type {
+	WindowBackend,
+	WindowEndpoint,
+	WindowMessage,
+	WindowTransportOptions,
+	WindowTransportPacket,
+} from "./windowBackend";
 
 export interface RpcTransport {
 	readonly endpointId: string;
 
-	send(message: WindowMessage): Promise<void>;
+	send(message: WindowMessage, options: WindowTransportOptions): Promise<void>;
 
 	onMessage(
 		winId: string,
-		callback: (message: WindowMessage) => void,
+		callback: (packet: WindowTransportPacket) => void,
 	): () => void;
 }
 
@@ -22,6 +28,8 @@ export interface WindowRpcOptions {
 	sourceId?: string;
 	targetEndpointId?: string;
 	wManagerId: string | (() => string);
+	localRuntimeId: string;
+	parentId: string | null;
 }
 
 interface PendingRequest {
@@ -48,6 +56,8 @@ export class WindowRpc {
 	private readonly targetEndpointId?: string;
 	private readonly timeoutMs: number;
 	private readonly getWManagerId: () => string;
+	private readonly localRuntimeId: string;
+	private readonly parentId: string | null;
 
 	private readonly unsubscribe: () => void;
 
@@ -66,6 +76,8 @@ export class WindowRpc {
 			transport.endpointId;
 
 		this.targetEndpointId = options.targetEndpointId;
+		this.localRuntimeId = options.localRuntimeId;
+		this.parentId = options.parentId;
 
 		this.timeoutMs = options.timeoutMs ?? 10_000;
 		const managerId = options.wManagerId;
@@ -75,8 +87,8 @@ export class WindowRpc {
 
 		this.unsubscribe = transport.onMessage(
 			winId,
-			(message) => {
-				void this.handleMessage(message);
+			(packet) => {
+				void this.handleMessage(packet);
 			},
 		);
 	}
@@ -143,8 +155,6 @@ export class WindowRpc {
 			{ type: "rpc:request" }
 		> = {
 			type: "rpc:request" as const,
-			winId: this.winId,
-			wManagerId: this.getWManagerId(),
 			requestId,
 			sourceId: this.sourceId,
 			targetEndpointId: this.targetEndpointId,
@@ -170,7 +180,22 @@ export class WindowRpc {
 				timeout,
 			});
 
-			void this.transport.send(request).catch((error) => {
+			const from: WindowEndpoint = {
+				wManagerId: this.localRuntimeId,
+				winId: this.winId,
+				parentId: this.parentId,
+			};
+			void this.transport.send(request, {
+				from,
+				to: {
+					type: "window",
+					endpoint: {
+						wManagerId: this.getWManagerId(),
+						winId: this.winId,
+						parentId: this.parentId,
+					},
+				},
+			}).catch((error) => {
 				const pending = this.pending.get(requestId);
 
 				if (!pending) return;
@@ -183,9 +208,8 @@ export class WindowRpc {
 		});
 	}
 
-	private async handleMessage(
-		message: WindowMessage,
-	): Promise<void> {
+	private async handleMessage(packet: WindowTransportPacket): Promise<void> {
+		const message = packet.message;
 		if (
 			this.destroyed ||
 			(message.type !== "rpc:request" &&
@@ -194,8 +218,13 @@ export class WindowRpc {
 			return;
 		}
 
-		if (message.winId !== this.winId) return;
-		if (message.wManagerId !== this.getWManagerId()) return;
+		if (
+			packet.to.type !== "window" ||
+			packet.to.endpoint.winId !== this.winId ||
+			packet.to.endpoint.wManagerId !== this.localRuntimeId
+		) {
+			return;
+		}
 		// Ignorera alltid egna utskick.
 		if (message.sourceId === this.sourceId) return;
 		if (message.type === "rpc:response") {
@@ -248,8 +277,6 @@ export class WindowRpc {
 
 				response = {
 					type: "rpc:response",
-					winId: this.winId,
-					wManagerId: this.getWManagerId(),
 					requestId: message.requestId,
 					sourceId: this.sourceId,
 					targetEndpointId: message.sourceId,
@@ -258,8 +285,6 @@ export class WindowRpc {
 			} catch (error) {
 				response = {
 					type: "rpc:response",
-					winId: this.winId,
-					wManagerId: this.getWManagerId(),
 					requestId: message.requestId,
 					sourceId: this.sourceId,
 					targetEndpointId: message.sourceId,
@@ -269,7 +294,17 @@ export class WindowRpc {
 
 			if (this.destroyed) return;
 
-			await this.transport.send(response);
+			await this.transport.send(response, {
+				from: {
+					wManagerId: this.localRuntimeId,
+					winId: this.winId,
+					parentId: this.parentId,
+				},
+				to: {
+					type: "window",
+					endpoint: packet.from,
+				},
+			});
 		}
 	}
 
@@ -320,7 +355,10 @@ export function createRpcTransport(
 	return {
 		endpointId: broker.endpointId,
 
-		async send(message: WindowMessage): Promise<void> {
+		async send(
+			message: WindowMessage,
+			options: WindowTransportOptions,
+		): Promise<void> {
 			if (
 				message.type !== "rpc:request" &&
 				message.type !== "rpc:response"
@@ -330,14 +368,19 @@ export function createRpcTransport(
 				);
 			}
 
-			await broker.sendRaw(message);
+			await broker.sendRaw(message, options);
 		},
 
 		onMessage(winId, callback) {
 			return broker.onRawMessage(
 				winId,
 				(packet) => {
-					if (packet.to_WinId !== winId) return;
+					if (
+						packet.to.type !== "window" ||
+						packet.to.endpoint.winId !== winId
+					) {
+						return;
+					}
 
 					if (
 						packet.message.type !== "rpc:request" &&
@@ -346,7 +389,7 @@ export function createRpcTransport(
 						return;
 					}
 
-					callback(packet.message);
+					callback(packet);
 				},
 			);
 		},

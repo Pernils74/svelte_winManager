@@ -30,22 +30,16 @@ import type { WindowTarget } from "./windowSync.svelte";
 export type WindowMessage =
 	| {
 		type: "sync:props";
-		winId: WindowId;
-		wManagerId: string;
-		parentId?: WindowId | null;
+		componentKey?: string;
 		renderTargetWinId?: WindowId;
 		props: Record<string, unknown>;
 	}
 	| {
 		type: "sync:state-update";
-		winId: WindowId;
-		wManagerId: string;
 		updates: Partial<WindowState>;
 	}
 	| {
 		type: "rpc:request";
-		winId: WindowId;
-		wManagerId: string;
 		requestId: string;
 		sourceId: string;
 		targetEndpointId?: string;
@@ -54,27 +48,41 @@ export type WindowMessage =
 	}
 	| {
 		type: "rpc:response";
-		winId: WindowId;
-		wManagerId: string;
 		requestId: string;
 		sourceId: string;
 		targetEndpointId: string;
 		result?: unknown;
 		error?: string;
 	}
-	| { type: "system:close"; winId: WindowId; wManagerId: string };
+	| { type: "system:close" };
 // | {
 // 	type: "registry:snapshot";
 // 	version: number;
 // 	entries: WindowRegistryEntry[];
 // };
 
-export interface WindowTransportPacket {
-	from_WinId: WindowId;
-	to_WinId: WindowId;
+export interface WindowEndpoint {
+	wManagerId: string;
+	winId: WindowId;
+	parentId: WindowId | null;
+}
 
-	// winId: WindowId;
-	// sourceId: string;
+export type WindowRecipient =
+	| { type: "window"; endpoint: WindowEndpoint }
+	| {
+		type: "group";
+		parentId: WindowId | null;
+		componentKey: string;
+	};
+
+export interface WindowTransportOptions {
+	from: WindowEndpoint;
+	to: WindowRecipient;
+}
+
+export interface WindowTransportPacket {
+	from: WindowEndpoint;
+	to: WindowRecipient;
 	message: WindowMessage;
 }
 
@@ -104,9 +112,7 @@ export interface ExternalWindowDescriptor {
 }
 
 /**
- * Transportpaket.
- *
- * Broker tolkar aldrig data.
+ * The backend routes by the envelope and treats the message payload as opaque.
  */
 export type RawMessageCallback = (packet: WindowTransportPacket) => void;
 
@@ -117,10 +123,20 @@ export interface WindowBackend {
 	// open(descriptor: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
 	open(descriptor: ExternalWindowDescriptor, target: WindowTarget): Promise<void>;
 
-	close(winId: string, wManagerId: string): Promise<void>;
-	sendRaw(message: WindowMessage): Promise<void>;
+	close(
+		winId: string,
+		wManagerId: string,
+		parentId?: WindowId | null,
+		sourceRuntimeId?: string,
+	): Promise<void>;
+	sendRaw(message: WindowMessage, options: WindowTransportOptions): Promise<void>;
 
 	onRawMessage(winId: string, callback: RawMessageCallback): () => void;
+	onGroupMessage(
+		parentId: WindowId | null,
+		componentKey: string,
+		callback: RawMessageCallback,
+	): () => void;
 	destroy(): void;
 }
 
@@ -156,6 +172,7 @@ const STORAGE_MESSAGE_PREFIX = "svelte_winmanager_message_";
 const STORAGE_INIT_PREFIX = "win_payload_init_";
 
 const TAURI_EVENT_PREFIX = "svelte-winmanager:";
+const TAURI_GROUP_EVENT = `${TAURI_EVENT_PREFIX}group`;
 
 interface WindowRegistryEntry {
 	winId: WindowId;
@@ -245,13 +262,15 @@ function tauriEventName(winId: string): string {
 	return `${TAURI_EVENT_PREFIX}${winId}`;
 }
 
+function groupListenerKey(parentId: WindowId | null, componentKey: string): string {
+	return JSON.stringify([parentId, componentKey]);
+}
+
 /**
  * Validerar om ett värde är ett giltigt transportpaket.
  *
  * - Paketet måste vara ett objekt.
- * - packet.from_WinId och packet.to_WinId måste vara strängar.
- * - packet.message måste vara ett objekt.
- * - Meddelandets winId måste matcha paketets to_WinId.
+ * - Paketet innehåller giltiga avsändar- och mottagarendpoints.
  * - Meddelandet måste ha en giltig type.
  * - Varje meddelandetyp måste ha sina obligatoriska fält.
  *
@@ -266,21 +285,53 @@ function isTransportPacket(
 	}
 
 	const packet = value as Record<string, unknown>;
+	const from = packet.from as Record<string, unknown> | undefined;
 
 	if (
+		!from ||
+		typeof from.wManagerId !== "string" ||
+		typeof from.winId !== "string" ||
 		!(
-			typeof packet.from_WinId === "string" &&
-			typeof packet.to_WinId === "string" &&
-			!!packet.message &&
-			typeof packet.message === "object" &&
-			"winId" in packet.message &&
-			packet.message.winId === packet.to_WinId &&
-			"type" in packet.message &&
-			typeof packet.message.type === "string" &&
-			"wManagerId" in packet.message &&
-			typeof packet.message.wManagerId === "string"
-		)
+			from.parentId === null ||
+			typeof from.parentId === "string"
+		) ||
+		!packet.to ||
+		typeof packet.to !== "object" ||
+		!packet.message ||
+		typeof packet.message !== "object" ||
+		!("type" in packet.message) ||
+		typeof packet.message.type !== "string"
 	) {
+		return false;
+	}
+
+	const recipient = packet.to as Record<string, unknown>;
+	let recipientEndpoint: Record<string, unknown> | undefined;
+	if (recipient.type === "window") {
+		const endpoint = recipient.endpoint as Record<string, unknown> | undefined;
+		if (
+			!endpoint ||
+			typeof endpoint.wManagerId !== "string" ||
+			typeof endpoint.winId !== "string" ||
+			!(
+				endpoint.parentId === null ||
+				typeof endpoint.parentId === "string"
+			)
+		) {
+			return false;
+		}
+		recipientEndpoint = endpoint;
+	} else if (recipient.type === "group") {
+		if (
+			!(
+				recipient.parentId === null ||
+				typeof recipient.parentId === "string"
+			) ||
+			typeof recipient.componentKey !== "string"
+		) {
+			return false;
+		}
+	} else {
 		return false;
 	}
 
@@ -288,19 +339,25 @@ function isTransportPacket(
 
 	switch (message.type) {
 		case "sync:props":
-			return (
+			if (
 				!!message.props &&
 				typeof message.props === "object" &&
-				!Array.isArray(message.props) &&
-				(
-					message.parentId === undefined ||
-					message.parentId === null ||
-					typeof message.parentId === "string"
-				)
-			);
+				!Array.isArray(message.props)
+			) {
+				if (recipient.type === "group") {
+					return typeof message.componentKey === "string" &&
+						message.componentKey.length > 0 &&
+						recipient.parentId === from.parentId &&
+						recipient.componentKey === message.componentKey;
+				}
+				return recipient.type === "window";
+			}
+			return false;
 
 		case "sync:state-update":
 			return (
+				recipient.type === "window" &&
+				recipientEndpoint?.winId === from.winId &&
 				!!message.updates &&
 				typeof message.updates === "object" &&
 				!Array.isArray(message.updates)
@@ -308,6 +365,7 @@ function isTransportPacket(
 
 		case "rpc:request":
 			return (
+				recipient.type === "window" &&
 				typeof message.requestId === "string" &&
 				typeof message.sourceId === "string" &&
 				typeof message.method === "string" &&
@@ -320,6 +378,7 @@ function isTransportPacket(
 
 		case "rpc:response":
 			return (
+				recipient.type === "window" &&
 				typeof message.requestId === "string" &&
 				typeof message.sourceId === "string" &&
 				typeof message.targetEndpointId === "string" &&
@@ -330,7 +389,7 @@ function isTransportPacket(
 			);
 
 		case "system:close":
-			return true;
+			return recipient.type === "window";
 
 		case "registry:snapshot":
 			return (
@@ -350,6 +409,7 @@ export class WindowBackendManager implements WindowBackend {
 	readonly endpointId = createId();
 	private channel: BroadcastChannel | null = null;
 	private listeners = new Map<string, Set<RawMessageCallback>>();
+	private groupListeners = new Map<string, Set<RawMessageCallback>>();
 
 	private initialMessages = new Map<
 		string,
@@ -458,16 +518,20 @@ export class WindowBackendManager implements WindowBackend {
 
 				localStorage.removeItem(key);
 
+				const parentId = params.get("parentId");
+				const endpoint: WindowEndpoint = {
+					wManagerId,
+					winId,
+					parentId,
+				};
 				const packet: WindowTransportPacket = {
-					from_WinId: winId,
-					to_WinId: winId,
+					from: endpoint,
+					to: { type: "window", endpoint },
 					message: {
 						type: "sync:props",
-						winId,
-						wManagerId,
-						parentId: params.get("parentId") ?? undefined,
+						componentKey: params.get("componentKey") ?? undefined,
 						renderTargetWinId: params.get("renderTargetWinId") ??
-							params.get("parentId") ??
+							parentId ??
 							undefined,
 						props,
 					},
@@ -717,6 +781,8 @@ export class WindowBackendManager implements WindowBackend {
 	async close(
 		winId: string,
 		wManagerId: string,
+		parentId: string | null = null,
+		sourceRuntimeId = wManagerId,
 	): Promise<void> {
 		this.assertAlive();
 
@@ -742,11 +808,14 @@ export class WindowBackendManager implements WindowBackend {
 			return;
 		}
 
-		await this.sendRaw({
-			type: "system:close",
-			winId,
-			wManagerId,
-		});
+		const endpoint = { winId, wManagerId, parentId };
+		await this.sendRaw(
+			{ type: "system:close" },
+			{
+				from: { ...endpoint, wManagerId: sourceRuntimeId },
+				to: { type: "window", endpoint },
+			},
+		);
 	}
 
 	private async closeTauriWindow(
@@ -777,45 +846,35 @@ export class WindowBackendManager implements WindowBackend {
 
 	async sendRaw(
 		message: WindowMessage,
+		options: WindowTransportOptions,
 	): Promise<void> {
 		this.assertAlive();
 
-		if (!message.winId) {
-			throw new Error(
-				"sendRaw kräver ett meddelande med winId.",
-			);
-		}
-
-		if (!message.wManagerId) {
-			throw new Error(
-				"sendRaw kräver ett meddelande med wManagerId.",
-			);
-		}
-
 		const packet: WindowTransportPacket = {
-			from_WinId: message.winId,
-			to_WinId: message.winId,
+			from: options.from,
+			to: options.to,
 			message,
 		};
 
 		if (this.target === "tauri-window") {
 			const modulePath = "@tauri-apps/api/event";
 			const api = await import(/* @vite-ignore */ modulePath) as TauriEventApi;
-			await api.emit(tauriEventName(message.winId), packet);
+			await api.emit(
+				options.to.type === "group"
+					? TAURI_GROUP_EVENT
+					: tauriEventName(options.to.endpoint.winId),
+				packet,
+			);
 
 			return;
 		}
 
 		if (this.channel) {
-			this.channel.postMessage(
-				packet,
-			);
+			this.channel.postMessage(packet);
 			return;
 		}
 
-		this.sendStoragePacket(
-			packet,
-		);
+		this.sendStoragePacket(packet);
 	}
 
 	private sendStoragePacket(
@@ -870,9 +929,7 @@ export class WindowBackendManager implements WindowBackend {
 		}
 
 		if (this.target === "tauri-window") {
-			void this.ensureTauriListener(
-				winId,
-			);
+			void this.ensureTauriListener(winId);
 		}
 
 		return () => {
@@ -887,6 +944,33 @@ export class WindowBackendManager implements WindowBackend {
 					winId,
 				);
 			}
+		};
+	}
+
+	onGroupMessage(
+		parentId: WindowId | null,
+		componentKey: string,
+		callback: RawMessageCallback,
+	): () => void {
+		this.assertAlive();
+
+		const key = groupListenerKey(parentId, componentKey);
+		let callbacks = this.groupListeners.get(key);
+		if (!callbacks) {
+			callbacks = new Set();
+			this.groupListeners.set(key, callbacks);
+		}
+		callbacks.add(callback);
+
+		if (this.target === "tauri-window") {
+			void this.ensureTauriGroupListener();
+		}
+
+		return () => {
+			const current = this.groupListeners.get(key);
+			if (!current) return;
+			current.delete(callback);
+			if (current.size === 0) this.groupListeners.delete(key);
 		};
 	}
 
@@ -940,6 +1024,31 @@ export class WindowBackendManager implements WindowBackend {
 		}
 	}
 
+	private async ensureTauriGroupListener(): Promise<void> {
+		if (this.tauriListeners.has(TAURI_GROUP_EVENT)) {
+			await this.tauriListeners.get(TAURI_GROUP_EVENT);
+			return;
+		}
+
+		const modulePath = "@tauri-apps/api/event";
+		const promise = (async () => {
+			const api = await import(
+				/* @vite-ignore */ modulePath
+			) as TauriEventApi;
+			return api.listen(TAURI_GROUP_EVENT, (event) => {
+				this.receivePacket(event.payload);
+			});
+		})();
+
+		this.tauriListeners.set(TAURI_GROUP_EVENT, promise);
+		try {
+			await promise;
+		} catch (error) {
+			this.tauriListeners.delete(TAURI_GROUP_EVENT);
+			console.error("[WindowBackend] Tauri group listener error:", error);
+		}
+	}
+
 	private receivePacket(
 		value: unknown,
 	): void {
@@ -952,10 +1061,8 @@ export class WindowBackendManager implements WindowBackend {
 		if (
 			value.message.type ===
 				"system:close" &&
-			new URLSearchParams(
-					globalThis.location.search,
-				).get("winId") ===
-				value.to_WinId
+			value.to.type === "window" &&
+			new URLSearchParams(globalThis.location.search).get("winId") === value.to.endpoint.winId
 		) {
 			globalThis.close();
 			return;
@@ -967,19 +1074,13 @@ export class WindowBackendManager implements WindowBackend {
 	private notifyListeners(
 		packet: WindowTransportPacket,
 	): void {
-		// console.log(
-		// 	"[DISPATCH]",
-		// 	packet.to_WinId,
-		// 	[...this.listeners.keys()],
-		// );
-
-		const callbacks = this.listeners.get(packet.to_WinId);
+		const callbacks = packet.to.type === "group"
+			? this.groupListeners.get(
+				groupListenerKey(packet.to.parentId, packet.to.componentKey),
+			)
+			: this.listeners.get(packet.to.endpoint.winId);
 
 		if (!callbacks) {
-			// console.warn(
-			// 	"[NO LISTENER]",
-			// 	packet.to_WinId,
-			// );
 			return;
 		}
 
@@ -1038,6 +1139,7 @@ export class WindowBackendManager implements WindowBackend {
 
 		this.tauriListeners.clear();
 		this.listeners.clear();
+		this.groupListeners.clear();
 
 		for (
 			const opened of this.openedWindows.values()

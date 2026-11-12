@@ -28,7 +28,19 @@ onMount(() => {
 	channel.onmessage = (event) => {
 		const packet = event.data;
 
-		if (currentWinId && packet?.to_WinId !== currentWinId) {
+		if (
+			currentWinId &&
+			packet?.to?.type === "window" &&
+			packet.to.endpoint?.winId !== currentWinId
+		) {
+			return;
+		}
+
+		if (
+			parentId !== undefined &&
+			packet?.to?.type === "group" &&
+			packet.to.parentId !== parentId
+		) {
 			return;
 		}
 
