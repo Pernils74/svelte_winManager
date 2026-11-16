@@ -366,18 +366,18 @@ export class WindowSync {
 	 * inte lämnar aktuell runtime.
 	 */
 	async open(
-		descriptor: ExternalWindowDescriptor,
+		rootDescriptor: ExternalWindowDescriptor,
 		target: WindowTarget,
 	): Promise<void> {
 		this.assertAlive();
 
-		const cleanDescriptor = snapshot({
-			...descriptor,
-			props: descriptor.props ?? {},
+		const cleanDescriptors = snapshot({
+			...rootDescriptor,
+			props: rootDescriptor.props ?? {},
 		});
 
 		await this.backend.open(
-			cleanDescriptor,
+			cleanDescriptors,
 			target,
 		);
 	}
@@ -533,9 +533,7 @@ export class WindowSync {
 			"props",
 			win.parentId,
 		) as Record<string, unknown>;
-		lastSnapshot = win.wManagerId === sourceRuntimeId
-			? initialSnapshot
-			: undefined;
+		lastSnapshot = win.wManagerId === sourceRuntimeId ? initialSnapshot : undefined;
 
 		// ------------------------------------------
 		// OUTGOING REACTIVE SYNCHRONIZATION (props)

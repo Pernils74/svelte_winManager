@@ -360,20 +360,38 @@ export class WindowManager {
 		return result;
 	}
 
-	getRenderableRoots(): WindowInstance[] {
-		return this.getChildren(WINDOW_MANAGER_ROOT_ID).filter(
-			(win) =>
-				!win.isMinimized &&
-				win.wManagerId === this.wManagerId,
+	// getRenderableRoots(): WindowInstance[] {
+	// 	return this.getChildren(WINDOW_MANAGER_ROOT_ID).filter(
+	// 		(win) =>
+	// 			!win.isMinimized &&
+	// 			win.wManagerId === this.wManagerId,
+	// 	);
+	// }
+
+	// getRenderableChildren(renderTargetWinId: WindowId): WindowInstance[] {
+	// 	return this.getChildren(renderTargetWinId).filter(
+	// 		(win) =>
+	// 			!win.isMinimized &&
+	// 			win.wManagerId === this.wManagerId,
+	// 	);
+	// }
+
+	getRenderChildren(renderTargetWinId: WindowId): WindowInstance[] {
+		return this.windows.filter(
+			(win) => win.renderTargetWinId === renderTargetWinId,
 		);
 	}
 
-	getRenderableChildren(renderTargetWinId: WindowId): WindowInstance[] {
-		return this.getChildren(renderTargetWinId).filter(
-			(win) =>
-				!win.isMinimized &&
-				win.wManagerId === this.wManagerId,
-		);
+	getRenderDescendants(renderTargetWinId: WindowId): WindowInstance[] {
+		const result: WindowInstance[] = [];
+		const visit = (id: WindowId) => {
+			for (const child of this.getRenderChildren(id)) {
+				result.push(child);
+				visit(child.winId);
+			}
+		};
+		visit(renderTargetWinId);
+		return result;
 	}
 
 	getOrphanWorkspaceWindows(): WindowInstance[] {
@@ -509,6 +527,54 @@ export class WindowManager {
 	// --------------------------------------------------
 
 	async detachWindow(
+		win: WindowInstance,
+		target: Exclude<WindowViewPortType, "workspace">,
+	): Promise<void> {
+		if (!win) {
+			throw new Error("Window hittades inte.");
+		}
+
+		const detachedManagerId = crypto.randomUUID();
+
+		const subtree = [
+			win,
+			...this.getRenderDescendants(win.winId),
+		];
+
+		const descriptors = subtree.map((node): ExternalWindowDescriptor => {
+			node.wManagerId = detachedManagerId;
+
+			return {
+				wManagerId: detachedManagerId,
+
+				winId: node.winId,
+
+				title: node.title,
+				componentKey: node.componentKey,
+
+				parentId: node.parentId,
+				renderTargetWinId: node.renderTargetWinId,
+
+				props: $state.snapshot(node.props),
+
+				left: node.rect.left,
+				top: node.rect.top,
+				width: node.rect.width,
+				height: node.rect.height,
+			};
+		});
+
+		const rootDescriptor = descriptors[0];
+		rootDescriptor.subtree = descriptors;
+		await this.sync.open(rootDescriptor, target); // skickar vidare root + trädet i root.subtree
+
+		// await this.sync.open(descriptors, target);
+		// for (const descriptor of descriptors) {
+		// 	console.log("opening", descriptor.winId);
+		// }
+	}
+
+	async detachWindow_old(
 		win: WindowInstance,
 		target: Exclude<WindowViewPortType, "workspace">,
 	): Promise<void> {
@@ -697,12 +763,10 @@ export class WindowManager {
 	): void {
 		// console.log("updateprops");
 		const targets = win
-			? options.onlyWindow
-				? [win]
-				: this.windows.filter((current) =>
-					current.parentId === win.parentId &&
-					current.componentKey === win.componentKey
-				)
+			? options.onlyWindow ? [win] : this.windows.filter((current) =>
+				current.parentId === win.parentId &&
+				current.componentKey === win.componentKey
+			)
 			: this.windows.filter((current) =>
 				Object.keys(props).some(
 					(key) => key in current.props,

@@ -104,6 +104,9 @@ export interface ExternalWindowDescriptor {
 	renderTargetWinId?: WindowId | null;
 
 	props: Record<string, unknown>;
+
+	subtree?: ExternalWindowDescriptor[];
+
 	width?: number;
 	height?: number;
 	left?: number;
@@ -441,45 +444,28 @@ export class WindowBackendManager implements WindowBackend {
 	// --------------------------------------------------
 
 	private initializeBrowserTransport(): void {
-		if (
-			typeof BroadcastChannel !==
-				"undefined"
-		) {
+		if (typeof BroadcastChannel !== "undefined") {
 			this.channel = new BroadcastChannel(
 				CHANNEL_NAME,
 			);
 
-			this.channel.onmessage = (
-				event: MessageEvent<unknown>,
-			) => {
+			this.channel.onmessage = (event: MessageEvent<unknown>) => {
 				this.receivePacket(event.data);
 			};
 		}
 
-		this.storageListener = (
-			event: StorageEvent,
-		) => {
-			if (
-				!event.key?.startsWith(
-					STORAGE_MESSAGE_PREFIX,
-				)
-			) {
+		this.storageListener = (event: StorageEvent) => {
+			if (!event.key?.startsWith(STORAGE_MESSAGE_PREFIX)) {
 				return;
 			}
-
 			if (!event.newValue) return;
 
 			try {
-				const packet: unknown = JSON.parse(
-					event.newValue,
-				);
+				const packet: unknown = JSON.parse(event.newValue);
 
 				this.receivePacket(packet);
 			} catch (error) {
-				console.error(
-					"[WindowBackend] Invalid storage packet:",
-					error,
-				);
+				console.error("[WindowBackend] Invalid storage packet:", error);
 			}
 		};
 
@@ -500,12 +486,9 @@ export class WindowBackendManager implements WindowBackend {
 
 		queueMicrotask(() => {
 			if (this.destroyed) return;
-
 			try {
 				const key = initStorageKey(winId);
-
 				const raw = localStorage.getItem(key);
-
 				if (!raw) return;
 
 				const props = JSON.parse(raw) as Record<string, unknown>;
@@ -615,9 +598,17 @@ export class WindowBackendManager implements WindowBackend {
 		descriptor: ExternalWindowDescriptor,
 	): void {
 		try {
+			// localStorage.setItem(
+			// 	initStorageKey(descriptor.winId),
+			// 	JSON.stringify(descriptor.props ?? {}),
+			// );
+
 			localStorage.setItem(
 				initStorageKey(descriptor.winId),
-				JSON.stringify(descriptor.props ?? {}),
+				JSON.stringify({
+					root: descriptor,
+					subtree: descriptor.subtree,
+				}),
 			);
 		} catch (error) {
 			throw new Error(
@@ -860,9 +851,7 @@ export class WindowBackendManager implements WindowBackend {
 			const modulePath = "@tauri-apps/api/event";
 			const api = await import(/* @vite-ignore */ modulePath) as TauriEventApi;
 			await api.emit(
-				options.to.type === "group"
-					? TAURI_GROUP_EVENT
-					: tauriEventName(options.to.endpoint.winId),
+				options.to.type === "group" ? TAURI_GROUP_EVENT : tauriEventName(options.to.endpoint.winId),
 				packet,
 			);
 
