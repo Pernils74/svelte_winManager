@@ -1,5 +1,10 @@
 import { type Component, createContext } from "svelte";
-import { getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
+import {
+	getAllRegisteredKeys,
+	getComponentByKey,
+	getComponentKey,
+	registerComponents,
+} from "./windowComponentRegistry.ts";
 import { WindowSync } from "./windowSync.svelte.ts";
 
 import { createWindowBackend, type ExternalWindowDescriptor, type WindowBackend } from "./windowBackend.ts";
@@ -564,14 +569,47 @@ export class WindowManager {
 			};
 		});
 
-		const rootDescriptor = descriptors[0];
-		rootDescriptor.subtree = descriptors;
+		const rootDescriptor = {
+			...descriptors[0],
+			subtree: descriptors,
+		};
 		await this.sync.open(rootDescriptor, target); // skickar vidare root + trädet i root.subtree
 
 		// await this.sync.open(descriptors, target);
 		// for (const descriptor of descriptors) {
 		// 	console.log("opening", descriptor.winId);
 		// }
+	}
+
+	// I WindowManager (windowManager.svelte.ts)
+	// Överst i windowManager.svelte.ts
+	// import { getComponentByKey, getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
+
+	// Inne i WindowManager-klassen
+	async hydrateDetachedSubtree(rootWinId: string): Promise<void> {
+		const descriptors = this.backend.consumeInitialDescriptors(rootWinId);
+		if (descriptors.length === 0) return;
+
+		for (let i = 0; i < descriptors.length; i++) {
+			const desc = descriptors[i];
+			const isRoot = i === 0;
+
+			// Hämtar komponenten (eller WindowComponentFallback om den saknas)
+			const component = await getComponentByKey(desc.componentKey);
+
+			this.open(component, {
+				winId: desc.winId,
+				title: desc.title,
+				componentKey: desc.componentKey,
+				parentId: desc.parentId ?? null,
+				renderTargetWinId: isRoot ? WINDOW_MANAGER_ROOT_ID : (desc.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID),
+				props: desc.props,
+				left: isRoot ? 0 : desc.left,
+				top: isRoot ? 0 : desc.top,
+				width: desc.width,
+				height: desc.height,
+			});
+		}
 	}
 
 	async detachWindow_old(
@@ -1290,11 +1328,6 @@ export class WindowManager {
 
 const [getContextManager, setContextManager] = createContext<WindowManager>();
 // const [getCurrentWindow, setCurrentWindow] = createContext<WindowInstance>();
-
-// export interface WindowManagerOptions {
-// 	modules?: Record<string, () => Promise<any>>;
-// 	backend?: WindowBackend;
-// }
 
 export interface WindowManagerOptions {
 	config?: Partial<AppConfig>;

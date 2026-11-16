@@ -141,6 +141,8 @@ export interface WindowBackend {
 		callback: RawMessageCallback,
 	): () => void;
 	destroy(): void;
+
+	consumeInitialDescriptors(rootWinId: string): ExternalWindowDescriptor[];
 }
 
 interface TauriEventApi {
@@ -408,6 +410,8 @@ function isTransportPacket(
 export class WindowBackendManager implements WindowBackend {
 	public readonly winRegistry = new WindowsRegistryService();
 
+	private initialDescriptors = new Map<string, ExternalWindowDescriptor[]>();
+
 	readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId = createId();
 	private channel: BroadcastChannel | null = null;
@@ -436,7 +440,17 @@ export class WindowBackendManager implements WindowBackend {
 		// startar lyssnaren på broadcasy channel
 		if (this.target === "browser-tab") {
 			this.initializeBrowserTransport();
+		} else if (this.target === "tauri-window") {
+			this.initializeTauriTransport(); // Lyssna på Tauri-events
 		}
+		// Körs för BÅDE webbläsare och Tauri!
+		this.readInitialState();
+	}
+
+	public consumeInitialDescriptors(rootWinId: string): ExternalWindowDescriptor[] {
+		const descriptors = this.initialDescriptors.get(rootWinId) ?? [];
+		this.initialDescriptors.delete(rootWinId);
+		return descriptors;
 	}
 
 	// --------------------------------------------------
@@ -476,6 +490,42 @@ export class WindowBackendManager implements WindowBackend {
 
 		this.readInitialState();
 	}
+
+	private async initializeTauriTransport(): Promise<void> {
+		const modulePath = "@tauri-apps/api/event";
+		const api = (await import(/* @vite-ignore */ modulePath)) as TauriEventApi;
+
+		// 1. Lyssna på gruppmeddelanden (sync:props till hela gruppen)
+		const unlistenGroup = await api.listen(TAURI_GROUP_EVENT, (event) => {
+			if (this.destroyed) return;
+			this.receivePacket(event.payload);
+		});
+		this.tauriListeners.set(TAURI_GROUP_EVENT, Promise.resolve(unlistenGroup));
+
+		// 2. Lyssna på direkta meddelanden för det aktuella fönstret (om winId finns i URL)
+		const params = new URLSearchParams(globalThis.location.search);
+		const winId = params.get("winId");
+		if (winId) {
+			this.ensureTauriListener(winId, api);
+		}
+	}
+
+	// private ensureTauriWindowListener(winId: string, api?: TauriEventApi): void {
+	// 	const eventName = tauriEventName(winId);
+	// 	if (this.tauriListeners.has(eventName)) return;
+
+	// 	const promise = (async () => {
+	// 		const eventApi = api ??
+	// 			((await import(/* @vite-ignore */ "@tauri-apps/api/event")) as TauriEventApi);
+
+	// 		return eventApi.listen(eventName, (event) => {
+	// 			if (this.destroyed) return;
+	// 			this.receivePacket(event.payload);
+	// 		});
+	// 	})();
+
+	// 	this.tauriListeners.set(eventName, promise);
+	// }
 
 	private readInitialState_old(): void {
 		const params = new URLSearchParams(globalThis.location.search);
@@ -596,6 +646,9 @@ export class WindowBackendManager implements WindowBackend {
 						},
 					];
 
+				// Spara listan så att WindowManager kan återskapa fönstren
+				this.initialDescriptors.set(winId, descriptors);
+
 				localStorage.removeItem(key);
 
 				for (const desc of descriptors) {
@@ -712,7 +765,22 @@ export class WindowBackendManager implements WindowBackend {
 		return url;
 	}
 
-	private saveInitialState(
+	private saveInitialState(descriptor: ExternalWindowDescriptor): void {
+		try {
+			const { subtree, ...cleanRoot } = descriptor;
+			localStorage.setItem(
+				initStorageKey(descriptor.winId),
+				JSON.stringify({
+					root: cleanRoot,
+					subtree: subtree?.map(({ subtree: _, ...node }) => node),
+				}),
+			);
+		} catch (error) {
+			throw new Error(`Kunde inte spara initial state: ${String(error)}`);
+		}
+	}
+
+	private saveInitialState_old(
 		descriptor: ExternalWindowDescriptor,
 	): void {
 		try {
@@ -810,6 +878,8 @@ export class WindowBackendManager implements WindowBackend {
 		const api = await import(
 			/* @vite-ignore */ modulePath
 		) as TauriWebviewWindowApi;
+
+		this.saveInitialState(descriptor);
 
 		const {
 			wManagerId,
