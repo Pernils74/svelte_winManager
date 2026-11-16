@@ -43,7 +43,12 @@ import { type Component, onMount, type Snippet } from "svelte";
 import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
-import { getWindowManager, WINDOW_MANAGER_ROOT_ID, type WindowInstance, type WindowState } from "./windowManager.svelte";
+import {
+	getWindowManager,
+	WINDOW_MANAGER_ROOT_ID,
+	type WindowInstance,
+	type WindowState,
+} from "./windowManager.svelte";
 import { getComponentByKey } from "./windowComponentRegistry";
 
 // import { registerComponents } from "./windowRegistry";
@@ -63,6 +68,10 @@ interface Props {
 let { desktopContent, topbarContent }: Props = $props();
 
 const wManager = getWindowManager();
+
+const initialState = wManager.backend.getInitialState();
+const descriptors = initialState?.subtree ??
+	[initialState?.root].filter(Boolean);
 
 // Reading of URL-parametrar for standalone windows (win.isDetached=true)
 let standaloneWinId = $derived(page.url.searchParams.get("winId"));
@@ -115,6 +124,46 @@ $effect(() => {
 	standaloneLoading = true;
 
 	async function initializeStandaloneWindow() {
+		try {
+			const component = await getComponentByKey(componentKey);
+			if (cancelled) return;
+
+			let winInstance = wManager.find(targetWinId);
+
+			if (!winInstance) {
+				wManager.open(component, {
+					winId: targetWinId,
+					title,
+					// Behåll övriga relevanta options från descriptor.
+					parentId: standaloneParentId,
+					renderTargetWinId: standaloneRenderTargetWinId,
+					width: window.innerWidth,
+					height: window.innerHeight,
+				});
+
+				winInstance = wManager.find(targetWinId);
+			}
+
+			if (!winInstance || cancelled) return;
+
+			unsubscribe = wManager.sync.attachWindow(winInstance, wManager);
+
+			publishStandaloneStateUpdate({
+				width: window.innerWidth,
+				height: window.innerHeight,
+				isMinimized: document.hidden,
+				isFocused: document.hasFocus(),
+			});
+
+			// Här lägger vi sedan in loopen för subtree,
+			// när vi vet varifrån descriptors hämtas.
+		} catch (error) {
+			// ...
+		} finally {
+			if (!cancelled) standaloneLoading = false;
+		}
+	}
+	async function initializeStandaloneWindow_old() {
 		try {
 			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
 			const component = await getComponentByKey(componentKey);

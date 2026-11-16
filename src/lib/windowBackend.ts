@@ -447,6 +447,23 @@ export class WindowBackendManager implements WindowBackend {
 		this.readInitialState();
 	}
 
+	getInitialState(): {
+		root: ExternalWindowDescriptor;
+		subtree: ExternalWindowDescriptor[];
+	} | undefined {
+		const winId = new URLSearchParams(globalThis.location.search).get("winId");
+
+		if (!winId) return undefined;
+
+		const raw = localStorage.getItem(initStorageKey(winId));
+
+		if (!raw) return undefined;
+
+		localStorage.removeItem(initStorageKey(winId));
+
+		return JSON.parse(raw);
+	}
+
 	public consumeInitialDescriptors(rootWinId: string): ExternalWindowDescriptor[] {
 		const descriptors = this.initialDescriptors.get(rootWinId) ?? [];
 		this.initialDescriptors.delete(rootWinId);

@@ -365,22 +365,6 @@ export class WindowManager {
 		return result;
 	}
 
-	// getRenderableRoots(): WindowInstance[] {
-	// 	return this.getChildren(WINDOW_MANAGER_ROOT_ID).filter(
-	// 		(win) =>
-	// 			!win.isMinimized &&
-	// 			win.wManagerId === this.wManagerId,
-	// 	);
-	// }
-
-	// getRenderableChildren(renderTargetWinId: WindowId): WindowInstance[] {
-	// 	return this.getChildren(renderTargetWinId).filter(
-	// 		(win) =>
-	// 			!win.isMinimized &&
-	// 			win.wManagerId === this.wManagerId,
-	// 	);
-	// }
-
 	getRenderChildren(renderTargetWinId: WindowId): WindowInstance[] {
 		return this.windows.filter(
 			(win) => win.renderTargetWinId === renderTargetWinId,
@@ -418,33 +402,6 @@ export class WindowManager {
 		});
 	}
 
-	// open<TProps extends Record<string, unknown> = Record<string, unknown>>(
-	// 	component: Component<any>,
-	// 	options?: OpenWindowOptions<TProps>,
-	// ): WindowInstance<TProps>;
-	// open<TProps extends Record<string, unknown> = Record<string, unknown>>(
-	// 	parent: WindowInstance,
-	// 	component: Component<any>,
-	// 	options?: OpenWindowOptions<TProps>,
-	// ): WindowInstance<TProps>;
-	// open<TProps extends Record<string, unknown> = Record<string, unknown>>(
-	// 	first: WindowInstance | Component<any>,
-	// 	second: Component<any> | OpenWindowOptions<TProps> = {},
-	// 	third: OpenWindowOptions<TProps> = {},
-	// ): WindowInstance<TProps> {
-	// 	if (isWindowInstance(first)) {
-	// 		return this.openWindow(second as Component<any>, {
-	// 			...third,
-	// 			parentId: first.winId,
-	// 		});
-	// 	}
-
-	// 	return this.openWindow(
-	// 		first,
-	// 		second as OpenWindowOptions<TProps>,
-	// 	);
-	// }
-
 	// --------------------------------------------------
 	// OPEN
 	// --------------------------------------------------
@@ -463,8 +420,9 @@ export class WindowManager {
 		// const parent = this.find(options.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID) ??
 		// 	this.find(WINDOW_MANAGER_ROOT_ID)!;
 
-		const renderTargetWinId = this.find(options.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID)?.winId ??
-			WINDOW_MANAGER_ROOT_ID;
+		const renderTargetWinId = this.find(
+			options.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+		)?.winId ?? WINDOW_MANAGER_ROOT_ID;
 
 		const parentId = options.parentId !== undefined ? options.parentId : this.currentParentId;
 		const tileOffset = options.tileOffset ?? 20;
@@ -557,8 +515,11 @@ export class WindowManager {
 				title: node.title,
 				componentKey: node.componentKey,
 
-				parentId: node.parentId,
-				renderTargetWinId: node.renderTargetWinId,
+				// parentId: node.parentId,
+				// renderTargetWinId: node.renderTargetWinId,
+
+				parentId: node.winId === win.winId ? null : node.parentId,
+				renderTargetWinId: node.winId === win.winId ? WINDOW_MANAGER_ROOT_ID : node.renderTargetWinId,
 
 				props: $state.snapshot(node.props),
 
