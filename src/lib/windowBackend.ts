@@ -477,7 +477,7 @@ export class WindowBackendManager implements WindowBackend {
 		this.readInitialState();
 	}
 
-	private readInitialState(): void {
+	private readInitialState_old(): void {
 		const params = new URLSearchParams(globalThis.location.search);
 		const winId = params.get("winId");
 		const wManagerId = params.get("wManagerId");
@@ -492,6 +492,7 @@ export class WindowBackendManager implements WindowBackend {
 				if (!raw) return;
 
 				const props = JSON.parse(raw) as Record<string, unknown>;
+
 				if (!props || typeof props !== "object" || Array.isArray(props)) {
 					throw new Error("Initial window props must be an object.");
 				}
@@ -535,6 +536,121 @@ export class WindowBackendManager implements WindowBackend {
 		});
 	}
 
+	private readInitialState(): void {
+		const params = new URLSearchParams(globalThis.location.search);
+
+		const winId = params.get("winId");
+		const wManagerId = params.get("wManagerId");
+
+		if (!winId) return;
+
+		queueMicrotask(() => {
+			if (this.destroyed) return;
+
+			try {
+				const key = initStorageKey(winId);
+				const raw = localStorage.getItem(key);
+
+				if (!raw) return;
+
+				const parsed = JSON.parse(raw) as {
+					root?: ExternalWindowDescriptor;
+					subtree?: ExternalWindowDescriptor[];
+				};
+
+				if (!parsed || typeof parsed !== "object") {
+					throw new Error("Invalid initial window state.");
+				}
+
+				if (!wManagerId) {
+					throw new Error(
+						"Initial window state is missing wManagerId.",
+					);
+				}
+
+				/*
+				 * Backwards compatibility:
+				 *
+				 * Old format:
+				 *   { ...props }
+				 *
+				 * New format:
+				 *   {
+				 *     root: descriptor,
+				 *     subtree: descriptor[]
+				 *   }
+				 */
+				const descriptors: ExternalWindowDescriptor[] = Array.isArray(parsed.subtree)
+					? parsed.subtree
+					: parsed.root
+					? [parsed.root]
+					: [
+						{
+							wManagerId,
+							winId,
+							title: params.get("title") ?? "",
+							componentKey: params.get("componentKey") ?? "",
+							parentId: params.get("parentId"),
+							renderTargetWinId: params.get("renderTargetWinId"),
+							props: parsed as Record<string, unknown>,
+						},
+					];
+
+				localStorage.removeItem(key);
+
+				for (const desc of descriptors) {
+					const endpoint: WindowEndpoint = {
+						wManagerId: desc.wManagerId,
+						winId: desc.winId,
+						parentId: desc.parentId ?? null,
+					};
+
+					const packet: WindowTransportPacket = {
+						from: endpoint,
+
+						to: {
+							type: "window",
+							endpoint,
+						},
+
+						message: {
+							type: "sync:props",
+							componentKey: desc.componentKey,
+
+							renderTargetWinId: desc.renderTargetWinId ??
+								desc.parentId ??
+								undefined,
+
+							props: desc.props,
+						},
+					};
+
+					/*
+					 * Viktigt:
+					 * initialMessages är per winId.
+					 *
+					 * Root:
+					 *   initialMessages[root.winId] = root packet
+					 *
+					 * Child:
+					 *   initialMessages[child.winId] = child packet
+					 */
+					this.initialMessages.set(
+						desc.winId,
+						packet,
+					);
+
+					this.notifyListeners(packet);
+				}
+			} catch (error) {
+				console.error(
+					"[WindowBackend] Could not read initial state:",
+					error,
+				);
+			}
+		});
+	}
+
 	// --------------------------------------------------
 	// Window lifecycle
 	// --------------------------------------------------
@@ -560,6 +676,8 @@ export class WindowBackendManager implements WindowBackend {
 				return;
 
 			case "browser-window":
+				console.log("hfkhfk");
+
 				this.openBrowserWindow(descriptor);
 				return;
 

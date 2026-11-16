@@ -28,9 +28,9 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/WindowFrame.
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowManager.svelte.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowSync.svelte.ts
+https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowBackend.ts
 
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowComponentRegistry.ts
-https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowBackend.ts
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/lib/windowRpc.ts
 
 https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/+page.svelte
