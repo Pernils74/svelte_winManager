@@ -749,6 +749,12 @@ $effect(() => {
 </div>
 
 <style>
+.content :global(*),
+.content :global(*::before),
+.content :global(*::after) {
+	box-sizing: border-box;
+}
+
 .window-frame {
 	position: absolute;
 	box-sizing: border-box;

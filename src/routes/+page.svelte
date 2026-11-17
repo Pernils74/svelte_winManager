@@ -52,7 +52,7 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 
 import WindowHost from "#lib/WindowHost.svelte";
 
-import { bootstrapWindowManager, initializeWindowManager } from "#lib/windowManager.svelte.ts";
+import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
 import { getAllRegisteredKeys, registerComponents } from "#lib/windowComponentRegistry.ts";
 
 import WindowA from "./window_A.svelte";
@@ -95,7 +95,7 @@ onMount(() => {
 		height: 600,
 		left: 10,
 		top: 100,
-		titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
+		// titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
 	// wManager.open(WinGraphA, {

@@ -1,4 +1,3 @@
-import { type Component, createContext } from "svelte";
 import {
 	getAllRegisteredKeys,
 	getComponentByKey,
@@ -510,8 +509,9 @@ export class WindowManager {
 				// parentId: node.winId === win.winId ? null : node.parentId,
 				parentId: node.parentId,
 
-				// renderTargetWinId: node.winId === win.winId ? WINDOW_MANAGER_ROOT_ID : node.renderTargetWinId,
-				renderTargetWinId: node.renderTargetWinId,
+				renderTargetWinId: node.winId === win.winId ? WINDOW_MANAGER_ROOT_ID : node.renderTargetWinId,
+
+				// renderTargetWinId: node.renderTargetWinId,
 
 				props: $state.snapshot(node.props),
 
@@ -540,6 +540,57 @@ export class WindowManager {
 
 	async restoreSubtree(
 		descriptors: ExternalWindowDescriptor[],
+	): Promise<WindowInstance | undefined> {
+		if (descriptors.length === 0) return undefined;
+
+		const rootId = descriptors[0].winId;
+		let rootWin: WindowInstance | undefined;
+
+		for (const descriptor of descriptors) {
+			const isRoot = descriptor.winId === rootId;
+			const component = await getComponentByKey(descriptor.componentKey);
+
+			this.open(component, {
+				winId: descriptor.winId,
+				title: descriptor.title,
+				// parentId: isRoot ? null : descriptor.parentId,
+				parentId: descriptor.parentId,
+				renderTargetWinId: isRoot ? WINDOW_MANAGER_ROOT_ID : descriptor.renderTargetWinId,
+				left: isRoot ? 0 : descriptor.rect.left,
+				top: isRoot ? 0 : descriptor.rect.top,
+				width: descriptor.rect.width,
+				height: descriptor.rect.height,
+				props: descriptor.props,
+			});
+
+			const win = this.find(descriptor.winId);
+			if (!win) continue;
+
+			win.wManagerId = this.wManagerId;
+
+			if (isRoot) {
+				rootWin = win;
+			}
+		}
+
+		if (rootWin) {
+			this.focus(rootWin);
+
+			// Om du har rotens bounds-element tillgängligt i managern:
+			// const rootBounds = this.getBoundingEl(WINDOW_MANAGER_ROOT_ID);
+			// if (rootBounds) {
+			// 	this.toggleMaximize(rootWin, rootBounds);
+			// } else {
+			// 	rootWin.isMaximized = true;
+			// }
+			rootWin.isMaximized = true;
+		}
+
+		return rootWin;
+	}
+
+	async restoreSubtree_old(
+		descriptors: ExternalWindowDescriptor[],
 	): Promise<void> {
 		let rootWin: WindowInstance | undefined;
 
@@ -548,11 +599,15 @@ export class WindowManager {
 				descriptor.componentKey,
 			);
 
+			const isSubtreeRoot = descriptor.winId === descriptors[0].winId;
+
 			this.open(component, {
 				winId: descriptor.winId,
 				title: descriptor.title,
-				parentId: descriptor.parentId,
-				renderTargetWinId: descriptor.renderTargetWinId,
+				parentId: isSubtreeRoot ? null : descriptor.parentId,
+				renderTargetWinId: isSubtreeRoot ? WINDOW_MANAGER_ROOT_ID : descriptor.renderTargetWinId,
+				left: isSubtreeRoot ? 0 : descriptor.rect.left,
+				top: isSubtreeRoot ? 0 : descriptor.rect.top,
 				width: descriptor.rect.width,
 				height: descriptor.rect.height,
 			});
@@ -1244,8 +1299,10 @@ export class WindowManager {
 // CONTEXT
 // --------------------------------------------------
 
-const [getContextManager, setContextManager] = createContext<WindowManager>();
-// const [getCurrentWindow, setCurrentWindow] = createContext<WindowInstance>();
+import { type Component, getContext, hasContext, setContext } from "svelte";
+
+const WINDOW_MANAGER_KEY = Symbol.for("svelte_winManager_context");
+const PARENT_ID_KEY = Symbol.for("svelte_winManager_parent_id");
 
 export interface WindowManagerOptions {
 	config?: Partial<AppConfig>;
@@ -1256,65 +1313,50 @@ export interface WindowManagerOptions {
 export function initializeWindowManager(
 	options?: WindowManagerOptions,
 ): WindowManager {
-	// 1. Slå ihop hårdkodade defaults med vad som skickades in i app-starten
-
-	try {
-		return getContextManager();
-	} catch {
-		const wManager = new WindowManager({
-			backend: options?.backend,
-			config: options?.config,
-		});
-		if (options?.modules) {
-			registerComponents(options.modules);
-		}
-		setContextManager(wManager);
-		return wManager;
+	if (hasContext(WINDOW_MANAGER_KEY)) {
+		return getContext<WindowManager>(WINDOW_MANAGER_KEY);
 	}
-}
 
-export function bootstrapWindowManager() {
-	return initializeWindowManager({
-		modules: import.meta.glob(
-			"/src/routes/**/*.svelte",
-			{ eager: true },
-		),
+	const wManager = new WindowManager({
+		backend: options?.backend,
+		config: options?.config,
 	});
+
+	if (options?.modules) {
+		registerComponents(options.modules);
+	}
+
+	setContext(WINDOW_MANAGER_KEY, wManager);
+	return wManager;
 }
-
-// export function getWindowManager({ parentId = "root" }: { parentId?: WindowId | WindowInstance } = {}): WindowManager {
-// 	const manager = getContextManager();
-// 	// Här har du nu tillgång till parentId (antingen det som skickades in eller "root")
-// 	return manager;
-// }
-
-const [getContextParentId, setContextParentId] = createContext<WindowId>();
 
 export function getWindowManager(
 	{ parentId }: { parentId?: WindowId } = {},
 ): WindowManager {
-	const manager = getContextManager();
+	if (!hasContext(WINDOW_MANAGER_KEY)) {
+		throw new Error(
+			"WindowManager context saknas. Se till att initializeWindowManager() körs i en föräldrakomponent.",
+		);
+	}
+
+	const manager = getContext<WindowManager>(WINDOW_MANAGER_KEY);
 
 	// 1. Om WindowFrame skickade med parentId, spara det i Svelte context för alla barnkomponenter
 	if (parentId) {
-		setContextParentId(parentId);
+		setContext(PARENT_ID_KEY, parentId);
 	}
 
 	// 2. Läs av parentId (antingen det som just skickades in, eller det som ärvts från WindowFrame)
 	let resolvedParentId: WindowId = WINDOW_MANAGER_ROOT_ID;
 	if (parentId) {
 		resolvedParentId = parentId;
-	} else {
-		try {
-			resolvedParentId = getContextParentId();
-		} catch {
-			// Vi är på rotnivå (utanför en WindowFrame)
-			resolvedParentId = WINDOW_MANAGER_ROOT_ID;
-		}
+	} else if (hasContext(PARENT_ID_KEY)) {
+		resolvedParentId = getContext<WindowId>(PARENT_ID_KEY);
 	}
 
 	// Return a scoped view without losing the manager instance's private state.
 	const currentParentId = resolvedParentId === WINDOW_MANAGER_ROOT_ID ? null : resolvedParentId;
+
 	return new Proxy(manager, {
 		get(target, property) {
 			if (property === "currentParentId") {
@@ -1332,42 +1374,14 @@ export function getWindowManager(
 					});
 			}
 
-			// if (property === "open") {
-			// 	return (
-			// 		first: WindowInstance | Component<any>,
-			// 		second: Component<any> | OpenWindowOptions = {},
-			// 		third?: OpenWindowOptions,
-			// 	) => {
-			// 		if (isWindowInstance(first)) {
-			// 			return target.open(first, second as Component<any>, third);
-			// 		}
-
-			// 		const options = second as OpenWindowOptions;
-			// 		return target.openWindow(first, {
-			// 			...options,
-			// 			parentId: options.parentId !== undefined ? options.parentId : currentParentId,
-			// 		});
-			// 	};
-			// }
-
 			const value = Reflect.get(target, property, target);
 			return typeof value === "function" ? value.bind(target) : value;
 		},
 	});
 }
 
-// export function getWindowManager(
-// 	windowContext?: WindowInstance,
-// ): WindowManager {
-// 	const manager = getContextManager();
-
-// 	if (windowContext) {
-// 		setCurrentWindow(windowContext);
-// 	}
-
-// 	let currentWindow: WindowInstance;
-// 	try {
-// 		currentWindow = getCurrentWindow();
-// 	} catch {
-// 		return manager;
-// 	}
+// if (import.meta.hot) {
+//     import.meta.hot.accept(() => {
+//         import.meta.hot?.invalidate();
+//     });
+// }

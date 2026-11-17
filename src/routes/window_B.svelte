@@ -155,6 +155,7 @@ function detachToWindow() {
 
 <style>
 .window-container {
+	/* box-sizing: border-box; */
 	display: flex;
 	flex-direction: column;
 	background: white;

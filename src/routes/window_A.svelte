@@ -9,6 +9,8 @@ import WindowRegistryDebug from "#lib/WindowRegistryDebug.svelte";
 import Window_B from "./window_B.svelte";
 import { type WindowBProps } from "./window_B.svelte";
 
+import WindowATitlebar from "./window_A_titlebar.svelte";
+
 import Wallpaper from "#lib/Wallpaper.svelte";
 
 let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
@@ -41,6 +43,7 @@ function spawnReactive() {
 	});
 }
 onMount(() => {
+	win.titlebar = WindowATitlebar; // Must be set in onMount
 	spawnReactive();
 });
 
@@ -110,6 +113,7 @@ $effect(() => {
 
 <style>
 .window-container {
+	/* box-sizing: border-box; */
 	display: flex;
 	flex-direction: column;
 	background: white;
@@ -117,6 +121,7 @@ $effect(() => {
 	background-color: antiquewhite;
 	width: 100%;
 	height: 100%;
+	overflow: auto;
 }
 
 code {

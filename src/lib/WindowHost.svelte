@@ -3,7 +3,7 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/%
 
 <!-- WindowHost.svelte -->
 <script lang="ts">
-import { type Component, onMount, type Snippet } from "svelte";
+import { type Component, onMount, type Snippet, tick } from "svelte";
 import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
@@ -50,8 +50,6 @@ let standaloneWinId = $derived(page.url.searchParams.get("winId"));
 // let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
 // let standaloneManagerId = page.url.searchParams.get("wManagerId");
 
-// let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
-
 // Komponenten laddas asynkront från windowRegistry.
 
 let standaloneLoading = $state(false);
@@ -73,9 +71,16 @@ onMount(() => {
 	if (descriptors.length === 0) return; // Kollar om det är ett detached subtree
 
 	void (async () => {
-		await wManager.restoreSubtree(
+		const rootWin = await wManager.restoreSubtree(
 			descriptors,
 		);
+
+		// Vänta en tick så att rootContentEl säkert är bunden i DOM:en
+		// await tick();
+
+		// if (rootWin && rootContentEl && !rootWin.isMaximized) {
+		// 	wManager.toggleMaximize(rootWin, rootContentEl);
+		// }
 
 		console.log(
 			"restore",

@@ -50,6 +50,7 @@ let {
 
 <style>
 .registry-debug {
+	box-sizing: border-box;
 	font-size: 11px;
 	background: white;
 	border: 1px solid #ccc;
