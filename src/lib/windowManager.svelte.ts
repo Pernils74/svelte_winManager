@@ -548,7 +548,6 @@ export class WindowManager {
 				descriptor.componentKey,
 			);
 
-			console.log("ghgjhgjgjgjgjhg ", descriptor.title);
 			this.open(component, {
 				winId: descriptor.winId,
 				title: descriptor.title,
@@ -563,7 +562,9 @@ export class WindowManager {
 			if (win) {
 				Object.assign(win.props, descriptor.props);
 
-				win.wManagerId = descriptor.wManagerId;
+				// win.wManagerId = descriptor.wManagerId;
+				win.wManagerId = this.wManagerId;
+
 				if (descriptor.winId === descriptors[0].winId) {
 					rootWin = win;
 				}
@@ -578,56 +579,6 @@ export class WindowManager {
 	// I WindowManager (windowManager.svelte.ts)
 	// Överst i windowManager.svelte.ts
 	// import { getComponentByKey, getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
-
-	async detachWindow_old(
-		win: WindowInstance,
-		target: Exclude<WindowViewPortType, "workspace">,
-	): Promise<void> {
-		if (!win) {
-			throw new Error("Window hittades inte.");
-		}
-
-		const children = this.getChildren(win.winId);
-		for (const child of children) {
-			if (child.wManagerId != this.wManagerId) continue;
-			this.reparent(
-				child.winId,
-				WINDOW_MANAGER_ROOT_ID,
-				{
-					left: child.rect.left + win.rect.left,
-					top: child.rect.top + win.rect.top,
-					width: child.rect.width,
-					height: child.rect.height,
-				},
-			);
-		}
-
-		const detachedManagerId = crypto.randomUUID();
-
-		const descriptor: ExternalWindowDescriptor = {
-			wManagerId: detachedManagerId,
-			winId: win.winId,
-
-			title: win.title,
-			componentKey: win.componentKey,
-
-			parentId: win.parentId,
-			renderTargetWinId: win.renderTargetWinId, // renderTargetWinId kommer oftast sättas till nya root
-			// renderTargetWinId: null, // detached window blir root i nya runtime
-			props: $state.snapshot(win.props),
-
-			width: win.rect.width,
-			height: win.rect.height,
-
-			left: win.rect.left,
-			top: win.rect.top,
-		};
-
-		// detta för att förhindra att den renderas i nuvarande wManager.
-		// Dvs kommer vara ett ghost fönster
-		win.wManagerId = detachedManagerId;
-		await this.sync.open(descriptor, target);
-	}
 
 	// --------------------------------------------------
 	// DUPLICATE

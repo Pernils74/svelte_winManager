@@ -591,43 +591,6 @@ $effect(() => {
 	}
 });
 
-function shouldBroadcast_old(win: WindowInstance): boolean {
-	// Ett fönster utan parent är ett eget root-fönster.
-	// if (!win.renderTargetWinId) return true;
-	if (win.renderTargetWinId == null) return true;
-
-	// Försök hitta den logiska parenten i denna JS-runtime.
-	const parent = wManager.find(win.renderTargetWinId);
-
-	// Parent finns inte i denna runtime.
-	// Då är win ett detached/externt fönster.
-	if (!parent) {
-		return true;
-	}
-
-	console.log("wwwwwwwwwwww");
-	// Parent finns lokalt.
-	// Broadcast behövs bara om parent tillhör en annan runtime.
-	// return parent.wManagerId !== win.wManagerId;
-	return parent.wManagerId !== wManager.wManagerId;
-}
-
-function shouldBroadcast(win: WindowInstance): boolean {
-	return win.renderTargetWinId == null;
-}
-
-// Här reagerar vi på ändringar i props och gör om funktioner till RPC-strängar
-// $effect(() => {
-// 	const props = $state.snapshot(win.props);
-// 	if (shouldBroadcast(win)) {
-// 		// 🌟 Ta en rå kopia av props
-// 		// console.log("skickar syn")
-// 		void wManager.sync.send(win.winId, {
-// 			props: props,
-// 		});
-// 	}
-// });
-
 // för tillfällig debugg
 // $effect(() => {
 // 	const props = $state.snapshot(win.props);

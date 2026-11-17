@@ -68,7 +68,6 @@ import brodcastChannelMonitor from "./BroadcastChannelMonitor.svelte";
 
 import MouseCords from "./MouseCords.svelte";
 
-// const wManager = initializeWindowManager();
 const wManager = initializeWindowManager({
 	modules: import.meta.glob(
 		"/src/routes/**/*.svelte",

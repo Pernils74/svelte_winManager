@@ -8,13 +8,12 @@ import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
 import {
-	bootstrapWindowManager,
 	getWindowManager,
-	initializeWindowManager,
 	WINDOW_MANAGER_ROOT_ID,
 	type WindowInstance,
 	type WindowState,
 } from "./windowManager.svelte";
+
 import { getComponentByKey } from "./windowComponentRegistry";
 
 // import { registerComponents } from "./windowRegistry";
@@ -36,25 +35,9 @@ let { desktopContent, topbarContent }: Props = $props();
 const detachedRootWinId = page.url.searchParams.get("winId");
 const isStandalone = detachedRootWinId !== null;
 
-let wManager = $state(
-	isStandalone
-		? initializeWindowManager({
-			modules: import.meta.glob(
-				"/src/routes/**/*.svelte",
-				{ eager: true },
-			),
-		})
-		: getWindowManager(),
-);
-
-// const wManager = bootstrapWindowManager();
+const wManager = getWindowManager(); // ligger i try catch block och kommer skapa ny om den inte finns
 
 const descriptors = detachedRootWinId ? wManager.backend.getInitialStateFor(detachedRootWinId) : [];
-
-const standaloneRootId = descriptors[0]?.winId;
-
-// const descriptors = initialState?.subtree ??
-// 	[initialState?.root].filter(Boolean);
 
 // Reading of URL-parametrar for standalone windows (win.isDetached=true)
 let standaloneWinId = $derived(page.url.searchParams.get("winId"));
@@ -86,165 +69,8 @@ let minimizedWindows = $derived(
 	),
 );
 
-// Ladda komponenten och skapa fristående fönsterinstans.
-// $effect(() => {
-// 	if (
-// 		!isStandalone ||
-// 		!standaloneWinId ||
-// 		!standaloneComponentKey
-// 	) {
-// 		standaloneLoading = false;
-// 		return;
-// 	}
-
-// 	const targetWinId = standaloneWinId;
-// 	const componentKey = standaloneComponentKey;
-// 	const title = standaloneTitle;
-
-// 	let cancelled = false;
-// 	let unsubscribe: (() => void) | undefined;
-
-// 	standaloneLoading = true;
-
-// 	async function initializeStandaloneWindow() {
-// 		try {
-// 			const component = await getComponentByKey(componentKey);
-// 			if (cancelled) return;
-
-// 			let winInstance = wManager.find(targetWinId);
-
-// 			if (!winInstance) {
-// 				wManager.open(component, {
-// 					winId: targetWinId,
-// 					title,
-// 					// Behåll övriga relevanta options från descriptor.
-// 					parentId: standaloneParentId,
-// 					renderTargetWinId: standaloneRenderTargetWinId,
-// 					width: window.innerWidth,
-// 					height: window.innerHeight,
-// 				});
-
-// 				winInstance = wManager.find(targetWinId);
-// 			}
-
-// 			if (!winInstance || cancelled) return;
-
-// 			unsubscribe = wManager.sync.attachWindow(winInstance, wManager);
-
-// 			publishStandaloneStateUpdate({
-// 				width: window.innerWidth,
-// 				height: window.innerHeight,
-// 				isMinimized: document.hidden,
-// 				isFocused: document.hasFocus(),
-// 			});
-
-// 			// Här lägger vi sedan in loopen för subtree,
-// 			// när vi vet varifrån descriptors hämtas.
-// 		} catch (error) {
-// 			// ...
-// 		} finally {
-// 			if (!cancelled) standaloneLoading = false;
-// 		}
-// 	}
-// 	async function initializeStandaloneWindow_old() {
-// 		try {
-// 			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
-// 			const component = await getComponentByKey(componentKey);
-// 			if (cancelled) return;
-
-// 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
-// 			const winInstance = wManager.find(targetWinId);
-// 			// om den inte finns gör en ny
-// 			if (!winInstance) {
-// 				const newWinInstance: WindowInstance = {
-// 					wManagerId: standaloneManagerId ?? wManager.wManagerId,
-
-// 					winId: targetWinId,
-// 					title,
-// 					componentKey,
-// 					component,
-// 					thumbnail: null,
-// 					props: {},
-// 					parentId: standaloneParentId,
-// 					renderTargetWinId: standaloneRenderTargetWinId,
-// 					boundingEl: null,
-// 					rect: {
-// 						left: 0,
-// 						top: 0,
-// 						width: window.innerWidth,
-// 						height: window.innerHeight,
-// 					},
-// 					isMinimized: false,
-// 					isMaximized: true,
-// 					transparency: 1,
-// 					isFocused: false,
-
-// 					storedState: null,
-// 					zIndex: 1,
-// 					tileOffset: 0,
-// 					metrics: {
-// 						renderMs: 0,
-// 						renderStrategy: "immediate",
-// 						renderBusy: false,
-// 					},
-// 					showButtons: false,
-// 					docking: {},
-// 				};
-
-// 				wManager.windows.push(newWinInstance);
-// 			} else {
-// 				winInstance.component = component;
-// 				winInstance.componentKey = componentKey;
-// 				winInstance.title = title;
-// 			}
-
-// 			if (cancelled) return;
-
-// 			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
-// 			// Denna ersätter din gamla `wManager.backend.onMessage`
-// 			// unsubscribe = wManager.setupStandaloneSync(targetWinId);
-
-// 			unsubscribe = wManager.sync.attachWindow(wManager.find(targetWinId)!, wManager);
-
-// 			publishStandaloneStateUpdate({
-// 				width: window.innerWidth,
-// 				height: window.innerHeight,
-// 				isMinimized: document.hidden,
-// 				isFocused: document.hasFocus(),
-// 			});
-// 		} catch (error) {
-// 			if (cancelled) return;
-
-// 			console.error(
-// 				`[WindowHost] Kunde inte initiera "${componentKey}"`,
-// 				error,
-// 			);
-// 		} finally {
-// 			if (!cancelled) {
-// 				standaloneLoading = false;
-// 			}
-// 		}
-// 	}
-
-// 	void initializeStandaloneWindow();
-
-// 	return () => {
-// 		cancelled = true;
-// 		// unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
-// 	};
-// });
-
 onMount(() => {
-	if (descriptors.length === 0) return;
-
-	// const wManager = bootstrapWindowManager();
-
-	// wManager = initializeWindowManager({
-	// 	modules: import.meta.glob(
-	// 		"/src/routes/**/*.svelte",
-	// 		{ eager: true },
-	// 	),
-	// });
+	if (descriptors.length === 0) return; // Kollar om det är ett detached subtree
 
 	void (async () => {
 		await wManager.restoreSubtree(
