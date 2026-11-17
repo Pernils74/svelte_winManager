@@ -1,39 +1,3 @@
-<!--
-WindowManager
-    └── State / API / Hierarchy
-
-WindowHost
-    ├── Workspace
-    │   └── renderWindow(win)
-    │       └── WindowFrame
-    │           ├── Titlebar
-    │           ├── Content
-    │           │   ├── WindowComponent
-    │           │   └── Child Windows
-    │           └── Resize Handles
-    │
-    ├── Taskbar
-    └── Detached Windows
-
-WindowBackend
-    ├── Browser Tab
-    ├── Browser Window
-    └── Tauri -->
-
-<!-- Workspace (root bounds)
-│
-├── Window A
-│   └── Content A (bounds A)
-│       ├── Window A1
-│       │   └── Content A1 (bounds A1)
-│       │       └── Window A1a
-│       │
-│       └── Window A2
-│
-└── Window B
-	└── Content B (bounds B)
-		└── Window B1 -->
-
 <!-- https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/lib/WindowHost.svelte
 https://github.com/Pernils74/svelte_winManager/blob/dev_refactoring/src/routes/%2Bpage.svelte -->
 
@@ -68,23 +32,29 @@ interface Props {
 let { desktopContent, topbarContent }: Props = $props();
 
 const wManager = getWindowManager();
+const detachedRootWinId = page.url.searchParams.get("winId");
 
-const initialState = wManager.backend.getInitialState();
-const descriptors = initialState?.subtree ??
-	[initialState?.root].filter(Boolean);
+const descriptors = detachedRootWinId ? wManager.backend.getInitialStateFor(detachedRootWinId) : [];
+
+const standaloneRootId = descriptors[0]?.winId;
+
+const isStandalone = detachedRootWinId !== null;
+
+// const descriptors = initialState?.subtree ??
+// 	[initialState?.root].filter(Boolean);
 
 // Reading of URL-parametrar for standalone windows (win.isDetached=true)
 let standaloneWinId = $derived(page.url.searchParams.get("winId"));
-let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
-let standaloneRenderTargetWinId = $derived(
-	page.url.searchParams.get("renderTargetWinId") ??
-		page.url.searchParams.get("parentId"),
-);
-let standaloneParentId = $derived(page.url.searchParams.get("parentId"));
-let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
-let standaloneManagerId = page.url.searchParams.get("wManagerId");
+// let standaloneComponentKey = $derived(page.url.searchParams.get("componentKey"));
+// let standaloneRenderTargetWinId = $derived(
+// 	page.url.searchParams.get("renderTargetWinId") ??
+// 		page.url.searchParams.get("parentId"),
+// );
+// let standaloneParentId = $derived(page.url.searchParams.get("parentId"));
+// let standaloneTitle = $derived(page.url.searchParams.get("title") ?? "Fristående");
+// let standaloneManagerId = page.url.searchParams.get("wManagerId");
 
-let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
+// let isStandalone = $derived(!!(standaloneWinId && standaloneComponentKey));
 
 // Komponenten laddas asynkront från windowRegistry.
 
@@ -104,151 +74,183 @@ let minimizedWindows = $derived(
 );
 
 // Ladda komponenten och skapa fristående fönsterinstans.
-$effect(() => {
-	if (
-		!isStandalone ||
-		!standaloneWinId ||
-		!standaloneComponentKey
-	) {
-		standaloneLoading = false;
-		return;
-	}
+// $effect(() => {
+// 	if (
+// 		!isStandalone ||
+// 		!standaloneWinId ||
+// 		!standaloneComponentKey
+// 	) {
+// 		standaloneLoading = false;
+// 		return;
+// 	}
 
-	const targetWinId = standaloneWinId;
-	const componentKey = standaloneComponentKey;
-	const title = standaloneTitle;
+// 	const targetWinId = standaloneWinId;
+// 	const componentKey = standaloneComponentKey;
+// 	const title = standaloneTitle;
 
-	let cancelled = false;
-	let unsubscribe: (() => void) | undefined;
+// 	let cancelled = false;
+// 	let unsubscribe: (() => void) | undefined;
 
-	standaloneLoading = true;
+// 	standaloneLoading = true;
 
-	async function initializeStandaloneWindow() {
-		try {
-			const component = await getComponentByKey(componentKey);
-			if (cancelled) return;
+// 	async function initializeStandaloneWindow() {
+// 		try {
+// 			const component = await getComponentByKey(componentKey);
+// 			if (cancelled) return;
 
-			let winInstance = wManager.find(targetWinId);
+// 			let winInstance = wManager.find(targetWinId);
 
-			if (!winInstance) {
-				wManager.open(component, {
-					winId: targetWinId,
-					title,
-					// Behåll övriga relevanta options från descriptor.
-					parentId: standaloneParentId,
-					renderTargetWinId: standaloneRenderTargetWinId,
-					width: window.innerWidth,
-					height: window.innerHeight,
-				});
+// 			if (!winInstance) {
+// 				wManager.open(component, {
+// 					winId: targetWinId,
+// 					title,
+// 					// Behåll övriga relevanta options från descriptor.
+// 					parentId: standaloneParentId,
+// 					renderTargetWinId: standaloneRenderTargetWinId,
+// 					width: window.innerWidth,
+// 					height: window.innerHeight,
+// 				});
 
-				winInstance = wManager.find(targetWinId);
-			}
+// 				winInstance = wManager.find(targetWinId);
+// 			}
 
-			if (!winInstance || cancelled) return;
+// 			if (!winInstance || cancelled) return;
 
-			unsubscribe = wManager.sync.attachWindow(winInstance, wManager);
+// 			unsubscribe = wManager.sync.attachWindow(winInstance, wManager);
 
-			publishStandaloneStateUpdate({
-				width: window.innerWidth,
-				height: window.innerHeight,
-				isMinimized: document.hidden,
-				isFocused: document.hasFocus(),
-			});
+// 			publishStandaloneStateUpdate({
+// 				width: window.innerWidth,
+// 				height: window.innerHeight,
+// 				isMinimized: document.hidden,
+// 				isFocused: document.hasFocus(),
+// 			});
 
-			// Här lägger vi sedan in loopen för subtree,
-			// när vi vet varifrån descriptors hämtas.
-		} catch (error) {
-			// ...
-		} finally {
-			if (!cancelled) standaloneLoading = false;
-		}
-	}
-	async function initializeStandaloneWindow_old() {
-		try {
-			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
-			const component = await getComponentByKey(componentKey);
-			if (cancelled) return;
+// 			// Här lägger vi sedan in loopen för subtree,
+// 			// när vi vet varifrån descriptors hämtas.
+// 		} catch (error) {
+// 			// ...
+// 		} finally {
+// 			if (!cancelled) standaloneLoading = false;
+// 		}
+// 	}
+// 	async function initializeStandaloneWindow_old() {
+// 		try {
+// 			// 🌟 1. Ladda komponenten från ditt routes-register asynkront
+// 			const component = await getComponentByKey(componentKey);
+// 			if (cancelled) return;
 
-			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
-			const winInstance = wManager.find(targetWinId);
-			// om den inte finns gör en ny
-			if (!winInstance) {
-				const newWinInstance: WindowInstance = {
-					wManagerId: standaloneManagerId ?? wManager.wManagerId,
+// 			// 🌟 2. Säkerställ att fönsterobjektet existerar i din manager
+// 			const winInstance = wManager.find(targetWinId);
+// 			// om den inte finns gör en ny
+// 			if (!winInstance) {
+// 				const newWinInstance: WindowInstance = {
+// 					wManagerId: standaloneManagerId ?? wManager.wManagerId,
 
-					winId: targetWinId,
-					title,
-					componentKey,
-					component,
-					thumbnail: null,
-					props: {},
-					parentId: standaloneParentId,
-					renderTargetWinId: standaloneRenderTargetWinId,
-					boundingEl: null,
-					rect: {
-						left: 0,
-						top: 0,
-						width: window.innerWidth,
-						height: window.innerHeight,
-					},
-					isMinimized: false,
-					isMaximized: true,
-					transparency: 1,
-					isFocused: false,
+// 					winId: targetWinId,
+// 					title,
+// 					componentKey,
+// 					component,
+// 					thumbnail: null,
+// 					props: {},
+// 					parentId: standaloneParentId,
+// 					renderTargetWinId: standaloneRenderTargetWinId,
+// 					boundingEl: null,
+// 					rect: {
+// 						left: 0,
+// 						top: 0,
+// 						width: window.innerWidth,
+// 						height: window.innerHeight,
+// 					},
+// 					isMinimized: false,
+// 					isMaximized: true,
+// 					transparency: 1,
+// 					isFocused: false,
 
-					storedState: null,
-					zIndex: 1,
-					tileOffset: 0,
-					metrics: {
-						renderMs: 0,
-						renderStrategy: "immediate",
-						renderBusy: false,
-					},
-					showButtons: false,
-					docking: {},
-				};
+// 					storedState: null,
+// 					zIndex: 1,
+// 					tileOffset: 0,
+// 					metrics: {
+// 						renderMs: 0,
+// 						renderStrategy: "immediate",
+// 						renderBusy: false,
+// 					},
+// 					showButtons: false,
+// 					docking: {},
+// 				};
 
-				wManager.windows.push(newWinInstance);
-			} else {
-				winInstance.component = component;
-				winInstance.componentKey = componentKey;
-				winInstance.title = title;
-			}
+// 				wManager.windows.push(newWinInstance);
+// 			} else {
+// 				winInstance.component = component;
+// 				winInstance.componentKey = componentKey;
+// 				winInstance.title = title;
+// 			}
 
-			if (cancelled) return;
+// 			if (cancelled) return;
 
-			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
-			// Denna ersätter din gamla `wManager.backend.onMessage`
-			// unsubscribe = wManager.setupStandaloneSync(targetWinId);
+// 			// 🌟 3. Haka på den centraliserade tvåvägssynken från WindowManager
+// 			// Denna ersätter din gamla `wManager.backend.onMessage`
+// 			// unsubscribe = wManager.setupStandaloneSync(targetWinId);
 
-			unsubscribe = wManager.sync.attachWindow(wManager.find(targetWinId)!, wManager);
+// 			unsubscribe = wManager.sync.attachWindow(wManager.find(targetWinId)!, wManager);
 
-			publishStandaloneStateUpdate({
-				width: window.innerWidth,
-				height: window.innerHeight,
-				isMinimized: document.hidden,
-				isFocused: document.hasFocus(),
-			});
-		} catch (error) {
-			if (cancelled) return;
+// 			publishStandaloneStateUpdate({
+// 				width: window.innerWidth,
+// 				height: window.innerHeight,
+// 				isMinimized: document.hidden,
+// 				isFocused: document.hasFocus(),
+// 			});
+// 		} catch (error) {
+// 			if (cancelled) return;
 
-			console.error(
-				`[WindowHost] Kunde inte initiera "${componentKey}"`,
-				error,
-			);
-		} finally {
-			if (!cancelled) {
-				standaloneLoading = false;
-			}
-		}
-	}
+// 			console.error(
+// 				`[WindowHost] Kunde inte initiera "${componentKey}"`,
+// 				error,
+// 			);
+// 		} finally {
+// 			if (!cancelled) {
+// 				standaloneLoading = false;
+// 			}
+// 		}
+// 	}
 
-	void initializeStandaloneWindow();
+// 	void initializeStandaloneWindow();
 
-	return () => {
-		cancelled = true;
-		// unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
-	};
+// 	return () => {
+// 		cancelled = true;
+// 		// unsubscribe?.(); // 🌟 Dödar både BroadcastChannel-lyssnaren OCH $effect.root-effekten i managern!
+// 	};
+// });
+
+onMount(() => {
+	if (descriptors.length === 0) return;
+
+	void (async () => {
+		await wManager.restoreSubtree(
+			descriptors,
+		);
+
+		console.log(
+			"restore",
+			descriptors.map((d) => ({
+				title: d.title,
+				winId: d.winId,
+				parentId: d.parentId,
+				renderTargetWinId: d.renderTargetWinId,
+				wManagerId: d.wManagerId,
+			})),
+		);
+
+		console.log(
+			"all windows",
+			wManager.windows.map((w) => ({
+				title: w.title,
+				winId: w.winId,
+				parentId: w.parentId,
+				renderTargetWinId: w.renderTargetWinId,
+				wManagerId: w.wManagerId,
+			})),
+		);
+	})();
 });
 
 onMount(() => {

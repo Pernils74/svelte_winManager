@@ -493,85 +493,91 @@ export class WindowManager {
 		win: WindowInstance,
 		target: Exclude<WindowViewPortType, "workspace">,
 	): Promise<void> {
-		if (!win) {
-			throw new Error("Window hittades inte.");
-		}
-
 		const detachedManagerId = crypto.randomUUID();
-
 		const subtree = [
 			win,
 			...this.getRenderDescendants(win.winId),
 		];
-
-		const descriptors = subtree.map((node): ExternalWindowDescriptor => {
-			node.wManagerId = detachedManagerId;
-
-			return {
+		const descriptors = subtree.map(
+			(node): ExternalWindowDescriptor => ({
 				wManagerId: detachedManagerId,
 
 				winId: node.winId,
-
 				title: node.title,
 				componentKey: node.componentKey,
 
-				// parentId: node.parentId,
-				// renderTargetWinId: node.renderTargetWinId,
+				// gör detached-noden till ny root
+				// parentId: node.winId === win.winId ? null : node.parentId,
+				parentId: node.parentId,
 
-				parentId: node.winId === win.winId ? null : node.parentId,
-				renderTargetWinId: node.winId === win.winId ? WINDOW_MANAGER_ROOT_ID : node.renderTargetWinId,
+				// renderTargetWinId: node.winId === win.winId ? WINDOW_MANAGER_ROOT_ID : node.renderTargetWinId,
+				renderTargetWinId: node.renderTargetWinId,
 
 				props: $state.snapshot(node.props),
 
-				left: node.rect.left,
-				top: node.rect.top,
-				width: node.rect.width,
-				height: node.rect.height,
-			};
-		});
+				rect: { ...node.rect },
+				// left: node.rect.left,
+				// top: node.rect.top,
+				// width: node.rect.width,
+				// height: node.rect.height,
+			}),
+		);
 
-		const rootDescriptor = {
-			...descriptors[0],
-			subtree: descriptors,
-		};
-		await this.sync.open(rootDescriptor, target); // skickar vidare root + trädet i root.subtree
+		await this.sync.open(
+			{
+				...descriptors[0],
+				subtree: descriptors,
+			},
+			target,
+		);
 
-		// await this.sync.open(descriptors, target);
-		// for (const descriptor of descriptors) {
-		// 	console.log("opening", descriptor.winId);
+		// Ändrar till win blir "ghost" så de inte renderas i nuvarande runtime
+		// disblar det för tillfället
+		// for (const node of subtree) {
+		// 	node.wManagerId = detachedManagerId;
 		// }
+	}
+
+	async restoreSubtree(
+		descriptors: ExternalWindowDescriptor[],
+	): Promise<void> {
+		let rootWin: WindowInstance | undefined;
+
+		for (const descriptor of descriptors) {
+			const component = await getComponentByKey(
+				descriptor.componentKey,
+			);
+
+			console.log("ghgjhgjgjgjgjhg ", descriptor.title);
+			this.open(component, {
+				winId: descriptor.winId,
+				title: descriptor.title,
+				parentId: descriptor.parentId,
+				renderTargetWinId: descriptor.renderTargetWinId,
+				width: descriptor.rect.width,
+				height: descriptor.rect.height,
+			});
+
+			const win = this.find(descriptor.winId);
+
+			if (win) {
+				Object.assign(win.props, descriptor.props);
+
+				win.wManagerId = descriptor.wManagerId;
+				if (descriptor.winId === descriptors[0].winId) {
+					rootWin = win;
+				}
+				// this.focus(win);
+			}
+		}
+		if (rootWin) {
+			this.focus(rootWin);
+		}
 	}
 
 	// I WindowManager (windowManager.svelte.ts)
 	// Överst i windowManager.svelte.ts
 	// import { getComponentByKey, getComponentKey, registerComponents } from "./windowComponentRegistry.ts";
-
-	// Inne i WindowManager-klassen
-	async hydrateDetachedSubtree(rootWinId: string): Promise<void> {
-		const descriptors = this.backend.consumeInitialDescriptors(rootWinId);
-		if (descriptors.length === 0) return;
-
-		for (let i = 0; i < descriptors.length; i++) {
-			const desc = descriptors[i];
-			const isRoot = i === 0;
-
-			// Hämtar komponenten (eller WindowComponentFallback om den saknas)
-			const component = await getComponentByKey(desc.componentKey);
-
-			this.open(component, {
-				winId: desc.winId,
-				title: desc.title,
-				componentKey: desc.componentKey,
-				parentId: desc.parentId ?? null,
-				renderTargetWinId: isRoot ? WINDOW_MANAGER_ROOT_ID : (desc.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID),
-				props: desc.props,
-				left: isRoot ? 0 : desc.left,
-				top: isRoot ? 0 : desc.top,
-				width: desc.width,
-				height: desc.height,
-			});
-		}
-	}
 
 	async detachWindow_old(
 		win: WindowInstance,

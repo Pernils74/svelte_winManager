@@ -23,7 +23,7 @@
 //        |
 //        +---- winId C -> listeners C
 
-import type { WindowId, WindowState } from "./windowManager.svelte";
+import type { WindowId, WindowRect, WindowState } from "./windowManager.svelte";
 
 import type { WindowTarget } from "./windowSync.svelte";
 
@@ -55,11 +55,6 @@ export type WindowMessage =
 		error?: string;
 	}
 	| { type: "system:close" };
-// | {
-// 	type: "registry:snapshot";
-// 	version: number;
-// 	entries: WindowRegistryEntry[];
-// };
 
 export interface WindowEndpoint {
 	wManagerId: string;
@@ -107,10 +102,11 @@ export interface ExternalWindowDescriptor {
 
 	subtree?: ExternalWindowDescriptor[];
 
-	width?: number;
-	height?: number;
-	left?: number;
-	top?: number;
+	rect: WindowRect;
+	// width?: number;
+	// height?: number;
+	// left?: number;
+	// top?: number;
 	alwaysOnTop?: boolean; //TODO inför att popoup windows skall ligga först
 }
 
@@ -120,11 +116,11 @@ export interface ExternalWindowDescriptor {
 export type RawMessageCallback = (packet: WindowTransportPacket) => void;
 
 export interface WindowBackend {
-	readonly target: Exclude<WindowViewPortType, "workspace">;
+	// readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId: string;
 
-	// open(descriptor: ExternalWindowDescriptor, target: WindowViewPortType): Promise<void>;
 	open(descriptor: ExternalWindowDescriptor, target: WindowTarget): Promise<void>;
+	getInitialStateFor(winId: string): ExternalWindowDescriptor[];
 
 	close(
 		winId: string,
@@ -141,8 +137,6 @@ export interface WindowBackend {
 		callback: RawMessageCallback,
 	): () => void;
 	destroy(): void;
-
-	consumeInitialDescriptors(rootWinId: string): ExternalWindowDescriptor[];
 }
 
 interface TauriEventApi {
@@ -178,71 +172,6 @@ const STORAGE_INIT_PREFIX = "win_payload_init_";
 
 const TAURI_EVENT_PREFIX = "svelte-winmanager:";
 const TAURI_GROUP_EVENT = `${TAURI_EVENT_PREFIX}group`;
-
-interface WindowRegistryEntry {
-	winId: WindowId;
-	wMangerId: string;
-	renderTargetWinId: WindowId | null;
-	wManagerId: string;
-	componentKey: string;
-}
-
-export class WindowsRegistryService {
-	windows = new Map<WindowId, WindowRegistryEntry>();
-
-	version = 0;
-
-	add(entry: WindowRegistryEntry): void {
-		this.windows.set(entry.winId, structuredClone(entry));
-		this.version++;
-	}
-
-	remove(winId: WindowId): void {
-		if (this.windows.delete(winId)) {
-			this.version++;
-		}
-	}
-
-	replace(
-		version: number,
-		entries: WindowRegistryEntry[],
-	): void {
-		this.windows.clear();
-		for (const entry of entries) {
-			this.windows.set(
-				entry.winId,
-				structuredClone(entry),
-			);
-		}
-
-		this.version = version;
-	}
-
-	snapshot() {
-		return {
-			version: this.version,
-			entries: [...this.windows.values()],
-		};
-	}
-
-	get(winId: WindowId): WindowRegistryEntry | undefined {
-		return this.windows.get(winId);
-	}
-
-	getChildren(renderTargetWinId: WindowId): WindowRegistryEntry[] {
-		return [...this.windows.values()]
-			.filter(
-				(entry) => entry.renderTargetWinId === renderTargetWinId,
-			);
-	}
-
-	update(winId: WindowId, updates: Partial<WindowRegistryEntry>): void {
-		const entry = this.windows.get(winId);
-		if (!entry) return;
-		Object.assign(entry, updates);
-		this.version++;
-	}
-}
 
 function createId(): string {
 	return crypto.randomUUID();
@@ -396,32 +325,16 @@ function isTransportPacket(
 		case "system:close":
 			return recipient.type === "window";
 
-		case "registry:snapshot":
-			return (
-				typeof message.version === "number" &&
-				Array.isArray(message.entries)
-			);
-
 		default:
 			return false;
 	}
 }
 
 export class WindowBackendManager implements WindowBackend {
-	public readonly winRegistry = new WindowsRegistryService();
-
-	private initialDescriptors = new Map<string, ExternalWindowDescriptor[]>();
-
-	readonly target: Exclude<WindowViewPortType, "workspace">;
 	readonly endpointId = createId();
 	private channel: BroadcastChannel | null = null;
 	private listeners = new Map<string, Set<RawMessageCallback>>();
 	private groupListeners = new Map<string, Set<RawMessageCallback>>();
-
-	private initialMessages = new Map<
-		string,
-		WindowTransportPacket
-	>();
 
 	private openedWindows = new Map<string, Window | null>();
 	private tauriListeners = new Map<string, Promise<() => void>>();
@@ -433,41 +346,12 @@ export class WindowBackendManager implements WindowBackend {
 	private destroyed = false;
 
 	constructor() {
-		this.target = isTauri() ? "tauri-window" : "browser-tab";
-
-		if (!isBrowser()) return;
-
-		// startar lyssnaren på broadcasy channel
-		if (this.target === "browser-tab") {
-			this.initializeBrowserTransport();
-		} else if (this.target === "tauri-window") {
+		// startar lyssnaren på broadcast channel
+		if (isTauri()) {
 			this.initializeTauriTransport(); // Lyssna på Tauri-events
+		} else {
+			this.initializeBrowserTransport(); // "browser-tab" , "browser-window"
 		}
-		// Körs för BÅDE webbläsare och Tauri!
-		this.readInitialState();
-	}
-
-	getInitialState(): {
-		root: ExternalWindowDescriptor;
-		subtree: ExternalWindowDescriptor[];
-	} | undefined {
-		const winId = new URLSearchParams(globalThis.location.search).get("winId");
-
-		if (!winId) return undefined;
-
-		const raw = localStorage.getItem(initStorageKey(winId));
-
-		if (!raw) return undefined;
-
-		localStorage.removeItem(initStorageKey(winId));
-
-		return JSON.parse(raw);
-	}
-
-	public consumeInitialDescriptors(rootWinId: string): ExternalWindowDescriptor[] {
-		const descriptors = this.initialDescriptors.get(rootWinId) ?? [];
-		this.initialDescriptors.delete(rootWinId);
-		return descriptors;
 	}
 
 	// --------------------------------------------------
@@ -486,9 +370,8 @@ export class WindowBackendManager implements WindowBackend {
 		}
 
 		this.storageListener = (event: StorageEvent) => {
-			if (!event.key?.startsWith(STORAGE_MESSAGE_PREFIX)) {
-				return;
-			}
+			if (!event.key?.startsWith(STORAGE_MESSAGE_PREFIX)) return;
+
 			if (!event.newValue) return;
 
 			try {
@@ -500,12 +383,9 @@ export class WindowBackendManager implements WindowBackend {
 			}
 		};
 
-		globalThis.addEventListener(
-			"storage",
-			this.storageListener,
-		);
+		globalThis.addEventListener("storage", this.storageListener);
 
-		this.readInitialState();
+		// this.readInitialState();
 	}
 
 	private async initializeTauriTransport(): Promise<void> {
@@ -525,200 +405,6 @@ export class WindowBackendManager implements WindowBackend {
 		if (winId) {
 			this.ensureTauriListener(winId, api);
 		}
-	}
-
-	// private ensureTauriWindowListener(winId: string, api?: TauriEventApi): void {
-	// 	const eventName = tauriEventName(winId);
-	// 	if (this.tauriListeners.has(eventName)) return;
-
-	// 	const promise = (async () => {
-	// 		const eventApi = api ??
-	// 			((await import(/* @vite-ignore */ "@tauri-apps/api/event")) as TauriEventApi);
-
-	// 		return eventApi.listen(eventName, (event) => {
-	// 			if (this.destroyed) return;
-	// 			this.receivePacket(event.payload);
-	// 		});
-	// 	})();
-
-	// 	this.tauriListeners.set(eventName, promise);
-	// }
-
-	private readInitialState_old(): void {
-		const params = new URLSearchParams(globalThis.location.search);
-		const winId = params.get("winId");
-		const wManagerId = params.get("wManagerId");
-
-		if (!winId) return;
-
-		queueMicrotask(() => {
-			if (this.destroyed) return;
-			try {
-				const key = initStorageKey(winId);
-				const raw = localStorage.getItem(key);
-				if (!raw) return;
-
-				const props = JSON.parse(raw) as Record<string, unknown>;
-
-				if (!props || typeof props !== "object" || Array.isArray(props)) {
-					throw new Error("Initial window props must be an object.");
-				}
-				if (!wManagerId) {
-					throw new Error("Initial window state is missing wManagerId.");
-				}
-
-				localStorage.removeItem(key);
-
-				const parentId = params.get("parentId");
-				const endpoint: WindowEndpoint = {
-					wManagerId,
-					winId,
-					parentId,
-				};
-				const packet: WindowTransportPacket = {
-					from: endpoint,
-					to: { type: "window", endpoint },
-					message: {
-						type: "sync:props",
-						componentKey: params.get("componentKey") ?? undefined,
-						renderTargetWinId: params.get("renderTargetWinId") ??
-							parentId ??
-							undefined,
-						props,
-					},
-				};
-
-				this.initialMessages.set(
-					winId,
-					packet,
-				);
-
-				this.notifyListeners(packet);
-			} catch (error) {
-				console.error(
-					"[WindowBackend] Could not read initial state:",
-					error,
-				);
-			}
-		});
-	}
-
-	private readInitialState(): void {
-		const params = new URLSearchParams(globalThis.location.search);
-
-		const winId = params.get("winId");
-		const wManagerId = params.get("wManagerId");
-
-		if (!winId) return;
-
-		queueMicrotask(() => {
-			if (this.destroyed) return;
-
-			try {
-				const key = initStorageKey(winId);
-				const raw = localStorage.getItem(key);
-
-				if (!raw) return;
-
-				const parsed = JSON.parse(raw) as {
-					root?: ExternalWindowDescriptor;
-					subtree?: ExternalWindowDescriptor[];
-				};
-
-				if (!parsed || typeof parsed !== "object") {
-					throw new Error("Invalid initial window state.");
-				}
-
-				if (!wManagerId) {
-					throw new Error(
-						"Initial window state is missing wManagerId.",
-					);
-				}
-
-				/*
-				 * Backwards compatibility:
-				 *
-				 * Old format:
-				 *   { ...props }
-				 *
-				 * New format:
-				 *   {
-				 *     root: descriptor,
-				 *     subtree: descriptor[]
-				 *   }
-				 */
-				const descriptors: ExternalWindowDescriptor[] = Array.isArray(parsed.subtree)
-					? parsed.subtree
-					: parsed.root
-					? [parsed.root]
-					: [
-						{
-							wManagerId,
-							winId,
-							title: params.get("title") ?? "",
-							componentKey: params.get("componentKey") ?? "",
-							parentId: params.get("parentId"),
-							renderTargetWinId: params.get("renderTargetWinId"),
-							props: parsed as Record<string, unknown>,
-						},
-					];
-
-				// Spara listan så att WindowManager kan återskapa fönstren
-				this.initialDescriptors.set(winId, descriptors);
-
-				localStorage.removeItem(key);
-
-				for (const desc of descriptors) {
-					const endpoint: WindowEndpoint = {
-						wManagerId: desc.wManagerId,
-						winId: desc.winId,
-						parentId: desc.parentId ?? null,
-					};
-
-					const packet: WindowTransportPacket = {
-						from: endpoint,
-
-						to: {
-							type: "window",
-							endpoint,
-						},
-
-						message: {
-							type: "sync:props",
-							componentKey: desc.componentKey,
-
-							renderTargetWinId: desc.renderTargetWinId ??
-								desc.parentId ??
-								undefined,
-
-							props: desc.props,
-						},
-					};
-
-					/*
-					 * Viktigt:
-					 * initialMessages är per winId.
-					 *
-					 * Root:
-					 *   initialMessages[root.winId] = root packet
-					 *
-					 * Child:
-					 *   initialMessages[child.winId] = child packet
-					 */
-					this.initialMessages.set(
-						desc.winId,
-						packet,
-					);
-
-					this.notifyListeners(packet);
-				}
-			} catch (error) {
-				console.error(
-					"[WindowBackend] Could not read initial state:",
-					error,
-				);
-			}
-		});
 	}
 
 	// --------------------------------------------------
@@ -782,42 +468,38 @@ export class WindowBackendManager implements WindowBackend {
 		return url;
 	}
 
-	private saveInitialState(descriptor: ExternalWindowDescriptor): void {
-		try {
-			const { subtree, ...cleanRoot } = descriptor;
-			localStorage.setItem(
-				initStorageKey(descriptor.winId),
-				JSON.stringify({
-					root: cleanRoot,
-					subtree: subtree?.map(({ subtree: _, ...node }) => node),
-				}),
-			);
-		} catch (error) {
-			throw new Error(`Kunde inte spara initial state: ${String(error)}`);
-		}
+	getInitialStateFor(winId: string): ExternalWindowDescriptor[] {
+		const raw = localStorage.getItem(initStorageKey(winId));
+		if (!raw) return [];
+
+		localStorage.removeItem(initStorageKey(winId));
+		return JSON.parse(raw);
 	}
 
-	private saveInitialState_old(
+	private saveInitialState(
 		descriptor: ExternalWindowDescriptor,
 	): void {
-		try {
-			// localStorage.setItem(
-			// 	initStorageKey(descriptor.winId),
-			// 	JSON.stringify(descriptor.props ?? {}),
-			// );
-
-			localStorage.setItem(
-				initStorageKey(descriptor.winId),
-				JSON.stringify({
-					root: descriptor,
-					subtree: descriptor.subtree,
-				}),
-			);
-		} catch (error) {
-			throw new Error(
-				`Kunde inte spara initial state: ${String(error)}`,
-			);
-		}
+		localStorage.setItem(
+			initStorageKey(descriptor.winId),
+			JSON.stringify(
+				descriptor.subtree ?? [descriptor],
+			),
+		);
+		console.log(
+			"json  ",
+			JSON.stringify(
+				descriptor.subtree ?? [descriptor],
+				null,
+				2,
+			),
+		);
+		// localStorage.setItem(
+		// 	initStorageKey(descriptor.winId),
+		// 	JSON.stringify({
+		// 		subtree: descriptor.subtree ??
+		// 			[descriptor],
+		// 	}),
+		// );
 	}
 
 	private openBrowserTab(
@@ -852,36 +534,25 @@ export class WindowBackendManager implements WindowBackend {
 
 		this.saveInitialState(descriptor);
 
-		const {
-			winId,
-			width = 1000,
-			height = 700,
-			left = 100,
-			top = 100,
-		} = descriptor;
+		const { winId, rect } = descriptor;
 
 		const popup = globalThis.open(
 			url.toString(),
 			`detached_${winId}`,
 			[
 				"popup=yes",
-				`width=${Math.round(width)}`,
-				`height=${Math.round(height)}`,
-				`left=${Math.round(left)}`,
-				`top=${Math.round(top)}`,
+				`width=${Math.round(rect.width)}`,
+				`height=${Math.round(rect.height)}`,
+				`left=${Math.round(rect.left)}`,
+				`top=${Math.round(rect.top)}`,
 				"resizable=yes",
 				"scrollbars=yes",
 			].join(","),
 		);
 
 		if (!popup) {
-			localStorage.removeItem(
-				initStorageKey(winId),
-			);
-
-			throw new Error(
-				"Webbläsaren blockerade popup-fönstret.",
-			);
+			localStorage.removeItem(initStorageKey(winId));
+			throw new Error("Webbläsaren blockerade popup-fönstret.");
 		}
 
 		this.openedWindows.set(winId, popup);
@@ -1102,41 +773,22 @@ export class WindowBackendManager implements WindowBackend {
 
 		if (!callbacks) {
 			callbacks = new Set();
-
-			this.listeners.set(
-				winId,
-				callbacks,
-			);
+			this.listeners.set(winId, callbacks);
 		}
 
 		callbacks.add(callback);
 
-		const initialMessage = this.initialMessages.get(
-			winId,
-		);
-
-		if (initialMessage) {
-			callback(initialMessage);
-			this.initialMessages.delete(
-				winId,
-			);
-		}
-
-		if (this.target === "tauri-window") {
+		if (isTauri()) {
 			void this.ensureTauriListener(winId);
 		}
 
 		return () => {
 			const current = this.listeners.get(winId);
-
 			if (!current) return;
 
 			current.delete(callback);
-
 			if (current.size === 0) {
-				this.listeners.delete(
-					winId,
-				);
+				this.listeners.delete(winId);
 			}
 		};
 	}
@@ -1315,39 +967,24 @@ export class WindowBackendManager implements WindowBackend {
 		this.channel = null;
 
 		if (this.storageListener) {
-			globalThis.removeEventListener(
-				"storage",
-				this.storageListener,
-			);
+			globalThis.removeEventListener("storage", this.storageListener);
 
 			this.storageListener = null;
 		}
 
-		for (
-			const promise of this.tauriListeners.values()
-		) {
-			void promise.then(
-				(unlisten) => unlisten(),
-			);
+		for (const promise of this.tauriListeners.values()) {
+			void promise.then((unlisten) => unlisten());
 		}
 
 		this.tauriListeners.clear();
 		this.listeners.clear();
 		this.groupListeners.clear();
 
-		for (
-			const opened of this.openedWindows.values()
-		) {
-			if (
-				opened &&
-				!opened.closed
-			) {
-				opened.close();
-			}
+		for (const opened of this.openedWindows.values()) {
+			if (opened && !opened.closed) opened.close();
 		}
 
 		this.openedWindows.clear();
-		this.initialMessages.clear();
 	}
 }
 
