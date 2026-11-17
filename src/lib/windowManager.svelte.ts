@@ -1322,6 +1322,15 @@ export function initializeWindowManager(
 	}
 }
 
+export function bootstrapWindowManager() {
+	return initializeWindowManager({
+		modules: import.meta.glob(
+			"/src/routes/**/*.svelte",
+			{ eager: true },
+		),
+	});
+}
+
 // export function getWindowManager({ parentId = "root" }: { parentId?: WindowId | WindowInstance } = {}): WindowManager {
 // 	const manager = getContextManager();
 // 	// Här har du nu tillgång till parentId (antingen det som skickades in eller "root")

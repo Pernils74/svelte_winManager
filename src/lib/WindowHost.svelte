@@ -8,7 +8,9 @@ import { page } from "$app/state";
 
 import WindowFrame from "./WindowFrame.svelte";
 import {
+	bootstrapWindowManager,
 	getWindowManager,
+	initializeWindowManager,
 	WINDOW_MANAGER_ROOT_ID,
 	type WindowInstance,
 	type WindowState,
@@ -31,14 +33,25 @@ interface Props {
 }
 let { desktopContent, topbarContent }: Props = $props();
 
-const wManager = getWindowManager();
 const detachedRootWinId = page.url.searchParams.get("winId");
+const isStandalone = detachedRootWinId !== null;
+
+let wManager = $state(
+	isStandalone
+		? initializeWindowManager({
+			modules: import.meta.glob(
+				"/src/routes/**/*.svelte",
+				{ eager: true },
+			),
+		})
+		: getWindowManager(),
+);
+
+// const wManager = bootstrapWindowManager();
 
 const descriptors = detachedRootWinId ? wManager.backend.getInitialStateFor(detachedRootWinId) : [];
 
 const standaloneRootId = descriptors[0]?.winId;
-
-const isStandalone = detachedRootWinId !== null;
 
 // const descriptors = initialState?.subtree ??
 // 	[initialState?.root].filter(Boolean);
@@ -223,6 +236,15 @@ let minimizedWindows = $derived(
 
 onMount(() => {
 	if (descriptors.length === 0) return;
+
+	// const wManager = bootstrapWindowManager();
+
+	// wManager = initializeWindowManager({
+	// 	modules: import.meta.glob(
+	// 		"/src/routes/**/*.svelte",
+	// 		{ eager: true },
+	// 	),
+	// });
 
 	void (async () => {
 		await wManager.restoreSubtree(

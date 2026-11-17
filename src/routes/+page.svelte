@@ -52,7 +52,7 @@ import Wallpaper from "#lib/Wallpaper.svelte";
 
 import WindowHost from "#lib/WindowHost.svelte";
 
-import { initializeWindowManager } from "#lib/windowManager.svelte.ts";
+import { bootstrapWindowManager, initializeWindowManager } from "#lib/windowManager.svelte.ts";
 import { getAllRegisteredKeys, registerComponents } from "#lib/windowComponentRegistry.ts";
 
 import WindowA from "./window_A.svelte";
@@ -76,18 +76,7 @@ const wManager = initializeWindowManager({
 	),
 });
 
-// +page.svelte
-
-// import { routeModules } from "#lib/windowRegistry.ts";
-
-// registerComponents(routeModules);
-
-// registerComponents(
-// 	import.meta.glob(
-// 		"/src/routes/**/*.svelte",
-// 		{ eager: true },
-// 	),
-// );
+// const wManager = bootstrapWindowManager();
 
 onMount(() => {
 	// wManager.open(debug, {
