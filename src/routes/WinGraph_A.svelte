@@ -7,10 +7,6 @@ import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 import WinGraph_B from "./WinGraph_B.svelte";
 import GraphView from "./WinGraphView.svelte";
 import WinGraphDebug from "./WinGraphDebug.svelte";
-import { onDestroy } from "svelte";
-const wManager = getWindowManager();
-
-let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 
 type Point3D = {
 	x: number;
@@ -18,14 +14,14 @@ type Point3D = {
 	z: number;
 };
 
-interface GraphConfig extends Record<string, number> {
+interface GraphConfig {
 	pointsPerBatch: number;
 	updateMs: number;
 }
 
-interface GraphDataPoints {
-	points: Point3D[];
-}
+const wManager = getWindowManager();
+
+let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
 
 const config = $state<GraphConfig>({
 	pointsPerBatch: 1000,

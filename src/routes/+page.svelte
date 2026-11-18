@@ -98,13 +98,13 @@ onMount(() => {
 		// titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	});
 
-	// wManager.open(WinGraphA, {
-	// 	title: "🪟 Window graph A",
-	// 	width: 600,
-	// 	height: 700,
-	// 	left: 650,
-	// 	top: 100,
-	// });
+	wManager.open(WinGraphA, {
+		title: "🪟 Window graph A",
+		width: 600,
+		height: 700,
+		left: 650,
+		top: 100,
+	});
 
 	// wManager.open(WindowC, {
 	// 	title: "🪟 Window C",
@@ -115,16 +115,16 @@ onMount(() => {
 	// 	top: 800,
 	// });
 
-	wManager.open(brodcastChannelMonitor, {
-		title: "🪟 BroadcastChannel Monitor",
-		// Reparent this window to the window with ID 1 (Window A)
+	// wManager.open(brodcastChannelMonitor, {
+	// 	title: "🪟 BroadcastChannel Monitor",
+	// 	// Reparent this window to the window with ID 1 (Window A)
 
-		width: 700,
-		height: 600,
-		left: 250,
-		top: 800,
-		props: { channelName: "svelte_winmanager_channel" },
-	});
+	// 	width: 700,
+	// 	height: 600,
+	// 	left: 250,
+	// 	top: 800,
+	// 	props: { channelName: "svelte_winmanager_channel" },
+	// });
 });
 
 const allComponents = $derived(getAllRegisteredKeys());

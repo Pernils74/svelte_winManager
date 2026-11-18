@@ -44,7 +44,7 @@ function spawnReactive() {
 }
 onMount(() => {
 	win.titlebar = WindowATitlebar; // Must be set in onMount
-	spawnReactive();
+	// spawnReactive();
 });
 
 // Uppdatera props i det öppnade fönstret
