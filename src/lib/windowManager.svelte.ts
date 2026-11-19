@@ -674,7 +674,15 @@ export class WindowManager {
 			renderTargetWinId: renderTargetWinId ?? source.renderTargetWinId,
 			parentId: source.parentId,
 			componentKey: source.componentKey,
-			props: structuredClone($state.snapshot(source.props)),
+			// props: structuredClone($state.snapshot(source.props)),
+			props: {
+				...structuredClone(this.sync.getTransportProps(source)),
+				// Behåll eventuella lokala funktioner vid duplicering i samma runtime:
+				...Object.fromEntries(
+					Object.entries(source.props).filter(([, v]) => typeof v === "function"),
+				),
+			},
+
 			// rect: source.rect,
 
 			left: source.rect.left + offset,
@@ -845,20 +853,20 @@ export class WindowManager {
 	private publishProps(win: WindowInstance): void {
 		this.sync.getTransportProps(win);
 
-		// void this.sync.send(
-		// 	win.winId,
-		// 	$state.snapshot(win.props),
-		// 	win.wManagerId,
-		// 	win.parentId,
-		// 	win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
-		// 	win.componentKey,
-		// 	this.wManagerId,
-		// ).catch((error) => {
-		// 	console.error(
-		// 		`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
-		// 		error,
-		// 	);
-		// });
+		void this.sync.send(
+			win.winId,
+			$state.snapshot(win.props),
+			win.wManagerId,
+			win.parentId,
+			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+			win.componentKey,
+			this.wManagerId,
+		).catch((error) => {
+			console.error(
+				`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
+				error,
+			);
+		});
 	}
 
 	// --------------------------------------------------

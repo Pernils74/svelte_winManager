@@ -561,6 +561,7 @@ export class WindowSync {
 
 				const currentSnapshot = (transportProps as Record<string, unknown>) ?? {};
 				const publishedSnapshot = this.publishedProps.get(win.winId);
+
 				if (publishedSnapshot) {
 					this.publishedProps.delete(win.winId);
 					if (deepEqual(publishedSnapshot, currentSnapshot)) {
@@ -630,13 +631,13 @@ export class WindowSync {
 	markPropsPublished(win: WindowInstance): void {
 		if (!this.sessions.has(win.winId)) return;
 
-		const publishedSnapshot = this.prepareForTransport(
-			$state.snapshot(win.props),
-			win.winId,
-			this.localRuntimeId,
-			"props",
-			win.parentId,
-		);
+		// const publishedSnapshot = this.prepareForTransport(
+		// 	$state.snapshot(win.props),
+		// 	win.winId,
+		// 	this.localRuntimeId,
+		// 	"props",
+		// 	win.parentId,
+		// );
 		// this.publishedProps.set(
 		// 	win.winId,
 		// 	publishedSnapshot as Record<string, unknown>,
@@ -826,12 +827,23 @@ export class WindowSync {
 	): Promise<void> {
 		this.assertAlive();
 
-		const cleanProps = this.prepareForTransport(
-			snapshot(props),
-			winId,
-			sourceRuntimeId,
-			"props",
-			parentId,
+		// const cleanProps = this.prepareForTransport(
+		// 	snapshot(props),
+		// 	winId,
+		// 	sourceRuntimeId,
+		// 	"props",
+		// 	parentId,
+		// );
+
+		// Ändra detta i send():
+		const cleanProps = snapshot(
+			this.prepareForTransport(
+				props,
+				winId,
+				sourceRuntimeId,
+				"props",
+				parentId,
+			),
 		);
 
 		const message: Extract<
