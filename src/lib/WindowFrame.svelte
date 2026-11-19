@@ -830,6 +830,17 @@ $effect(() => {
 	text-overflow: ellipsis;
 }
 
+.local-taskbar {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.25rem 0.5rem;
+	background: #e2e8f0;
+	border-top: 1px solid #cbd5e1;
+	z-index: 10;
+}
+
 /* Behåll miniatyren kopplad till respektive knapp */
 .local-taskbar .task-item {
 	position: relative;

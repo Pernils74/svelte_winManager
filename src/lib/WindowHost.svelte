@@ -59,10 +59,19 @@ let rootContentEl = $state<HTMLElement | undefined>();
 
 let winCount = $derived(wManager.winCount);
 
+// let minimizedWindows = $derived(
+// 	wManager.windows.filter(
+// 		(win) =>
+// 			win.winId !== WINDOW_MANAGER_ROOT_ID &&
+// 			win.isMinimized,
+// 	),
+// );
+
 let minimizedWindows = $derived(
 	wManager.windows.filter(
 		(win) =>
 			win.winId !== WINDOW_MANAGER_ROOT_ID &&
+			win.renderTargetWinId === WINDOW_MANAGER_ROOT_ID &&
 			win.isMinimized,
 	),
 );

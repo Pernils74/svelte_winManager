@@ -42,22 +42,6 @@ let { win, winId, renderTargetWinId, points }: Props = $props();
 
 let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
 
-// PID-parametrar
-const KP = 0.35;
-const KI = 0.06;
-const KD = 0.01;
-
-// Regulatorbegränsningar
-const MIN_BATCH = 1;
-const MAX_BATCH = 100000;
-const MAX_STEP = 0.20;
-const DEAD_BAND = 0.02;
-
-// PID-tillstånd
-let integral = 0;
-let previousError = 0;
-let previousTime = 0;
-
 let actualRenderMs = $state(0);
 let batchAdjustment = $state(0);
 let controllerStatus = $state("Waiting");
@@ -66,38 +50,8 @@ let longTaskMs = 0;
 let longTaskCount = 0;
 
 let totalLongTasks = $state(0);
-let lastLongTaskMs = $state(0);
 
 let longTaskObserver: PerformanceObserver | undefined;
-
-function clamp(
-	value: number,
-	min: number,
-	max: number,
-): number {
-	return Math.max(min, Math.min(max, value));
-}
-
-function startPerformanceMonitor() {
-	if (
-		!PerformanceObserver.supportedEntryTypes?.includes("longtask")
-	) {
-		console.warn("Long Task API not supported");
-		return;
-	}
-
-	longTaskObserver = new PerformanceObserver((list) => {
-		for (const entry of list.getEntries()) {
-			longTaskMs += entry.duration;
-			longTaskCount++;
-		}
-	});
-
-	longTaskObserver.observe({
-		type: "longtask",
-		buffered: false,
-	});
-}
 
 function regulateBatch(actualMs: number) {
 	const targetMs = config.updateMs;

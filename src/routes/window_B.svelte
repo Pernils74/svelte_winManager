@@ -13,12 +13,15 @@ export interface WindowBProps {
 }
 
 let {
-	win = $bindable(),
+	// win = $bindable(),
+	win,
 	winId,
 	renderTargetWinId,
 }: WindowComponentProps & WindowBProps = $props();
 
 const wManager = getWindowManager();
+
+const shared = $derived((win.props as WindowBProps).shared);
 
 function updateCounter() {
 	wManager.updateProps({
@@ -75,11 +78,11 @@ function detachToWindow() {
 		Parent wManagerId: <strong>{wManager.find(win.renderTargetWinId )?.wManagerId?? "root"}</strong><br>
 		Parent wManagerId: <strong>{wManager.find(renderTargetWinId )?.wManagerId?? "root"}</strong>
 	</p> -->
-	<BroadcastChannelRenderTargetMonitor
+	<!-- <BroadcastChannelRenderTargetMonitor
 		currentWinId={win.winId}
 		parentId={win.parentId}
 		renderTargetWinId={wManager.find(win.renderTargetWinId)?.renderTargetWinId ?? undefined}
-	/>
+	/> -->
 
 	<hr />
 
@@ -94,13 +97,19 @@ function detachToWindow() {
 	<input
 		type="text"
 		value={String(win.props.msg ?? "")}
-		oninput={(event) =>
+			oninput={(event) =>
 			updateTextFromB(event.currentTarget.value)}
+
 		placeholder="Update prop from Window B..."
 	/>
 
     2 vägs
-	<input
+	<input type="text" 
+	bind:value={shared.msg2}
+	placeholder="Type text..." />
+	
+	<!-- <input
+	bind:value={win.props.shared.msg2} 
 		type="text"
 		value={((win.props as WindowBProps).shared?.msg2 ?? "")}
 		oninput={(event) => {
@@ -111,7 +120,9 @@ function detachToWindow() {
 			win.props = props as typeof win.props;
 		}}
 		placeholder="Type text..."
-	/>
+	/> -->
+
+
 
 
 	<hr />

@@ -86,9 +86,7 @@ export interface WindowState extends WindowRect {
 	isFocused: boolean;
 }
 
-export interface WindowComponentProps<
-	TProps extends Record<string, unknown> = Record<string, unknown>,
-> {
+export interface WindowComponentProps<TProps extends Record<string, unknown> = Record<string, unknown>> {
 	win: WindowInstance<TProps>;
 	winId: WindowId;
 	renderTargetWinId: WindowId | null;
