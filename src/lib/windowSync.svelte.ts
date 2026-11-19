@@ -637,10 +637,11 @@ export class WindowSync {
 			"props",
 			win.parentId,
 		);
-		this.publishedProps.set(
-			win.winId,
-			publishedSnapshot as Record<string, unknown>,
-		);
+		// this.publishedProps.set(
+		// 	win.winId,
+		// 	publishedSnapshot as Record<string, unknown>,
+		// );
+		this.publishedProps.set(win.winId, this.getTransportProps(win));
 	}
 
 	startToMonitor(
@@ -649,7 +650,8 @@ export class WindowSync {
 	): () => void {
 		this.start(
 			win,
-			() => $state.snapshot(win.props),
+			// () => $state.snapshot(win.props),
+			() => this.getTransportProps(win, wManager.wManagerId),
 			(incomingProps) => {
 				// console.log("inkommande props");
 				wManager.updateProps(
@@ -793,6 +795,19 @@ export class WindowSync {
 
 		return value;
 	}
+
+	// I WindowSync (windowSync.svelte.ts)
+	getTransportProps(win: WindowInstance, sourceRuntimeId = this.localRuntimeId): Record<string, unknown> {
+		const prepared = this.prepareForTransport(
+			win.props,
+			win.winId,
+			sourceRuntimeId,
+			"props",
+			win.parentId,
+		);
+		return ($state.snapshot(prepared) as Record<string, unknown>) ?? {};
+	}
+
 	/**
 	 * Skickar props manuellt.
 	 *

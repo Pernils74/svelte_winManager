@@ -539,7 +539,8 @@ export class WindowManager {
 
 				// renderTargetWinId: node.renderTargetWinId,
 
-				props: $state.snapshot(node.props),
+				// props: $state.snapshot(node.props),
+				props: this.sync.getTransportProps(node),
 
 				rect: { ...node.rect },
 				// left: node.rect.left,
@@ -842,20 +843,22 @@ export class WindowManager {
 	}
 
 	private publishProps(win: WindowInstance): void {
-		void this.sync.send(
-			win.winId,
-			$state.snapshot(win.props),
-			win.wManagerId,
-			win.parentId,
-			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
-			win.componentKey,
-			this.wManagerId,
-		).catch((error) => {
-			console.error(
-				`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
-				error,
-			);
-		});
+		this.sync.getTransportProps(win);
+
+		// void this.sync.send(
+		// 	win.winId,
+		// 	$state.snapshot(win.props),
+		// 	win.wManagerId,
+		// 	win.parentId,
+		// 	win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+		// 	win.componentKey,
+		// 	this.wManagerId,
+		// ).catch((error) => {
+		// 	console.error(
+		// 		`[WindowManager] Props-synk misslyckades för ${win.winId}:`,
+		// 		error,
+		// 	);
+		// });
 	}
 
 	// --------------------------------------------------

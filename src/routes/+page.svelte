@@ -40,6 +40,11 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_A.
 
 
 
+https://github.com/Pernils74/svelte_winManager/blob/nyaste/src/lib/windowManager.svelte.ts
+https://github.com/Pernils74/svelte_winManager/blob/nyaste/src/lib/windowSync.svelte.ts
+
+
+
 -->
 
 
