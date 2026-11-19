@@ -477,6 +477,10 @@ export class WindowManager {
 		};
 
 		const initProps = (options.props ?? ({} as TProps)) as TProps & Record<string, unknown>;
+
+		// console.log("open props", initProps);
+		// console.log("onSetBatch", typeof initProps.onSetBatch);
+
 		const win = $state<WindowInstance<TProps>>({
 			wManagerId: this.wManagerId,
 			winId: options.winId ?? crypto.randomUUID(),
@@ -855,7 +859,7 @@ export class WindowManager {
 
 		void this.sync.send(
 			win.winId,
-			$state.snapshot(win.props),
+			win.props,
 			win.wManagerId,
 			win.parentId,
 			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,

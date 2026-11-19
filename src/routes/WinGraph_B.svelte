@@ -1,20 +1,4 @@
 <!-- WinGraph_B.svelte -->
-<!--
-
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowFrame.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/WindowHost.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowManager.svelte.ts
-
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowRegistry.ts
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/lib/windowBackend.ts
-
-
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraph_A.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraph_B.svelte
-https://github.com/Pernils74/svelte_winManager/blob/dev/src/routes/WinGraphView.svelte
-
-
--->
 
 <script lang="ts">
 import type { WindowComponentProps, WindowInstance } from "#lib/windowManager.svelte.ts";
@@ -34,12 +18,13 @@ interface GraphConfig extends Record<string, number> {
 }
 
 interface Props extends WindowComponentProps<GraphConfig> {
+	config: GraphConfig;
 	points: Point3D[];
 	onSetBatch?: (newBatch: number) => void;
 }
-let { win, points, onSetBatch }: Props = $props();
+let { win, config, points, onSetBatch }: Props = $props();
 
-let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
+// let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
 
 let actualRenderMs = $state(0);
 let batchAdjustment = $state(0);
@@ -58,6 +43,7 @@ function regulateBatch(actualMs: number) {
 	if (actualMs <= 0) return;
 	const current = config.pointsPerBatch;
 	const estimated = Math.round(current * (targetMs / actualMs));
+
 	config.pointsPerBatch = Math.max(1, Math.min(estimated, 100000));
 }
 

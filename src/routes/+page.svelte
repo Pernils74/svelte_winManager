@@ -42,7 +42,7 @@ https://github.com/Pernils74/svelte_winManager/blob/dev_new/src/routes/window_A.
 
 https://github.com/Pernils74/svelte_winManager/blob/nyaste/src/lib/windowManager.svelte.ts
 https://github.com/Pernils74/svelte_winManager/blob/nyaste/src/lib/windowSync.svelte.ts
-
+https://github.com/Pernils74/svelte_winManager/blob/nyaste/src/routes/WinGraph_A.svelte
 
 
 -->
@@ -107,7 +107,7 @@ onMount(() => {
 		title: "🪟 Window graph A",
 		width: 600,
 		height: 700,
-		left: 650,
+		left: 850,
 		top: 100,
 	});
 

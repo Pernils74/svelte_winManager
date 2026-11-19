@@ -105,7 +105,7 @@ function detachToWindow() {
 
     2 vägs
 	<input type="text" 
-	bind:value={shared.msg2}
+	bind:value={shared!.msg2}
 	placeholder="Type text..." />
 	
 	<!-- <input

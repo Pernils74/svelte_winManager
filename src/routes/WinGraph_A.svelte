@@ -1,5 +1,7 @@
 <!-- WinGraph_A.svelte -->
 
+<script module lang="ts"></script>
+
 <script lang="ts">
 import { getWindowManager } from "#lib/windowManager.svelte.ts";
 import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
@@ -29,7 +31,6 @@ const config = $state<GraphConfig>({
 });
 
 let isRunning = $state(false);
-
 let points = $state<Point3D[]>([]);
 
 function sleep(ms: number) {
@@ -49,12 +50,19 @@ async function generateDataPoints(numberOfPoints: number) {
 	return points;
 }
 
+function setPointsPerBatch(newBatch: number) {
+	const clamped = Math.max(1, Math.min(Math.round(newBatch), 100000));
+	config.pointsPerBatch = clamped;
+	// Uppdatera även props på öppna fönster så de ser det nya värdet
+	// wManager.updateProps({ pointsPerBatch: clamped });
+}
+
 async function start() {
 	if (isRunning) return;
 	isRunning = true;
 	while (isRunning) {
 		points = await generateDataPoints(config.pointsPerBatch);
-		wManager.updateProps({ points }); // will update all wins props who have points as props
+		// wManager.updateProps({ points }); // will update all wins props who have points as props
 		await sleep(config.updateMs);
 	}
 }
@@ -63,14 +71,15 @@ function stop() {
 	isRunning = false;
 }
 
-function setPointsPerBatch(newBatch: number) {
-	const clamped = Math.max(1, Math.min(Math.round(newBatch), 100000));
-	config.pointsPerBatch = clamped;
-	// Uppdatera även props på öppna fönster så de ser det nya värdet
-	wManager.updateProps({ pointsPerBatch: clamped });
-}
-
 function openGraph() {
+	const props = {
+		pointsPerBatch: config.pointsPerBatch,
+		updateMs: config.updateMs,
+		points: [],
+		onSetBatch: setPointsPerBatch,
+	};
+
+	console.log("before open", props);
 	const graphWin = wManager.open(WinGraph_B, {
 		winId: "MyCustomId",
 		title: "📈 Plotly Graph",
@@ -80,8 +89,7 @@ function openGraph() {
 		left: 60,
 		top: 10,
 		props: {
-			pointsPerBatch: config.pointsPerBatch,
-			updateMs: config.updateMs,
+			config,
 			points: [],
 			onSetBatch: setPointsPerBatch,
 		},
