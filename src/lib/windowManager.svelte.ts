@@ -48,11 +48,11 @@ export type ResizeMode =
 	| "bottom-left"
 	| "bottom-right";
 
-export type RenderStrategy =
-	| "immediate"
-	| "latest-wins"
-	| "throttled"
-	| "manual";
+// export type RenderStrategy =
+// 	| "immediate"
+// 	| "latest-wins"
+// 	| "throttled"
+// 	| "manual";
 
 export type WindowTiltlebarComponent = Component<WindowComponentProps<any>>;
 
@@ -70,14 +70,14 @@ export interface WindowRect {
 	height: number;
 }
 
-export interface WindowMetrics {
-	renderMs: number;
-	renderBusy: boolean;
-	isBusy?: boolean;
-	renderStrategy: RenderStrategy;
-	renderCount?: number;
-	droppedUpdates?: number;
-}
+// export interface WindowMetrics {
+// 	renderMs: number;
+// 	renderBusy: boolean;
+// 	isBusy?: boolean;
+// 	renderStrategy: RenderStrategy;
+// 	renderCount?: number;
+// 	droppedUpdates?: number;
+// }
 
 export interface WindowState extends WindowRect {
 	isMinimized: boolean;
@@ -89,6 +89,7 @@ export interface WindowState extends WindowRect {
 export interface WindowComponentProps<TProps extends Record<string, unknown> = Record<string, unknown>> {
 	win: WindowInstance<TProps>;
 	winId: WindowId;
+	parentId: WindowId;
 	renderTargetWinId: WindowId | null;
 }
 
@@ -99,7 +100,6 @@ export interface WindowInstance<
 > {
 	wManagerId: string;
 	winId: WindowId;
-
 	/**
 	 * WinId för fönstret som skapade denna instans.
 	 * Förblir oförändrad även om fönstret detachas.
@@ -127,12 +127,13 @@ export interface WindowInstance<
 	boundingEl: HTMLElement | null;
 	rect: WindowRect;
 	isDetached?: boolean;
-	renderStrategy?: RenderStrategy;
+	// renderStrategy?: RenderStrategy;
 	runtime?: { type?: string; id?: string };
 	context?: unknown;
 
 	isMaximized: boolean;
 	transparency: number;
+
 	isFocused: boolean;
 	isMinimized: boolean;
 
@@ -145,33 +146,60 @@ export interface WindowInstance<
 	docking: WindowDocking;
 	titlebar?: WindowTiltlebarComponent;
 
-	metrics: WindowMetrics;
+	// metrics: WindowMetrics;
 }
 
-export interface OpenWindowOptions<
+export type OpenWindowOptions<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
-> {
-	winId?: WindowId;
-	title?: string;
-	parentId?: WindowId | null;
-	renderTargetWinId?: WindowId | null;
+> =
+	& Partial<
+		Pick<
+			WindowInstance<TProps>,
+			| "winId"
+			| "title"
+			| "parentId"
+			| "renderTargetWinId"
+			| "boundingEl"
+			| "tileOffset"
+			| "transparency"
+			| "showButtons"
+			| "docking"
+			| "titlebar"
+			| "componentKey"
+		>
+	>
+	& {
+		props?: TProps;
+		left?: number;
+		top?: number;
+		width?: number;
+		height?: number;
+	};
 
-	boundingEl?: HTMLElement | null;
-	tileOffset?: number;
+// export interface OpenWindowOptions<
+// 	TProps extends Record<string, unknown> = Record<string, unknown>,
+// > {
+// 	winId?: WindowId;
+// 	title?: string;
+// 	parentId?: WindowId | null;
+// 	renderTargetWinId?: WindowId | null;
 
-	props?: TProps;
+// 	boundingEl?: HTMLElement | null;
+// 	tileOffset?: number;
 
-	left?: number;
-	top?: number;
-	width?: number;
-	height?: number;
+// 	props?: TProps;
 
-	transparency?: number;
-	showButtons?: boolean;
-	docking?: WindowDocking;
-	titlebar?: WindowTiltlebarComponent;
-	componentKey?: string;
-}
+// 	left?: number;
+// 	top?: number;
+// 	width?: number;
+// 	height?: number;
+
+// 	transparency?: number;
+// 	showButtons?: boolean;
+// 	docking?: WindowDocking;
+// 	titlebar?: WindowTiltlebarComponent;
+// 	componentKey?: string;
+// }
 
 function rectOf(win: WindowInstance): WindowRect {
 	const { left, top, width, height } = win.rect;
@@ -282,11 +310,11 @@ export class WindowManager {
 			tileOffset: 0,
 			showButtons: false,
 			docking: {},
-			metrics: {
-				renderMs: 0,
-				renderStrategy: "immediate",
-				renderBusy: false,
-			},
+			// metrics: {
+			// 	renderMs: 0,
+			// 	renderStrategy: "immediate",
+			// 	renderBusy: false,
+			// },
 		});
 	}
 
@@ -471,11 +499,11 @@ export class WindowManager {
 			showButtons: options.showButtons ?? true,
 			docking: options.docking ?? {},
 			titlebar: options.titlebar,
-			metrics: {
-				renderMs: 0,
-				renderStrategy: "immediate",
-				renderBusy: false,
-			},
+			// metrics: {
+			// 	renderMs: 0,
+			// 	renderStrategy: "immediate",
+			// 	renderBusy: false,
+			// },
 		});
 		this.windows.push(win as any);
 		this.sync.startToMonitor(win, this);
@@ -531,9 +559,9 @@ export class WindowManager {
 
 		// Ändrar till win blir "ghost" så de inte renderas i nuvarande runtime
 		// disblar det för tillfället
-		// for (const node of subtree) {
-		// 	node.wManagerId = detachedManagerId;
-		// }
+		for (const node of subtree) {
+			node.wManagerId = detachedManagerId;
+		}
 	}
 
 	async restoreSubtree(
@@ -643,8 +671,10 @@ export class WindowManager {
 		const copy = this.open(source.component, {
 			title: `${source.title} (copy)`,
 			renderTargetWinId: renderTargetWinId ?? source.renderTargetWinId,
+			parentId: source.parentId,
 			componentKey: source.componentKey,
 			props: structuredClone($state.snapshot(source.props)),
+			// rect: source.rect,
 
 			left: source.rect.left + offset,
 			top: source.rect.top + offset,
@@ -854,13 +884,13 @@ export class WindowManager {
 		}
 	}
 
-	updateMetrics(
-		win: WindowInstance,
-		updates: Partial<WindowMetrics>,
-	): void {
-		if (win.winId === WINDOW_MANAGER_ROOT_ID) return;
-		Object.assign(win.metrics, updates);
-	}
+	// updateMetrics(
+	// 	win: WindowInstance,
+	// 	updates: Partial<WindowMetrics>,
+	// ): void {
+	// 	if (win.winId === WINDOW_MANAGER_ROOT_ID) return;
+	// 	Object.assign(win.metrics, updates);
+	// }
 
 	updateAll(updates: Partial<WindowState>): void {
 		for (const win of this.windows) {

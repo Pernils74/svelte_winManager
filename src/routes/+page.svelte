@@ -88,23 +88,23 @@ onMount(() => {
 	// 	top: 800,
 	// });
 
-	wManager.open(WindowA, {
-		title: "🪟 Window A",
-		winId: "Window_A",
-		width: 600,
-		height: 600,
-		left: 10,
-		top: 100,
-		// titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
-	});
-
-	// wManager.open(WinGraphA, {
-	// 	title: "🪟 Window graph A",
+	// wManager.open(WindowA, {
+	// 	title: "🪟 Window A",
+	// 	winId: "Window_A",
 	// 	width: 600,
-	// 	height: 700,
-	// 	left: 650,
+	// 	height: 600,
+	// 	left: 10,
 	// 	top: 100,
+	// 	// titlebar: WindowATitlebar, // Inject a custom component into the titlebar space, or leave undefined for default controls
 	// });
+
+	wManager.open(WinGraphA, {
+		title: "🪟 Window graph A",
+		width: 600,
+		height: 700,
+		left: 650,
+		top: 100,
+	});
 
 	// wManager.open(WindowC, {
 	// 	title: "🪟 Window C",

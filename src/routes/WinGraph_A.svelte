@@ -10,7 +10,7 @@ import WinGraphDebug from "./WinGraphDebug.svelte";
 import { onDestroy } from "svelte";
 const wManager = getWindowManager();
 
-let { win, winId, renderTargetWinId }: WindowComponentProps = $props();
+let { win, winId, parentId, renderTargetWinId }: WindowComponentProps = $props();
 
 type Point3D = {
 	x: number;
@@ -23,10 +23,6 @@ interface GraphConfig extends Record<string, number> {
 	updateMs: number;
 }
 
-interface GraphDataPoints {
-	points: Point3D[];
-}
-
 const config = $state<GraphConfig>({
 	pointsPerBatch: 1000,
 	updateMs: 100,
@@ -34,7 +30,6 @@ const config = $state<GraphConfig>({
 
 let isRunning = $state(false);
 
-// let points: Points3D[] = [];
 let points = $state<Point3D[]>([]);
 
 function sleep(ms: number) {
@@ -68,6 +63,13 @@ function stop() {
 	isRunning = false;
 }
 
+function setPointsPerBatch(newBatch: number) {
+	const clamped = Math.max(1, Math.min(Math.round(newBatch), 100000));
+	config.pointsPerBatch = clamped;
+	// Uppdatera även props på öppna fönster så de ser det nya värdet
+	wManager.updateProps({ pointsPerBatch: clamped });
+}
+
 function openGraph() {
 	const graphWin = wManager.open(WinGraph_B, {
 		winId: "MyCustomId",
@@ -81,6 +83,7 @@ function openGraph() {
 			pointsPerBatch: config.pointsPerBatch,
 			updateMs: config.updateMs,
 			points: [],
+			onSetBatch: setPointsPerBatch,
 		},
 	});
 	// wManager.detachWindow(
@@ -110,14 +113,13 @@ function openDebug() {
 	Parent:	<strong>{renderTargetWinId ?? "root"}</strong>
 	</p>
 	<label>
-	Batch size
+	Points per Batch
 	<input
 		type="number"
 		min="1"
 		bind:value={config.pointsPerBatch}
 	/>
-	Points generated: <strong>{points.length}</strong>
-
+	<!-- Points generated: <strong>{points.length}</strong> -->
 	</label>
 
 	<label>

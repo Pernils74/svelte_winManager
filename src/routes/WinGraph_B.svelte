@@ -34,11 +34,10 @@ interface GraphConfig extends Record<string, number> {
 }
 
 interface Props extends WindowComponentProps<GraphConfig> {
-	win: WindowInstance<GraphConfig>;
 	points: Point3D[];
+	onSetBatch?: (newBatch: number) => void;
 }
-
-let { win, winId, renderTargetWinId, points }: Props = $props();
+let { win, points, onSetBatch }: Props = $props();
 
 let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
 
@@ -50,6 +49,7 @@ let longTaskMs = 0;
 let longTaskCount = 0;
 
 let totalLongTasks = $state(0);
+let lastLongTaskMs = $state(0);
 
 let longTaskObserver: PerformanceObserver | undefined;
 
@@ -57,31 +57,20 @@ function regulateBatch(actualMs: number) {
 	const targetMs = config.updateMs;
 	if (actualMs <= 0) return;
 	const current = config.pointsPerBatch;
-	const estimated = Math.round(
-		current *
-			(targetMs / actualMs),
-	);
-	config.pointsPerBatch = Math.max(
-		1,
-		Math.min(
-			estimated,
-			100000,
-		),
-	);
+	const estimated = Math.round(current * (targetMs / actualMs));
+	config.pointsPerBatch = Math.max(1, Math.min(estimated, 100000));
 }
 
 /**
  * Anropas från GraphView efter varje Plotly-rendering.
  */
 function onRenderMs(ms: number) {
-	win.metrics.renderMs = ms;
+	// win.metrics.renderMs = ms;
 	regulateBatch(ms);
 }
 
 onMount(() => {
-	if (
-		!PerformanceObserver.supportedEntryTypes?.includes("longtask")
-	) {
+	if (!PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
 		controllerStatus = "Long Task API unavailable";
 		return;
 	}
@@ -110,9 +99,6 @@ onMount(() => {
 <div class="container">
 	<div class="controller">
 		<div>
-
-			
-
 				Target:
 				<strong>{config.updateMs} ms</strong>
 			</div>
