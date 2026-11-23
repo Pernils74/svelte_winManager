@@ -418,6 +418,7 @@ export class WindowSync {
 		readProps: ReadProps,
 		applyState: ApplyProps,
 		applyWindowStateUpdate?: (updates: Partial<WindowState>) => void,
+		applyData?: (data: unknown) => void,
 		manager?: WindowManager,
 	): void {
 		this.assertAlive();
@@ -439,6 +440,20 @@ export class WindowSync {
 			if (stopped || this.destroyed) return;
 
 			const message = packet.message;
+
+			if (message.type === "sync:data") {
+				try {
+					applyData?.(message.data);
+				} catch (error) {
+					console.error(
+						`[WindowSync] Kunde inte applicera data för ${win.title}:`,
+						error,
+					);
+				}
+
+				return;
+			}
+
 			if (
 				message.type !== "sync:props" ||
 				!message.props ||
@@ -668,6 +683,9 @@ export class WindowSync {
 					{ publish: false },
 				);
 			},
+			(data) => {
+				win.data = data;
+			},
 			wManager,
 		);
 
@@ -864,6 +882,41 @@ export class WindowSync {
 		};
 		await this.backend.sendRaw(message, {
 			from,
+			to: {
+				type: "group",
+				parentId,
+				componentKey,
+			},
+		});
+	}
+
+	async sendData<T>(
+		winId: WindowId,
+		data: T,
+		wManagerId: string,
+		parentId: WindowId | null,
+		renderTargetWinId: WindowId,
+		componentKey: string,
+		sourceRuntimeId: string,
+	): Promise<void> {
+		this.assertAlive();
+
+		const message: Extract<
+			WindowMessage,
+			{ type: "sync:data" }
+		> = {
+			type: "sync:data",
+			componentKey,
+			renderTargetWinId,
+			data,
+		};
+
+		await this.backend.sendRaw(message, {
+			from: {
+				wManagerId: sourceRuntimeId,
+				winId,
+				parentId,
+			},
 			to: {
 				type: "group",
 				parentId,

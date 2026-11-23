@@ -482,7 +482,7 @@ export class WindowManager {
 		};
 
 		const initProps = (options.props ?? ({} as TProps)) as TProps & Record<string, unknown>;
-		const initData = (options.data ?? ({} as TData)) as TData & Record<string, unknown>;
+		const initData = options.data ?? ({} as TData);
 
 		// console.log("open props", initProps);
 		// console.log("onSetBatch", typeof initProps.onSetBatch);
@@ -496,7 +496,7 @@ export class WindowManager {
 			component,
 			componentKey: compKey,
 			props: initProps,
-			data: initData,
+			data: $state.raw(initData),
 			renderTargetWinId,
 			boundingEl: options.boundingEl ?? null,
 			rect: rect,
@@ -798,6 +798,46 @@ export class WindowManager {
 		// );
 		return true;
 	}
+
+	async updateData<TData>(
+		win: WindowInstance<any, TData>,
+		data: TData,
+	): Promise<void> {
+		win.data = data;
+
+		await this.sync.sendData(
+			win.winId,
+			data,
+			win.wManagerId,
+			win.parentId,
+			win.renderTargetWinId ?? WINDOW_MANAGER_ROOT_ID,
+			win.componentKey,
+			this.wManagerId,
+		);
+	}
+
+	//                   WindowInstance
+	//                        │
+	//           ┌────────────┴────────────┐
+	//           │                         │
+	//        props                       data
+	//           │                         │
+	//       $state()                  $state.raw()
+	//           │                         │
+	//        reactive                  explicit
+	//           │                         │
+	//       $effect()                 sendData()
+	//           │                         │
+	//    prepareForTransport             │
+	//    snapshot                        │
+	//    deepEqual                       │
+	//    RPC                             │
+	//           │                         │
+	//      sync:props                 sync:data
+	//           │                         │
+	//           └────────────┬────────────┘
+	//                        │
+	//                     backend
 
 	// --------------------------------------------------
 	// PROPS

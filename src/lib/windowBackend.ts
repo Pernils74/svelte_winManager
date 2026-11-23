@@ -35,6 +35,12 @@ export type WindowMessage =
 		props: Record<string, unknown>;
 	}
 	| {
+		type: "sync:data";
+		componentKey: string;
+		renderTargetWinId: WindowId;
+		data: unknown;
+	}
+	| {
 		type: "sync:state-update";
 		updates: Partial<WindowState>;
 	}
