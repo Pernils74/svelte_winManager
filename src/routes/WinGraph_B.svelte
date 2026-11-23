@@ -1,104 +1,65 @@
 <!-- WinGraph_B.svelte -->
-
 <script lang="ts">
-import type { WindowComponentProps, WindowInstance } from "#lib/windowManager.svelte.ts";
+import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
 import { onMount } from "svelte";
+import GraphView, { type PointCloud, type RenderStats } from "./WinGraphView.svelte";
 
-import GraphView from "./WinGraphView.svelte";
-
-type Point3D = {
-	x: number;
-	y: number;
-	z: number;
-};
-
-interface GraphConfig extends Record<string, number> {
+type WinGraphBProps = {
 	pointsPerBatch: number;
 	updateMs: number;
-}
-
-interface Props extends WindowComponentProps<GraphConfig> {
-	config: GraphConfig;
-	points: Point3D[];
+	cloud: PointCloud | null;
 	onSetBatch?: (newBatch: number) => void;
-}
-let { win, config, points, onSetBatch }: Props = $props();
+};
 
-// let config = $derived((win.props as GraphConfig) ?? { pointsPerBatch: 1000, updateMs: 100 });
+let { pointsPerBatch = 5000, updateMs = 50, cloud = null, onSetBatch }:
+	& WindowComponentProps<WinGraphBProps>
+	& WinGraphBProps = $props();
+
+let stats = $state<RenderStats>({ fps: 0, renderMs: 0 });
 
 let actualRenderMs = $state(0);
 let batchAdjustment = $state(0);
-let controllerStatus = $state("Waiting");
-
-let longTaskMs = 0;
-let longTaskCount = 0;
-
-let totalLongTasks = $state(0);
-let lastLongTaskMs = $state(0);
-
-let longTaskObserver: PerformanceObserver | undefined;
+let autoRegulate = $state(true);
 
 function regulateBatch(actualMs: number) {
-	const targetMs = config.updateMs;
-	if (actualMs <= 0) return;
-	const current = config.pointsPerBatch;
-	const estimated = Math.round(current * (targetMs / actualMs));
+	if (!autoRegulate || actualMs <= 0) return;
 
-	config.pointsPerBatch = Math.max(1, Math.min(estimated, 100000));
-}
-
-/**
- * Anropas från GraphView efter varje Plotly-rendering.
- */
-function onRenderMs(ms: number) {
-	// win.metrics.renderMs = ms;
-	regulateBatch(ms);
-}
-
-onMount(() => {
-	if (!PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
-		controllerStatus = "Long Task API unavailable";
+	const ratio = updateMs / actualMs;
+	// Dödzon ±15% så regulatorn ligger still när målet är nått
+	if (Math.abs(1 - ratio) < 0.15) {
+		batchAdjustment = 0;
 		return;
 	}
 
-	longTaskObserver = new PerformanceObserver((list) => {
-		for (const entry of list.getEntries()) {
-			longTaskMs += entry.duration;
-			longTaskCount++;
+	// Mjuk rampning: max ±20% ändring per steg
+	const clampedRatio = Math.max(0.8, Math.min(ratio, 1.2));
+	const nextBatch = Math.max(100, Math.min(Math.round(pointsPerBatch * clampedRatio), 100000));
 
-			totalLongTasks++;
-			lastLongTaskMs = entry.duration;
-		}
-	});
+	batchAdjustment = nextBatch - pointsPerBatch;
+	if (nextBatch !== pointsPerBatch) {
+		onSetBatch?.(nextBatch);
+	}
+}
 
-	longTaskObserver.observe({
-		type: "longtask",
-		buffered: false,
-	});
-
-	return () => {
-		longTaskObserver?.disconnect();
-	};
-});
+function onRenderMs(ms: number) {
+	actualRenderMs = ms;
+	regulateBatch(ms);
+}
 </script>
 
 <div class="container">
 	<div class="controller">
 		<div>
 				Target:
-				<strong>{config.updateMs} ms</strong>
+				<strong>{updateMs} ms</strong>
 			</div>
 		<div>
-				Render:
-				<strong>{actualRenderMs.toFixed(1)} ms</strong>
+				Render:				
+				<strong>{stats.renderMs.toFixed(1)} ms</strong>
 			</div>
 		<div>
 				Points/batch:
-				<strong>{config.pointsPerBatch}</strong>
-			</div>
-		<div>
-				PID:
-				<strong>{controllerStatus}</strong>
+				<strong>{pointsPerBatch}</strong>
 			</div>
 		<div>
 				Batch adjustment:
@@ -110,7 +71,8 @@ onMount(() => {
 	</div>
 
 	<GraphView
-		points={points}
+		cloud={cloud}
+		bind:stats
 		onRenderMs={onRenderMs}
 	/>
 </div>

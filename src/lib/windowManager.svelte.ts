@@ -97,6 +97,7 @@ import { type WindowViewPortType } from "./windowBackend.ts";
 
 export interface WindowInstance<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
+	TData = unknown,
 > {
 	wManagerId: string;
 	winId: WindowId;
@@ -122,7 +123,8 @@ export interface WindowInstance<
 	 * All application-specific data belongs here.
 	 * This object is reactive and synchronized between runtimes.
 	 */
-	props: TProps & Record<string, unknown>;
+	props: TProps & Record<string, unknown>; // reactive + sync
+	data: TData; // raw / one-way
 
 	boundingEl: HTMLElement | null;
 	rect: WindowRect;
@@ -151,6 +153,7 @@ export interface WindowInstance<
 
 export type OpenWindowOptions<
 	TProps extends Record<string, unknown> = Record<string, unknown>,
+	TData extends Record<string, unknown> = Record<string, unknown>,
 > =
 	& Partial<
 		Pick<
@@ -170,6 +173,7 @@ export type OpenWindowOptions<
 	>
 	& {
 		props?: TProps;
+		data?: TData;
 		left?: number;
 		top?: number;
 		width?: number;
@@ -293,6 +297,7 @@ export class WindowManager {
 			component: null,
 			componentKey: "",
 			props: {},
+			data: {},
 			renderTargetWinId: null,
 			boundingEl: null,
 			rect: {
@@ -477,6 +482,7 @@ export class WindowManager {
 		};
 
 		const initProps = (options.props ?? ({} as TProps)) as TProps & Record<string, unknown>;
+		const initData = (options.data ?? ({} as TData)) as TData & Record<string, unknown>;
 
 		// console.log("open props", initProps);
 		// console.log("onSetBatch", typeof initProps.onSetBatch);
@@ -490,6 +496,7 @@ export class WindowManager {
 			component,
 			componentKey: compKey,
 			props: initProps,
+			data: initData,
 			renderTargetWinId,
 			boundingEl: options.boundingEl ?? null,
 			rect: rect,

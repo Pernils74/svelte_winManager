@@ -1,69 +1,67 @@
 <!-- WinGraph_A.svelte -->
-
-<script module lang="ts"></script>
-
 <script lang="ts">
-import { getWindowManager } from "#lib/windowManager.svelte.ts";
-import type { WindowComponentProps } from "#lib/windowManager.svelte.ts";
-
-import WinGraph_B from "./WinGraph_B.svelte";
-import GraphView from "./WinGraphView.svelte";
-import WinGraphDebug from "./WinGraphDebug.svelte";
+import { getWindowManager, type WindowComponentProps, type WindowInstance } from "#lib/windowManager.svelte.ts";
 import { onDestroy } from "svelte";
+import WinGraph_B from "./WinGraph_B.svelte";
+import GraphView, { type PointCloud } from "./WinGraphView.svelte";
+
+import WinGraphDebug from "./WinGraphDebug.svelte";
+
 const wManager = getWindowManager();
+let { renderTargetWinId }: WindowComponentProps = $props();
 
-let { win, winId, parentId, renderTargetWinId }: WindowComponentProps = $props();
-
-type Point3D = {
-	x: number;
-	y: number;
-	z: number;
-};
-
-interface GraphConfig extends Record<string, number> {
+type WinGraphBProps = {
 	pointsPerBatch: number;
 	updateMs: number;
-}
+	cloud: PointCloud | null;
+	onSetBatch?: (newBatch: number) => void;
+};
 
-const config = $state<GraphConfig>({
-	pointsPerBatch: 1000,
-	updateMs: 100,
-});
-
+let pointsPerBatch = $state(5000);
+let updateMs = $state(50);
 let isRunning = $state(false);
-let points = $state<Point3D[]>([]);
+let cloud = $state.raw<PointCloud | null>(null);
+let graphWin = $state<WindowInstance<WinGraphBProps> | null>(null);
 
-function sleep(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+function generatePointCloud(count: number): PointCloud {
+	const x = new Float32Array(count);
+	const y = new Float32Array(count);
+	const z = new Float32Array(count);
+	const t = performance.now() * 0.001;
 
-async function generateDataPoints(numberOfPoints: number) {
-	const points: Point3D[] = [];
-	for (let i = 0; i < numberOfPoints; i++) {
-		points.push({
-			x: Math.random() * 100,
-			y: Math.random() * 100,
-			z: Math.random() * 100,
-		});
+	for (let i = 0; i < count; i++) {
+		const angle = i * 0.05 + t;
+		const radius = (i / count) * 50;
+		x[i] = Math.cos(angle) * radius;
+		y[i] = Math.sin(angle) * radius;
+		z[i] = Math.sin(radius * 0.2 + t) * 20;
 	}
-	await sleep(1);
-	return points;
+	return { count, x, y, z };
 }
 
+// Callback som anropas från WinGraph_B (även när WinGraph_B är detachad!)
 function setPointsPerBatch(newBatch: number) {
-	const clamped = Math.max(1, Math.min(Math.round(newBatch), 100000));
-	config.pointsPerBatch = clamped;
-	// Uppdatera även props på öppna fönster så de ser det nya värdet
-	// wManager.updateProps({ pointsPerBatch: clamped });
+	const clamped = Math.max(100, Math.min(Math.round(newBatch), 100000));
+	pointsPerBatch = clamped;
+	if (graphWin) {
+		graphWin.props.pointsPerBatch = clamped;
+	}
 }
 
 async function start() {
 	if (isRunning) return;
 	isRunning = true;
+
 	while (isRunning) {
-		points = await generateDataPoints(config.pointsPerBatch);
-		// wManager.updateProps({ points }); // will update all wins props who have points as props
-		await sleep(config.updateMs);
+		const nextCloud = generatePointCloud(pointsPerBatch);
+		cloud = nextCloud;
+
+		if (graphWin) {
+			graphWin.props.cloud = nextCloud;
+		}
+
+		// Ge webbläsaren andrum mellan varje batch
+		await new Promise((r) => setTimeout(r, updateMs));
 	}
 }
 
@@ -71,33 +69,23 @@ function stop() {
 	isRunning = false;
 }
 
-function openGraph() {
-	const props = {
-		pointsPerBatch: config.pointsPerBatch,
-		updateMs: config.updateMs,
-		points: [],
-		onSetBatch: setPointsPerBatch,
-	};
+onDestroy(stop);
 
-	console.log("before open", props);
-	const graphWin = wManager.open(WinGraph_B, {
+function openGraph() {
+	graphWin = wManager.open<WinGraphBProps>(WinGraph_B, {
 		winId: "MyCustomId",
-		title: "📈 Plotly Graph",
-		tileOffset: 40,
+		title: "📈 Plotly 3D Stream",
 		width: 800,
-		height: 500,
-		left: 60,
-		top: 10,
+		height: 550,
+		left: 420,
+		top: 40,
 		props: {
-			config,
-			points: [],
+			pointsPerBatch,
+			updateMs,
+			cloud: null,
 			onSetBatch: setPointsPerBatch,
 		},
 	});
-	// wManager.detachWindow(
-	// 	graphWin,
-	// 	"window",
-	// );
 }
 
 function openDebug() {
@@ -109,23 +97,22 @@ function openDebug() {
 		top: 10,
 		props: {
 			points: [],
-			pointsPerBatch: config.pointsPerBatch,
-			updateMs: config.updateMs,
+			pointsPerBatch: pointsPerBatch,
+			updateMs: updateMs,
 		},
 	});
 }
 </script>
 <div class="window-container">
 	<h4>📡 Live Data Stream</h4>
-	<p>
-	Parent:	<strong>{renderTargetWinId ?? "root"}</strong>
-	</p>
+	<p>Parent:	<strong>{renderTargetWinId ?? "root"}</strong></p>
+
 	<label>
 	Points per Batch
 	<input
 		type="number"
 		min="1"
-		bind:value={config.pointsPerBatch}
+		bind:value={pointsPerBatch}
 	/>
 	<!-- Points generated: <strong>{points.length}</strong> -->
 	</label>
@@ -135,7 +122,7 @@ function openDebug() {
 	<input
 		type="number"
 		min="1"
-		bind:value={config.updateMs}
+		bind:value={updateMs}
 	/>
 	</label>
 
@@ -161,8 +148,8 @@ function openDebug() {
 
 	<div class="graph-host">
 		<GraphView
-			payload={config}
-			points={points}
+			// config={config}
+			cloud={cloud}
 		/>
 	</div>
 </div>
