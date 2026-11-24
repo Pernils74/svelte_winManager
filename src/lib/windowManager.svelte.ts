@@ -482,7 +482,7 @@ export class WindowManager {
 		};
 
 		const initProps = (options.props ?? ({} as TProps)) as TProps & Record<string, unknown>;
-		const initData = options.data ?? ({} as TData);
+		const initData = $state.raw(options.data ?? ({} as TData));
 
 		// console.log("open props", initProps);
 		// console.log("onSetBatch", typeof initProps.onSetBatch);
@@ -496,7 +496,7 @@ export class WindowManager {
 			component,
 			componentKey: compKey,
 			props: initProps,
-			data: $state.raw(initData),
+			data: initData,
 			renderTargetWinId,
 			boundingEl: options.boundingEl ?? null,
 			rect: rect,

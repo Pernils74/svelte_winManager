@@ -36,10 +36,13 @@ interface Props extends Partial<WindowComponentProps> {
 let {
 	points,
 	cloud,
+	nextCloud,
 	config,
 	stats = $bindable({ fps: 0, renderMs: 0 }),
 	onRenderMs,
 }: Props = $props();
+
+$inspect(nextCloud);
 
 let fps = $state(0);
 let renderMs = $state(0);

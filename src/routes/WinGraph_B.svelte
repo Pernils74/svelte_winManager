@@ -11,9 +11,17 @@ type WinGraphBProps = {
 	onSetBatch?: (newBatch: number) => void;
 };
 
-let { pointsPerBatch = 5000, updateMs = 50, cloud = null, onSetBatch }:
+let {
+	win,
+	pointsPerBatch = 5000,
+	updateMs = 50,
+	cloud = null,
+	onSetBatch,
+}:
 	& WindowComponentProps<WinGraphBProps>
 	& WinGraphBProps = $props();
+
+// let cloud = $derived(win.data);
 
 let stats = $state<RenderStats>({ fps: 0, renderMs: 0 });
 

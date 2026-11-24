@@ -54,11 +54,17 @@ async function start() {
 
 	while (isRunning) {
 		const nextCloud = generatePointCloud(pointsPerBatch);
+
 		cloud = nextCloud;
 
+		// den segare reaktiv prop metoden
 		if (graphWin) {
 			graphWin.props.cloud = nextCloud;
 		}
+
+		// if (graphWin) {
+		// 	await wManager.updateData(graphWin, nextCloud);
+		// }
 
 		// Ge webbläsaren andrum mellan varje batch
 		await new Promise((r) => setTimeout(r, updateMs));
@@ -85,6 +91,7 @@ function openGraph() {
 			cloud: null,
 			onSetBatch: setPointsPerBatch,
 		},
+		// data: null,
 	});
 }
 
@@ -147,10 +154,10 @@ function openDebug() {
 	</div>
 
 	<div class="graph-host">
-		<GraphView
+		<!-- <GraphView
 			// config={config}
 			cloud={cloud}
-		/>
+		/> -->
 	</div>
 </div>
 
